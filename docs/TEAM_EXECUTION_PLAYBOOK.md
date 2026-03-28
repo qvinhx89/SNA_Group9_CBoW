@@ -1,58 +1,58 @@
 # Team Execution Playbook - SNA Twitch Influencer Project
 
-## 1. Muc tieu cua tai lieu
+## 1. Mục tiêu của tài liệu
 
-Tai lieu nay la huong dan thao tac chi tiet cho nhom 3 nguoi, tu setup moi truong den chia nhanh song song.
-Muc tieu la:
+Tài liệu này là hướng dẫn thao tác chi tiết cho nhóm 3 người, từ setup môi trường đến chia nhánh song song.
+Mục tiêu là:
 
-- Moi thanh vien biet ro minh can lam gi.
-- Tat ca dau viec co thu tu phu thuoc ro rang.
-- Co tieu chi hoan thanh (Definition of Done) cho tung buoc.
-- Giam rui ro lam trung, lam thieu, hoac sai scope.
-
----
-
-## 2. Co cau nhom va vai tro
-
-- Vai tro 1: Pham Quoc Vinh
-- Vai tro 2: Tran Hung Vi
-- Vai tro 3: Tran Quoc Hai
-
-Nguyen tac:
-
-- Lead chot scope, merge cuoi, va giai quyet xung dot ky thuat.
-- Moi thanh vien van phai code, chay artifact, va review cheo.
-- Moi thay doi tham so bat buoc ghi vao experiment registry.
+- Mỗi thành viên biết rõ mình cần làm gì.
+- Tất cả đầu việc có thứ tự phụ thuộc rõ ràng.
+- Có tiêu chí hoàn thành (Definition of Done) cho từng bước.
+- Giảm rủi ro làm trùng, làm thiếu, hoặc sai scope.
 
 ---
 
-## 3. Tong quan luong cong viec
+## 2. Cơ cấu nhóm và vai trò
 
-Thu tu tong the:
+- Vai trò 1: Phạm Quốc Vinh
+- Vai trò 2: Trần Hùng Vĩ
+- Vai trò 3: Trần Quốc Hải
 
-1. Setup moi truong va du lieu (ca 3 nguoi cung lam).
-2. Khoa scope ky thuat (ca 3 nguoi xac nhan, Lead chot).
-3. Chay tuyen nen stage 0 -> 3 (tuan tu, khong tach nhanh).
-4. Chia nhanh song song (3 nhanh cho 3 nguoi).
-5. Tich hop ket qua, viet bao cao, review cheo.
-6. Chay reproducibility check va chot nop.
+Nguyên tắc:
+
+- Lead chốt scope, merge cuối, và giải quyết xung đột kỹ thuật.
+- Mỗi thành viên vẫn phải code, chạy artifact, và review chéo.
+- Mọi thay đổi tham số bắt buộc ghi vào experiment registry.
 
 ---
 
-## 4. Giai doan A - Setup moi truong (bat buoc cho ca 3 nguoi)
+## 3. Tổng quan luồng công việc
 
-### A1. Dung dung thu muc du an
+Thứ tự tổng thể:
 
-Thu muc lam viec:
+1. Setup môi trường và dữ liệu (cả 3 người cùng làm).
+2. Khóa scope kỹ thuật (cả 3 người xác nhận, Lead chốt).
+3. Chạy tuyến nền stage 0 -> 3 (tuần tự, không tách nhánh).
+4. Chia nhánh song song (3 nhánh cho 3 người).
+5. Tích hợp kết quả, viết báo cáo, review chéo.
+6. Chạy reproducibility check và chốt nộp.
+
+---
+
+## 4. Giai đoạn A - Setup môi trường (bắt buộc cho cả 3 người)
+
+### A1. Dựng đúng thư mục dự án
+
+Thư mục làm việc:
 
 - sna_twitch_influencer_project
 
-Luu y:
+Lưu ý:
 
-- Khong dung nham virtual environment cua thu muc khac.
-- Nen tao venv rieng trong chinh du an nay.
+- Không dùng nhầm virtual environment của thư mục khác.
+- Nên tạo venv riêng trong chính dự án này.
 
-### A2. Tao va kich hoat virtual environment
+### A2. Tạo và kích hoạt virtual environment
 
 PowerShell:
 
@@ -60,7 +60,7 @@ PowerShell:
     python -m venv .venv
     .\.venv\Scripts\Activate.ps1
 
-### A3. Cai dependencies
+### A3. Cài dependencies
 
     python -m pip install --upgrade pip
     pip install -r requirements.txt
@@ -69,240 +69,240 @@ PowerShell:
 
     python -c "import networkx, pandas, sklearn, yaml; print('OK')"
 
-### A5. Kiem tra du lieu dau vao
+### A5. Kiểm tra dữ liệu đầu vào
 
-- Kiem tra ton tai data/raw va cac file nguon can thiet.
-- Neu thieu file, dung pipeline va thong bao ngay cho Lead.
+- Kiểm tra tồn tại data/raw và các file nguồn cần thiết.
+- Nếu thiếu file, dừng pipeline và thông báo ngay cho Lead.
 
-### A6. Definition of Done cho Giai doan A
+### A6. Definition of Done cho Giai đoạn A
 
-- Moi thanh vien tu chay duoc lenh import test va ra OK.
-- Moi thanh vien xac nhan da o dung venv cua project.
-- Du lieu raw du dieu kien de chay stage 0.
+- Mỗi thành viên tự chạy được lệnh import test và ra OK.
+- Mỗi thành viên xác nhận đã ở đúng venv của project.
+- Dữ liệu raw đủ điều kiện để chạy stage 0.
 
 ---
 
-## 5. Giai doan B - Khoa scope (bat buoc truoc khi chay lon)
+## 5. Giai đoạn B - Khóa scope (bắt buộc trước khi chạy lớn)
 
-### B1. Doi soat file scope
+### B1. Đối soát file scope
 
-Can doi soat cac file:
+Cần đối soát các file:
 
 - docs/implementation_notes.md
 - src/config/base.yaml
 - run_all.py
 - reports/final_report.md
 
-### B2. Chot mot scope duy nhat
+### B2. Chốt một scope duy nhất
 
-- Thong nhat chinh xac cac mo hinh, metric, va cac phan ngoai scope.
-- Loai bo noi dung khong con phu hop khoi runner va report template.
+- Thống nhất chính xác các mô hình, metric, và các phần ngoài scope.
+- Loại bỏ nội dung không còn phù hợp khỏi runner và report template.
 
-### B3. Ghi nhat ky thay doi
+### B3. Ghi nhật ký thay đổi
 
-- Them entry vao docs/experiment_registry.md voi timestamp, ly do, tac dong.
+- Thêm entry vào docs/experiment_registry.md với timestamp, lý do, tác động.
 
-### B4. Definition of Done cho Giai doan B
+### B4. Definition of Done cho Giai đoạn B
 
-- Khong con mau thuan scope giua config, code runner, va report.
-- Registry co entry moi cho quyet dinh scope.
+- Không còn mâu thuẫn scope giữa config, code runner, và report.
+- Registry có entry mới cho quyết định scope.
 
 ---
 
-## 6. Giai doan C - Chay tuyen nen (stage 0 -> 3, khong song song)
+## 6. Giai đoạn C - Chạy tuyến nền (stage 0 -> 3, không song song)
 
 ### C1. Stage 0: Data audit + preprocess
 
-Chay:
+Chạy:
 
     python run_all.py --stage 0
 
-Can co:
+Cần có:
 
 - Artifact data quality
-- Du lieu processed de lam dau vao cho stage sau
+- Dữ liệu processed để làm đầu vào cho stage sau
 
 ### C2. Stage 1: Centrality
 
-Chay:
+Chạy:
 
     python run_all.py --stage 1
 
-Can co:
+Cần có:
 
-- Bang centrality co day du cot can thiet
+- Bảng centrality có đầy đủ cột cần thiết
 
 ### C3. Stage 2: Community + k-shell
 
-Chay:
+Chạy:
 
     python run_all.py --stage 2
 
-Can co:
+Cần có:
 
-- Nhan community
-- Ket qua k-shell
+- Nhãn community
+- Kết quả k-shell
 
 ### C4. Stage 3: SIS + typology + robustness
 
-Chay:
+Chạy:
 
     python run_all.py --stage 3
 
-Can co:
+Cần có:
 
 - sis_table
 - typology labels
 - robustness summary
 
-### C5. Quality gate cua Giai doan C
+### C5. Quality gate của Giai đoạn C
 
-Chi duoc tach nhanh song song neu:
+Chỉ được tách nhánh song song nếu:
 
-- Stage 0 -> 3 chay xong khong loi nghiem trong.
-- Cac artifact cot loi ton tai va doc duoc.
-- Lead xac nhan dau vao cho stage 4, 5, 6 da san sang.
+- Stage 0 -> 3 chạy xong không lỗi nghiêm trọng.
+- Các artifact cốt lõi tồn tại và đọc được.
+- Lead xác nhận đầu vào cho stage 4, 5, 6 đã sẵn sàng.
 
 ---
 
-## 7. Giai doan D - Chia nhanh song song cho 3 nguoi
+## 7. Giai đoạn D - Chia nhánh song song cho 3 người
 
-Sau quality gate cua stage 3, chia 3 nhanh nhu sau.
+Sau quality gate của stage 3, chia 3 nhánh như sau.
 
-### Nhanh D1 - Lead (RQ2 + RQ3)
+### Nhánh D1 - Lead (RQ2 + RQ3)
 
-Phan viec:
+Phần việc:
 
-- Chay IC calibration
-- Chay single-seed validation
-- Chay multi-seed benchmark
-- Tong hop ket qua RQ2, RQ3
+- Chạy IC calibration
+- Chạy single-seed validation
+- Chạy multi-seed benchmark
+- Tổng hợp kết quả RQ2, RQ3
 
-Lenh goi y:
+Lệnh gợi ý:
 
     python run_all.py --stage 4
     python run_all.py --stage 5
 
-Dau ra bat buoc:
+Đầu ra bắt buộc:
 
-- Bang ket qua stage4_single_seed
-- Bang ket qua stage5_multi_seed
-- Figure so sanh strategy
+- Bảng kết quả stage4_single_seed
+- Bảng kết quả stage5_multi_seed
+- Figure so sánh strategy
 
-### Nhanh D2 - Thanh vien A (RQ1 + quality structure)
+### Nhánh D2 - Thành viên A (RQ1 + quality structure)
 
-Phan viec:
+Phần việc:
 
-- Kiem tra tinh nhat quan output stage 1 -> 3
-- Tao bang/figure cho RQ1
-- Ho tro doi soat centrality va typology
+- Kiểm tra tính nhất quán output stage 1 -> 3
+- Tạo bảng/figure cho RQ1
+- Hỗ trợ đối soát centrality và typology
 
-Dau ra bat buoc:
+Đầu ra bắt buộc:
 
 - Table RQ1
 - Figure divergence views vs structural metrics
-- Ghi chu quality check
+- Ghi chú quality check
 
-### Nhanh D3 - Thanh vien B (RQ4 ML)
+### Nhánh D3 - Thành viên B (RQ4 ML)
 
-Phan viec:
+Phần việc:
 
-- Chuan bi feature surface cho ML
-- Chay stage ML theo scope da khoa
-- Xuat metric va confusion matrix
+- Chuẩn bị feature surface cho ML
+- Chạy stage ML theo scope đã khóa
+- Xuất metric và confusion matrix
 
-Lenh goi y:
+Lệnh gợi ý:
 
     python run_all.py --stage 6
 
-Dau ra bat buoc:
+Đầu ra bắt buộc:
 
-- Bang ket qua RQ4
+- Bảng kết quả RQ4
 - Figure confusion matrix
-- Ghi chu ket luan detectability
+- Ghi chú kết luận detectability
 
-### Rule phoi hop trong giai doan song song
+### Rule phối hợp trong giai đoạn song song
 
-- Moi nhanh lam tren branch rieng.
-- Khong sua file owner cua nhanh khac neu chua thong bao.
-- Moi thay doi tham so phai ghi ngay vao experiment registry.
-- Cuoi ngay, moi nguoi cap nhat trang thai: Done, Doing, Blocked.
-
----
-
-## 8. Giai doan E - Tich hop va viet bao cao
-
-### E1. Thu tu merge
-
-1. Merge nhanh D2 (RQ1 va structure checks)
-2. Merge nhanh D1 (simulation RQ2, RQ3)
-3. Merge nhanh D3 (ML RQ4)
-4. Lead chay lai tong hop sau merge
-
-### E2. Hoan thien bao cao
-
-- Dien ket qua that vao reports/final_report.md
-- Dong bo figure vao reports/figures
-- Dong bo table vao reports/tables
-- Moi claim phai co evidence tu artifact
-
-### E3. Review cheo
-
-- Vong 1: review ky thuat (logic, metric, reproducibility)
-- Vong 2: review trinh bay (ro rang, nhat quan RQ1 -> RQ4)
-
-### E4. Definition of Done cho Giai doan E
-
-- Bao cao khong con placeholder quan trong.
-- Figure/table khop 100% voi noi dung ket luan.
-- Tat ca phan thay doi da duoc review it nhat 1 lan.
+- Mỗi nhánh làm trên branch riêng.
+- Không sửa file owner của nhánh khác nếu chưa thông báo.
+- Mọi thay đổi tham số phải ghi ngay vào experiment registry.
+- Cuối ngày, mọi người cập nhật trạng thái: Done, Doing, Blocked.
 
 ---
 
-## 9. Giai doan F - Kiem tra truoc khi nop
+## 8. Giai đoạn E - Tích hợp và viết báo cáo
+
+### E1. Thứ tự merge
+
+1. Merge nhánh D2 (RQ1 và structure checks)
+2. Merge nhánh D1 (simulation RQ2, RQ3)
+3. Merge nhánh D3 (ML RQ4)
+4. Lead chạy lại tổng hợp sau merge
+
+### E2. Hoàn thiện báo cáo
+
+- Điền kết quả thật vào reports/final_report.md
+- Đồng bộ figure vào reports/figures
+- Đồng bộ table vào reports/tables
+- Mọi claim phải có evidence từ artifact
+
+### E3. Review chéo
+
+- Vòng 1: review kỹ thuật (logic, metric, reproducibility)
+- Vòng 2: review trình bày (rõ ràng, nhất quán RQ1 -> RQ4)
+
+### E4. Definition of Done cho Giai đoạn E
+
+- Báo cáo không còn placeholder quan trọng.
+- Figure/table khớp 100% với nội dung kết luận.
+- Tất cả phần thay đổi đã được review ít nhất 1 lần.
+
+---
+
+## 9. Giai đoạn F - Kiểm tra trước khi nộp
 
 ### F1. Reproducibility run
 
-- Chay lai pipeline tu dau tren mot may sach hoac venv sach.
-- Xac nhan artifact sinh ra day du.
+- Chạy lại pipeline từ đầu trên một máy sạch hoặc venv sạch.
+- Xác nhận artifact sinh ra đầy đủ.
 
-### F2. Checklist nop bai
+### F2. Checklist nộp bài
 
-- Outputs stage can thiet co du
-- reports/figures co du hinh can nop
-- reports/tables co du bang can nop
-- docs/experiment_registry.md da cap nhat day du
-- Bao cao final da chot ngay thang va thanh vien
+- Outputs stage cần thiết có đủ
+- reports/figures có đủ hình cần nộp
+- reports/tables có đủ bảng cần nộp
+- docs/experiment_registry.md đã cập nhật đầy đủ
+- Báo cáo final đã chốt ngày tháng và thành viên
 
-### F3. Definition of Done cho toan du an
+### F3. Definition of Done cho toàn dự án
 
-- Du 4 RQ voi bang va hinh minh chung.
-- Chay lai duoc theo quy trinh da ghi.
-- Nhom thong nhat ban nop cuoi.
+- Đủ 4 RQ với bảng và hình minh chứng.
+- Chạy lại được theo quy trình đã ghi.
+- Nhóm thống nhất bản nộp cuối.
 
 ---
 
-## 10. Bang phan cong nhanh (co the copy vao task board)
+## 10. Bảng phân công nhánh (có thể copy vào task board)
 
 - Lead:
-  - Scope lock va merge cuoi
+  - Scope lock và merge cuối
   - Stage 4 + Stage 5
-  - Tong hop RQ2, RQ3
-- Thanh vien A:
+  - Tổng hợp RQ2, RQ3
+- Thành viên A:
   - Stage 1 -> 3 quality check
   - RQ1 tables + figures
-  - Review nhanh ML
-- Thanh vien B:
+  - Review nhánh ML
+- Thành viên B:
   - Stage 6 ML
   - RQ4 tables + figures
-  - Review nhanh simulation
+  - Review nhánh simulation
 
 ---
 
-## 11. Moc tien do tham chieu
+## 11. Mốc tiến độ tham chiếu
 
-- Xong Giai doan A + B + C: 40%
-- Xong cac nhanh song song D1 + D2 + D3: 75%
-- Xong tich hop va review (E): 90%
-- Xong reproducibility check va chot nop (F): 100%
+- Xong Giai đoạn A + B + C: 40%
+- Xong các nhánh song song D1 + D2 + D3: 75%
+- Xong tích hợp và review (E): 90%
+- Xong reproducibility check và chốt nộp (F): 100%
 
