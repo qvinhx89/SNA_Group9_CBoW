@@ -14,7 +14,7 @@ Mục tiêu là:
 
 ## 2. Cơ cấu nhóm và vai trò
 
-- Vai trò 1: Phạm Quốc Vinh
+- Vai trò 1: Phạm Quốc Vĩnh
 - Vai trò 2: Trần Hùng Vĩ
 - Vai trò 3: Trần Quốc Hải
 
@@ -23,6 +23,13 @@ Nguyên tắc:
 - Lead chốt scope, merge cuối, và giải quyết xung đột kỹ thuật.
 - Mỗi thành viên vẫn phải code, chạy artifact, và review chéo.
 - Mọi thay đổi tham số bắt buộc ghi vào experiment registry.
+
+### Bức tranh toàn cảnh nhiệm vụ (Big Picture)
+Để dễ hình dung trước khi bắt tay làm, khối lượng công việc được chia tổng quan như sau:
+- **Lead (Vĩnh)** - *Người ghép nối & Mô phỏng:* Lo setup luồng chung, kiểm soát quy trình. Đảm nhiệm phần khắt khe nhất là chạy mô phỏng mô hình lan truyền (IC Model) để tìm ra chiến lược gieo mầm (seed) tối ưu (giải quyết **RQ2, RQ3**).
+- **Thành viên A (Vĩ)** - *Chuyên gia Cấu trúc mạng:* Tập trung phân tích nền tảng, tính toán các độ đo trung tâm (Centrality), phân tích cộng đồng (Community) và K-shell để rút ra phân loại (typology) của các influencer (giải quyết **RQ1**).
+- **Thành viên B (Hải)** - *Kỹ sư Machine Learning:* Dùng các đặc trưng rút trích từ dữ liệu mạng lưới để huấn luyện mô hình phân loại (Machine Learning), nhằm dự đoán độ chính xác của việc tìm ra influencer (giải quyết **RQ4**).
+*(**Lưu ý:** Đoạn đầu setup môi trường làm sạch dữ liệu và đoạn cuối ráp báo cáo thì cả 3 sẽ cùng phối hợp làm tuần tự).*
 
 ---
 
