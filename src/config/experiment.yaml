@@ -1,0 +1,10 @@
+# Experiment Configuration
+# This file tracks experiment-specific settings
+
+experiment:
+  name: "sna_twitch_baseline"
+  run_id: null  # Auto-generated
+  seed: 42
+
+# Override parameters here if needed
+# (base.yaml values will be used by default)

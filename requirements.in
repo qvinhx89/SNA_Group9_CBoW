@@ -1,0 +1,48 @@
+# SNA Twitch Influencer Project - Base Requirements
+# Use pip-compile to generate requirements.txt with pinned versions:
+#   pip-compile requirements.in > requirements.txt
+
+# Core
+numpy
+pandas
+scipy
+
+# Network
+networkx
+
+# Community detection
+cdlib
+python-louvain
+
+# ML
+scikit-learn
+
+# Statistics
+statsmodels
+
+# Interpretation
+shap
+
+# Parallel
+joblib
+
+# Storage
+pyarrow
+
+# Visualization
+matplotlib
+seaborn
+
+# Config
+pyyaml
+
+# Testing
+pytest
+pytest-cov
+
+# Notebooks
+jupyter
+notebook
+
+# Progress
+tqdm
