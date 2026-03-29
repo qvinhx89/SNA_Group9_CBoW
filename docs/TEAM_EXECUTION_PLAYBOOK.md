@@ -170,6 +170,19 @@ Chỉ được tách nhánh song song nếu:
 - Các artifact cốt lõi tồn tại và đọc được.
 - Lead xác nhận đầu vào cho stage 4, 5, 6 đã sẵn sàng.
 
+### C6. Bộ file hỗ trợ rigor cho Stage C
+
+Sử dụng các file sau để giữ chất lượng nghiên cứu trong lúc chạy pipeline:
+
+- docs/predictions.md
+- docs/stage_c_sanity_protocol.md
+- docs/live_interpretation_log.md
+- docs/results_audit_template.md
+
+Script chạy tự động Stage C + quality gate:
+
+    ./scripts/run_stageC_quality_gate.ps1
+
 ---
 
 ## 7. Giai đoạn D - Chia nhánh song song cho 3 người
