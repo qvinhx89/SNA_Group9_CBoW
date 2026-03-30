@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-03-30T12:50:05.819393",
+  "seed": 42,
+  "input_path": "data/processed/centrality_table.parquet",
+  "output_path": "data\\processed\\sis_table.parquet",
+  "sis_formula": "SIS(v) = [rank(PageRank) + rank(Betweenness) + rank(k-shell)] / 3",
+  "weights": "None (unweighted average)",
+  "rank_method": "average"
+}

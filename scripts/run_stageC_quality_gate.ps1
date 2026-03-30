@@ -30,6 +30,85 @@ function Test-RequiredFile {
     return New-GateResult -Name "FileExists:$Path" -Ok $false -Details "missing"
 }
 
+function Test-Stage0RawLoadQuality {
+    param([string]$ReportPath)
+
+    $checks = New-Object System.Collections.ArrayList
+    if (-not (Test-Path $ReportPath)) {
+        $null = $checks.Add((New-GateResult -Name "Stage0:RawLoadReportReadable" -Ok $false -Details "missing"))
+        return $checks
+    }
+
+    try {
+        $report = Get-Content $ReportPath -Raw | ConvertFrom-Json
+    } catch {
+        $null = $checks.Add((New-GateResult -Name "Stage0:RawLoadReportReadable" -Ok $false -Details "invalid json"))
+        return $checks
+    }
+
+    $null = $checks.Add((New-GateResult -Name "Stage0:RawLoadReportReadable" -Ok $true -Details "ok"))
+
+    $nodeFile = [string]$report.node_file
+    $nodeFileOk = -not [string]::IsNullOrWhiteSpace($nodeFile)
+    $nodeFileDetails = if ($nodeFileOk) { "node_file=$nodeFile" } else { "node_file missing" }
+    $null = $checks.Add((New-GateResult -Name "Stage0:NodeMetadataDetected" -Ok $nodeFileOk -Details $nodeFileDetails))
+
+    $viewsAvailable = 0
+    if ($report.PSObject.Properties.Name -contains "views_available") {
+        $viewsAvailable = [int]$report.views_available
+    }
+    $viewsOk = $viewsAvailable -gt 0
+    $null = $checks.Add((New-GateResult -Name "Stage0:ViewsAvailable" -Ok $viewsOk -Details "views_available=$viewsAvailable"))
+
+    if ($report.PSObject.Properties.Name -contains "node_edge_overlap_ratio") {
+        $overlapRatio = [double]$report.node_edge_overlap_ratio
+        $overlapOk = $overlapRatio -ge 0.95
+        $null = $checks.Add((New-GateResult -Name "Stage0:NodeEdgeOverlap" -Ok $overlapOk -Details ("ratio=" + $overlapRatio.ToString("F4"))))
+    } else {
+        $null = $checks.Add((New-GateResult -Name "Stage0:NodeEdgeOverlap" -Ok $false -Details "missing node_edge_overlap_ratio"))
+    }
+
+    if (($report.PSObject.Properties.Name -contains "n_nodes_raw") -and ($report.PSObject.Properties.Name -contains "n_nodes_unique")) {
+        $nRaw = [int]$report.n_nodes_raw
+        $nUnique = [int]$report.n_nodes_unique
+        $dedupOk = ($nRaw -eq $nUnique)
+        $null = $checks.Add((New-GateResult -Name "Stage0:NodeIdsDeduplicated" -Ok $dedupOk -Details "raw=$nRaw; unique=$nUnique"))
+    }
+
+    return $checks
+}
+
+function Test-Stage0PreprocessQuality {
+    param([string]$MetricsPath)
+
+    $checks = New-Object System.Collections.ArrayList
+    if (-not (Test-Path $MetricsPath)) {
+        $null = $checks.Add((New-GateResult -Name "Stage0:PreprocessMetricsReadable" -Ok $false -Details "missing"))
+        return $checks
+    }
+
+    try {
+        $metrics = Get-Content $MetricsPath -Raw | ConvertFrom-Json
+    } catch {
+        $null = $checks.Add((New-GateResult -Name "Stage0:PreprocessMetricsReadable" -Ok $false -Details "invalid json"))
+        return $checks
+    }
+
+    $null = $checks.Add((New-GateResult -Name "Stage0:PreprocessMetricsReadable" -Ok $true -Details "ok"))
+
+    $nActive = [int]$metrics.n_nodes_active_graph
+    $nFilled = [int]$metrics.n_missing_views_filled
+    if ($nActive -gt 0) {
+        $filledRatio = [double]$nFilled / [double]$nActive
+        $ratioOk = $filledRatio -lt 0.98
+        $null = $checks.Add((New-GateResult -Name "Stage0:MissingViewsFillRatio" -Ok $ratioOk -Details ("ratio=" + $filledRatio.ToString("F4"))))
+    } else {
+        $null = $checks.Add((New-GateResult -Name "Stage0:MissingViewsFillRatio" -Ok $false -Details "n_nodes_active_graph=0"))
+    }
+
+    return $checks
+}
+
 function Invoke-Stage {
     param(
         [int]$Stage,
@@ -98,6 +177,8 @@ if ($null -ne $last -and $last.ok) {
 }
 
 $requiredArtifacts = @(
+    "outputs/stage0_data_quality/raw_load_report.json",
+    "outputs/stage0_data_quality/metrics.json",
     "data/processed/graph_active.edgelist",
     "data/processed/node_attributes.parquet",
     "data/processed/centrality_table.parquet",
@@ -113,6 +194,14 @@ $requiredArtifacts = @(
 
 foreach ($artifact in $requiredArtifacts) {
     $null = $gateChecks.Add((Test-RequiredFile -Path $artifact))
+}
+
+foreach ($check in (Test-Stage0RawLoadQuality -ReportPath "outputs/stage0_data_quality/raw_load_report.json")) {
+    $null = $gateChecks.Add($check)
+}
+
+foreach ($check in (Test-Stage0PreprocessQuality -MetricsPath "outputs/stage0_data_quality/metrics.json")) {
+    $null = $gateChecks.Add($check)
 }
 
 $failedStages = @($stageResults | Where-Object { -not $_.ok })

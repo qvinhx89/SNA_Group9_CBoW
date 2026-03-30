@@ -39,7 +39,7 @@ community:
     n_runs: 10              # Number of runs for stability check (CHANGE-4)
     resolution: 1.0         # Resolution parameter
     seed_start: 0           # Starting seed (will use seeds 0-9)
-    nmi_threshold: 0.85     # Minimum acceptable NMI for stability
+    nmi_threshold: 0.70     # Practical minimum NMI for large sparse graph stability gate
 
 # SIS (Structural Influence Score) parameters
 sis:

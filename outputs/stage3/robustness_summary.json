@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-03-30T12:50:08.595561",
+  "base_threshold": 0.2,
+  "jaccard_target": 0.7,
+  "all_pass": true,
+  "rows": [
+    {
+      "threshold": 0.15,
+      "hidden_count": 24739,
+      "jaccard_with_base": 0.7470761129140898,
+      "jaccard_pass": true
+    },
+    {
+      "threshold": 0.2,
+      "hidden_count": 32324,
+      "jaccard_with_base": 1.0,
+      "jaccard_pass": true
+    },
+    {
+      "threshold": 0.25,
+      "hidden_count": 39251,
+      "jaccard_with_base": 0.7932304454577341,
+      "jaccard_pass": true
+    }
+  ]
+}

@@ -62,6 +62,9 @@ def compute_kshell(
 
 	centrality_df = pd.read_parquet(centrality_file)
 	centrality_df["node_id"] = centrality_df["node_id"].astype(str)
+	if "kshell" in centrality_df.columns:
+		# Idempotent reruns: replace existing kshell values with newly computed ones.
+		centrality_df = centrality_df.drop(columns=["kshell"])
 	merged = centrality_df.merge(kshell_df, on="node_id", how="left")
 
 	if merged["kshell"].isna().any():

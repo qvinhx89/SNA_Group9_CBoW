@@ -197,13 +197,16 @@ def compute_typology_on_null(
     df['typology'] = df.apply(assign_typology, axis=1)
 
     # Distribution
-    distribution = df['typology'].value_counts(normalize=True).to_dict()
+    distribution = {
+        str(k): float(v)
+        for k, v in df['typology'].value_counts(normalize=True).to_dict().items()
+    }
 
     return {
         'distribution': distribution,
-        'hidden_pct': distribution.get('hidden', 0) * 100,
-        'n_hidden': (df['typology'] == 'hidden').sum(),
-        'n_total': n
+        'hidden_pct': float(distribution.get('hidden', 0.0) * 100.0),
+        'n_hidden': int((df['typology'] == 'hidden').sum()),
+        'n_total': int(n)
     }
 
 
@@ -256,7 +259,7 @@ def run_null_model_comparison(
     # Load real typology for comparison
     try:
         typology_df = pd.read_parquet(typology_path)
-        real_hidden_pct = (typology_df['typology_label'] == 'hidden').mean() * 100
+        real_hidden_pct = float((typology_df['typology_label'] == 'hidden').mean() * 100.0)
         logger.info(f"Real graph: {real_hidden_pct:.2f}% Hidden Influencers")
     except FileNotFoundError:
         logger.warning("Typology file not found. Will compute from scratch.")
@@ -290,17 +293,17 @@ def run_null_model_comparison(
     # Comparison
     results = {
         "timestamp": datetime.now().isoformat(),
-        "seed": seed,
-        "sample_fraction": sample_fraction,
-        "n_nodes_sampled": G_sample.number_of_nodes(),
-        "threshold": threshold,
+        "seed": int(seed),
+        "sample_fraction": float(sample_fraction),
+        "n_nodes_sampled": int(G_sample.number_of_nodes()),
+        "threshold": float(threshold),
         "real_graph": {
-            "hidden_pct": real_hidden_pct
+            "hidden_pct": float(real_hidden_pct) if real_hidden_pct is not None else None
         },
         "null_model": {
-            "hidden_pct": null_typology['hidden_pct'],
-            "distribution": null_typology['distribution'],
-            "n_hidden": null_typology['n_hidden']
+            "hidden_pct": float(null_typology['hidden_pct']),
+            "distribution": {k: float(v) for k, v in null_typology['distribution'].items()},
+            "n_hidden": int(null_typology['n_hidden'])
         },
         "interpretation": ""
     }
@@ -332,8 +335,12 @@ def run_null_model_comparison(
     pd.DataFrame([{
         'metric': 'hidden_pct',
         'real_graph': real_hidden_pct,
-        'null_model': null_typology['hidden_pct'],
-        'difference': real_hidden_pct - null_typology['hidden_pct'] if real_hidden_pct else None
+        'null_model': float(null_typology['hidden_pct']),
+        'difference': (
+            float(real_hidden_pct) - float(null_typology['hidden_pct'])
+            if real_hidden_pct is not None
+            else None
+        )
     }]).to_csv(csv_path, index=False)
 
     logger.info("Null model comparison complete")

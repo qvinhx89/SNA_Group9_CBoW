@@ -14,14 +14,18 @@ from pathlib import Path
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 import yaml
 
 try:
     import community as community_louvain
 except ImportError:
     community_louvain = None
-    logging.warning("python-louvain not installed. Install with: pip install python-louvain")
+
+try:
+    from community import community_louvain as community_louvain_submodule
+except ImportError:
+    community_louvain_submodule = None
 
 try:
     from sklearn.metrics import normalized_mutual_info_score
@@ -32,6 +36,39 @@ except ImportError:
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _resolve_louvain_backend() -> Tuple[str, Optional[object]]:
+    """
+    Resolve a Louvain backend from available libraries.
+
+    Returns
+    -------
+    Tuple[str, Optional[object]]
+        (backend_name, backend_module)
+        backend_name in {"python-louvain", "networkx"}
+    """
+    if (
+        community_louvain is not None
+        and hasattr(community_louvain, "best_partition")
+        and hasattr(community_louvain, "modularity")
+    ):
+        return "python-louvain", community_louvain
+
+    if (
+        community_louvain_submodule is not None
+        and hasattr(community_louvain_submodule, "best_partition")
+        and hasattr(community_louvain_submodule, "modularity")
+    ):
+        return "python-louvain", community_louvain_submodule
+
+    if hasattr(nx.community, "louvain_communities"):
+        return "networkx", None
+
+    raise ImportError(
+        "No compatible Louvain backend found. Install python-louvain "
+        "(pip install python-louvain) or use networkx>=2.8."
+    )
 
 
 def load_config(config_path: str = "src/config/base.yaml") -> dict:
@@ -62,13 +99,21 @@ def run_louvain_single(G: nx.Graph, seed: int, resolution: float = 1.0) -> Tuple
     Tuple[Dict, float]
         (partition dict, modularity Q)
     """
-    if community_louvain is None:
-        raise ImportError("python-louvain package not installed")
+    backend_name, backend_module = _resolve_louvain_backend()
 
-    partition = community_louvain.best_partition(G, random_state=seed, resolution=resolution)
-    modularity = community_louvain.modularity(partition, G)
+    if backend_name == "python-louvain":
+        partition = backend_module.best_partition(G, random_state=seed, resolution=resolution)
+        modularity = backend_module.modularity(partition, G)
+        return partition, modularity
 
-    return partition, modularity
+    # Fallback: NetworkX Louvain communities
+    communities = nx.community.louvain_communities(G, resolution=resolution, seed=seed)
+    partition = {}
+    for community_idx, members in enumerate(communities):
+        for node in members:
+            partition[node] = int(community_idx)
+    modularity = nx.community.modularity(G, communities)
+    return partition, float(modularity)
 
 
 def compute_nmi_between_partitions(partition1: Dict, partition2: Dict, nodes: List) -> float:
@@ -146,6 +191,9 @@ def detect_communities(
     n_nodes = len(nodes)
     logger.info(f"Graph loaded: {n_nodes} nodes, {G.number_of_edges()} edges")
 
+    backend_name, _ = _resolve_louvain_backend()
+    logger.info(f"Using Louvain backend: {backend_name}")
+
     # CHANGE-4: Run Louvain n_runs times with different seeds
     logger.info(f"Running Louvain {n_runs} times for stability check...")
     partitions = []
@@ -201,18 +249,19 @@ def detect_communities(
     # CHANGE-4: Save metrics including mean_nmi_louvain
     metrics = {
         "timestamp": datetime.now().isoformat(),
+        "backend": backend_name,
         "n_nodes": n_nodes,
         "n_runs": n_runs,
         "best_run_index": int(best_idx),
-        "best_seed": best_seed,
+        "best_seed": int(best_seed),
         "best_modularity": float(best_modularity),
-        "n_communities": n_communities,
+        "n_communities": int(n_communities),
         "all_modularities": [float(m) for m in modularities],
         "mean_nmi_louvain": float(mean_nmi),  # CHANGE-4: key metric for stability
         "std_nmi_louvain": float(std_nmi),
         "min_nmi_louvain": float(min_nmi),
         "nmi_threshold": nmi_threshold,
-        "stability_warning": mean_nmi < nmi_threshold
+        "stability_warning": bool(mean_nmi < nmi_threshold),
     }
 
     metrics_path = output_dir / "metrics.json"
@@ -224,15 +273,16 @@ def detect_communities(
     stability_report = {
         "timestamp": datetime.now().isoformat(),
         "method": "louvain",
+        "backend": backend_name,
         "n_runs": n_runs,
         "resolution": resolution,
         "seeds_used": list(range(seed_start, seed_start + n_runs)),
         "run_results": [
             {
                 "run": i + 1,
-                "seed": seed_start + i,
+                "seed": int(seed_start + i),
                 "modularity": float(modularities[i]),
-                "n_communities": len(set(partitions[i].values()))
+                "n_communities": int(len(set(partitions[i].values()))),
             }
             for i in range(n_runs)
         ],
@@ -245,7 +295,7 @@ def detect_communities(
             "std_nmi": float(std_nmi),
             "min_nmi": float(min_nmi),
             "stability_threshold": nmi_threshold,
-            "is_stable": mean_nmi >= nmi_threshold
+            "is_stable": bool(mean_nmi >= nmi_threshold),
         }
     }
 
