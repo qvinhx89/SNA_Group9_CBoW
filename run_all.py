@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import json
+from typing import Tuple, Dict
 from pathlib import Path
 from datetime import datetime
 
@@ -96,10 +97,10 @@ def print_status(text: str, status: str = "INFO"):
     """Print status message with timestamp."""
     timestamp = datetime.now().strftime("%H:%M:%S")
     symbols = {
-        "INFO": "ℹ",
-        "OK": "✓",
-        "ERROR": "✗",
-        "RUN": "▶"
+        "INFO": "[i]",
+        "OK": "[OK]",
+        "ERROR": "[ERR]",
+        "RUN": "[RUN]"
     }
     symbol = symbols.get(status, "•")
     print(f"[{timestamp}] {symbol} {text}")
@@ -302,10 +303,6 @@ def main():
     # Default: run full pipeline
     results = run_full_pipeline()
     sys.exit(0 if results["success"] else 1)
-
-
-# Type hint for Python < 3.9 compatibility
-from typing import Tuple
 
 if __name__ == "__main__":
     main()

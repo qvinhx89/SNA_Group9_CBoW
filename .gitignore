@@ -15,10 +15,35 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Generated project artifacts
-outputs/
 logs/
-data/interim/
-data/processed/
+
+# Keep generated outputs ignored by default, but allow baseline Stage 0-3 artifacts
+outputs/*
+!outputs/.gitkeep
+!outputs/stage0_data_quality/
+!outputs/stage0_data_quality/**
+!outputs/stage1/
+!outputs/stage1/**
+!outputs/stage2/
+!outputs/stage2/**
+!outputs/stage3/
+!outputs/stage3/**
+
+# Keep data artifacts ignored by default, but allow reproducibility bundle for Stage 0-3
+data/interim/*
+!data/interim/.gitkeep
+!data/interim/edges_raw.parquet
+!data/interim/nodes_raw.parquet
+
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/graph_active.edgelist
+!data/processed/node_attributes.parquet
+!data/processed/centrality_table.parquet
+!data/processed/community_labels.parquet
+!data/processed/kshell_table.parquet
+!data/processed/sis_table.parquet
+!data/processed/typology_labels.parquet
 
 # OS/editor metadata
 .DS_Store
