@@ -4,6 +4,14 @@ Các file trong folder này được scaffold để 3 người có thể bắt �
 
 Artifacts/contracts: xem `docs/MAPR2026_v3_team_parallel_coding_plan.md`.
 
+## Preflight (Person 2)
+
+Chạy từ workspace root để kiểm tra prerequisite theo contract hiện tại:
+
+- `python src/mapr2026_v3/preflight_person2.py`
+
+Thêm `--json` nếu muốn output machine-readable.
+
 ## Quick dry-run (không chạy compute nặng)
 
 1. Tạo placeholder Day-1 artifacts:
