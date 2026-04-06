@@ -146,7 +146,8 @@ Tất cả artifacts dưới đây được tạo bởi **Person 1** qua `ic_lab
 
 Tạo trước typology vì structural profiling cần `cross_community_edge_fraction`.
 
-- **Thêm vào `data/processed/node_attributes.parquet`** (hoặc file riêng `community_features.parquet`):
+- **Output: `data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`; Person 1 owns node_attributes):
+  - `node_id`: str — join key; consumers join on column này (Stage 5 + structural profiling)
   - `community_id`: int — Louvain partition, `resolution=1.0`, `seed=42`
   - `cross_community_edge_fraction`: float — fraction of neighbors in a different community
 - Script: `src/graph/community.py` (đã có sẵn trong repo)
@@ -199,6 +200,13 @@ Output phụ bắt buộc: `outputs/mapr2026_v3_results/runtime_breakdown.csv`
 - `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`
   - columns tối thiểu: `model_name`, `spearman_rho`, `ndcg_at_10pct`, `precision_at_10pct`, `runtime_sec`
   - `runtime_sec` = full-graph inference only (M0-locked)
+  - Covers Group 1–4 (views_rank, views_per_day_rank, degree_rank, pagerank, kshell, betweenness, one_hop_spread, two_hop_spread, node2vec_ridge, mlp_raw_attr)
+
+- `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv` **(bắt buộc nếu GNN branch viable — M2)**
+  - columns tối thiểu: `model_name`, `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `precision_mean`, `precision_std`, `runtime_sec`
+  - Covers Group 5 GNN ablation (gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full)
+  - `runtime_sec` = GNN inference only trên full active graph (không tính training)
+  - `mean±std` tính trên 5 training seeds `[42, 123, 456, 789, 1024]`
 
 **Consumer rule (M0-locked):** Person 3 load metrics target từ `regression_targets.parquet`, filter theo `split_masks.parquet` dùng `load_split_mask()` + `apply_test_mask()` từ `eval_ranking_harness.py`. Không tạo split mới.
 
@@ -251,7 +259,9 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 
 **Decision gate — phải ghi vào `docs/day1_decisions.md` và commit:**
 
-| Projected runtime | N_seeds | N_runs | Action |
+> ⚠ `n_sample` = số labeled nodes được chọn để chạy IC (KHÔNG phải số IC random seeds — mỗi node dùng 1 seed = `42 + node_index`)
+
+| Projected runtime | n_sample | N_runs | Action |
 |---|---|---|---|
 | < 4h | 5.000 | 200 | Proceed as planned |
 | 4–8h | 3.000 | 150 | Ghi limitation về compute |
@@ -267,12 +277,13 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 
 **Lý do:** validate Task A (IC labels đủ discriminative và ổn định) trước khi làm typology/GNN.
 
-- Input: CSR
+- Input: CSR (`data/processed/graph_csr.npz`)
 - Output:
-  - `ic_scores_primary.parquet` (ít nhất trên pilot sample; có `ic_ci_lower/upper` nếu bootstrap)
-  - `regression_targets.parquet`, `classification_labels.parquet`
-  - **`split_masks.parquet`** — tạo ngay sau IC labels (M0-locked: 80/20, degree_quintile, seed=42)
-  - stability report (Jaccard across MC seeds)
+  - `data/processed/ic_scores_primary.parquet` (n_sample labeled nodes; columns: `node_id, ic_score_mean, ic_score_std, n_runs, p_model`; optional: `ic_ci_lower, ic_ci_upper` nếu bootstrap)
+  - `data/processed/regression_targets.parquet` (columns: `node_id, y` với `y=log1p(ic_score_mean)`)
+  - `data/processed/classification_labels.parquet` (columns: `node_id, y_top10`)
+  - **`data/processed/split_masks.parquet`** — tạo ngay sau IC labels (M0-locked: 80/20, degree_quintile, seed=42)
+  - `outputs/day1_benchmark/ic_pilot_diagnostics.json` — pilot 6-metric report + KS check + Jaccard stability (xem schema fields dưới)
 
 **Seed rules (critical correctness):**
 - **Primary IC**: `worker_seed = 42 + node_index` — mọi lần chạy production dùng cùng seed per-node
@@ -305,6 +316,25 @@ node_ids = np.array(sorted_nodes)  # save vào npz
   ```
   (`warn` = true nếu `ks_stat > 0.10`)
 
+**Schema tối thiểu của `outputs/day1_benchmark/ic_pilot_diagnostics.json`:**
+```json
+{
+  "n_pilot_nodes": 200,
+  "n_pilot_runs": 50,
+  "mean_reach": <float>,
+  "median_reach": <float>,
+  "iqr_reach": <float>,
+  "top10_to_median_ratio": <float>,
+  "cv_score": <float>,
+  "rank_stability": <float>,
+  "cv_noise_count": <int>,
+  "jaccard_stability": <float>,
+  "ks_results": { ... }
+}
+```
+- `jaccard_stability` ≥ 0.85 → labels ổn định (3 MC seeds × n_runs=150)
+- `cv_score` > 0.3 bắt buộc; nếu thấp hơn → báo team, tăng n_runs
+
 **Stop condition:** Nếu `split_masks.parquet` chưa tồn tại sau Stage 4 → Stage 7 (surrogate) không được chạy.
 
 ### Stage 4b (MỚI, song song với Stage 4) — Community detection features
@@ -312,17 +342,37 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 **Lý do:** `cross_community_edge_fraction` bắt buộc cho structural profiling — không cần IC labels.
 
 - Input: `data/processed/graph_active.edgelist`
-- Output: thêm `community_id` + `cross_community_edge_fraction` vào `node_attributes.parquet`
+- Output: **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`). Consumers (Person 2, Person 3) join on `node_id`.
 - Script: `src/graph/community.py` (đã có sẵn)
-- Library: `python-louvain` (`community.best_partition(G_nx, resolution=1.0, random_state=42)`)
-- Params: Louvain `resolution=1.0`, `seed=42`
+- Library: `python-louvain` — **KHÔNG dùng NetworkX Louvain** (không support `random_state`)
+- Params: `community.best_partition(G_nx, resolution=1.0, random_state=42)`
 - **Có thể chạy song song với Stage 4 (không phụ thuộc IC labels)**
+
+**Công thức `cross_community_edge_fraction` (bắt buộc — không dùng proxy khác):**
+```python
+import community   # pip install python-louvain
+
+partition = community.best_partition(G_nx, resolution=1.0, random_state=42)
+# partition: dict {node_id: community_id}
+
+def cross_community_fraction(node, G_neighbors, partition):
+    neighbors = list(G_neighbors[node])
+    if len(neighbors) == 0:
+        return 0.0
+    n_cross = sum(1 for v in neighbors if partition[v] != partition[node])
+    return n_cross / len(neighbors)
+
+# Áp dụng cho tất cả active nodes → column "cross_community_edge_fraction"
+```
+- Scope: **ALL active nodes** (phủ 100%) — không filter theo labeled/unlabeled
+- `community_id`: int (Louvain partition ID)
+- `cross_community_edge_fraction`: float ∈ [0.0, 1.0]
 
 ### Stage 5 (ĐỔI/VIẾT MỚI) — IC×views typology + structural profiling + life_time validation + null model
 
 **Lý do:** Task B phụ thuộc IC labels + community features.
 
-- Input: `ic_scores_primary.parquet` + `node_attributes.parquet` (phải có `community_id`, `cross_community_edge_fraction`)
+- Input: `ic_scores_primary.parquet` + `node_attributes.parquet` + **`community_features.parquet`** (phải có `community_id`, `cross_community_edge_fraction` — join on `node_id`)
 - Output:
   - `typology_labels_ic_views.parquet` (all labeled nodes, threshold top-10%, M0-locked)
   - `outputs/mapr2026_v3_results/structural_profiling.csv` (MWU + Cliff's Δ + BH-FDR p_corrected)
@@ -336,7 +386,7 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 - 100 runs/node: đủ để ổn định IC estimate trên null graph
 - So sánh: TYPOLOGY QUADRANT (không chỉ rank correlation) — câu hỏi: "null graph có Hidden với betweenness cao không?"
 
-**Schema bắt buộc cho `null_model_typology_summary.json`:**
+**Schema bắt buộc cho `null_model_typology_summary.json` (10 fields):**
 ```json
 {
   "timestamp": "<ISO 8601>",
@@ -345,11 +395,13 @@ node_ids = np.array(sorted_nodes)  # save vào npz
   "n_runs_per_node": 100,
   "rho_mean": <float>,
   "rho_std": <float>,
+  "hidden_betweenness_real_subgraph_mean": <float>,
   "hidden_betweenness_null_mean": <float>,
   "hidden_betweenness_null_std": <float>,
   "interpretation": "<str>"
 }
 ```
+⚠ Cả `hidden_betweenness_real_subgraph_mean` và `hidden_betweenness_null_mean` đều dùng cùng scope (500-node subgraph, NetworkX exact betweenness, normalized=True) để comparable.
 
 **Two-sample strategy (v3 Section 4.5):**
 - Nếu Hidden quadrant < 150 sau lần sample đầu → tăng `n_sample` lên **8.000–10.000 nodes**, đồng thời augment Sample B (high-betweenness + low-views nodes từ full graph)
@@ -365,6 +417,24 @@ node_ids = np.array(sorted_nodes)  # save vào npz
   - `data/processed/diffusion_proxies.parquet` — **FULL active graph** (M0-locked; không filter)
   - `outputs/mapr2026_v3_results/runtime_breakdown.csv` — ghi `model_name`, `inference_sec_full_graph`
 - Script: `src/mapr2026_v3/diffusion_proxies.py` (real mode, không `--dry-run`)
+
+**Công thức bắt buộc (xem chi tiết ở team_plan Person 2 Deliverable 2):**
+```python
+# One-hop — O(deg(u)) per node
+def one_hop(node, neighbors, degrees):
+    return sum(1.0 / max(degrees[v], 1) for v in neighbors[node])
+
+# Two-hop — O(deg²) per node; genuinely different from one-hop
+def two_hop(node, neighbors, degrees):
+    total = 0.0
+    for v in neighbors[node]:
+        p_uv = 1.0 / max(degrees[v], 1)
+        second = sum(1.0 / max(degrees[w], 1) for w in neighbors[v] if w != node)
+        total += p_uv * (1 + second)
+    return total
+```
+- Đo `inference_sec_full_graph` bằng `time.time()` bao toàn bộ vòng lặp qua ~168k nodes
+- Ghi 2 rows vào `runtime_breakdown.csv`: `one_hop_spread` và `two_hop_spread`
 
 **Stop condition:** Nếu output chỉ có labeled subset → rebuild. Person 3 cần full graph để đo runtime fair.
 

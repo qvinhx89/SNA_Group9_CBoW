@@ -94,6 +94,7 @@ python run_all.py --stage 2
 
 | Artifact (path)                                                | Owner    | Consumers  | Contract tối thiểu                                                                        |
 | -------------------------------------------------------------- | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| `outputs/stage0_data_quality/lcc_report.json`                  | Person 1 | Person 1,2 | fields: `n_nodes_total, n_nodes_lcc, pct_lcc, n_components`. **Dùng cho pilot threshold:** `median_reach < 5% of n_nodes_lcc`. Phải có trước khi chạy IC pilot. |
 | `data/processed/graph_csr.npz`                                 | Person 1 | All        | `indptr`, `indices`, `degrees`, mapping `node_id↔row_index` deterministic                 |
 | `outputs/day1_benchmark/ic_runtime_benchmark.json`             | Person 1 | All        | per-sim ms + projected runtime + decision table                                           |
 | `outputs/day1_benchmark/one_hop_correlation.json`              | Person 1 | All        | Spearman ρ + decision branch (ρ<0.8 / 0.8–0.9 / >0.9)                                     |
@@ -101,8 +102,9 @@ python run_all.py --stage 2
 | `data/processed/regression_targets.parquet`                    | Person 1 | Person 3   | columns: `node_id, y` với `y=log1p(ic_score_mean)`                                        |
 | `data/processed/classification_labels.parquet`                 | Person 1 | Person 3   | columns: `node_id, y_top10` (top 10%)                                                     |
 | `data/processed/split_masks.parquet` **[M0-locked]**           | Person 1 | Person 2,3 | columns: `node_id (str), split ('train'\|'test')`. 80/20, degree-stratified q=5, seed=42. Scope = labeled nodes only. **Không ai tự tạo split khác.** |
+| `data/processed/community_features.parquet`                    | Person 2 | Person 2,3 | columns: `node_id, community_id, cross_community_edge_fraction`. Scope: ALL active nodes. **File riêng** — KHÔNG ghi đè `node_attributes.parquet` (Person 1 owns). |
 | `data/processed/diffusion_proxies.parquet`                     | Person 2 | Person 3   | columns: `node_id, one_hop_spread, two_hop_spread`. **Scope: FULL active graph** (không phải chỉ labeled subset) |
-| `data/processed/typology_labels_ic_views.parquet`              | Person 2 | Person 3   | columns: `node_id, typology_label, ic_high, views_high, ic_score_mean, views`             |
+| `data/processed/typology_labels_ic_views.parquet`              | Person 2 | Person 2   | columns: `node_id, typology_label, ic_high, views_high, ic_score_mean, views`. Person 3 **không cần** file này để eval — Person 3 dùng `regression_targets.parquet` + `split_masks.parquet`. |
 | `outputs/mapr2026_v3_results/null_model_typology_summary.json` | Person 2 | All        | 9 fields bắt buộc: `timestamp, n_nodes(500), n_realizations(3), n_runs_per_node(100), rho_mean, rho_std, hidden_betweenness_null_mean, hidden_betweenness_null_std, interpretation` — xem Format spec dưới |
 | `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`     | Person 3 | All        | columns: `model_name, spearman_rho, ndcg_at_10pct, precision_at_10pct, runtime_sec`       |
 | `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv`    | Person 3 | All        | **Bắt buộc nếu GNN branch viable (M2)** — columns: `model_name, spearman_rho_mean, spearman_rho_std, ndcg_mean, ndcg_std, precision_mean, precision_std, runtime_sec` (mean±std trên 5 seeds) |
@@ -181,11 +183,13 @@ Schema bắt buộc (mean±std trên 5 training seeds `[42, 123, 456, 789, 1024]
 
 Schema bắt buộc — dùng để tính "Speedup: MC IC vs GNN inference" trong Table runtime của paper:
 
-- `model_name`: string — dùng tên chuẩn (vd. `gnn_raw_attr`, `diffusion_proxies`, `node2vec_ridge`, ...)
-- `inference_sec_full_graph`: float — thời gian inference trên toàn bộ active graph (~168k nodes)
+- `model_name`: string — dùng tên chuẩn (vd. `gnn_raw_attr`, `diffusion_proxies`, `node2vec_ridge`, `mc_ic_labeling`, ...)
+- `inference_sec_full_graph`: float — thời gian inference trên toàn bộ active graph (~168k nodes); với `mc_ic_labeling` = tổng IC labeling time tính bằng giây
+- `train_sec`: float or null — thời gian training (embed + Ridge.fit cho Node2Vec; training 1 seed cho GNN). null cho Group 1–3 và diffusion proxies (không có training phase riêng)
 
 **Owner rule:**
-- Person 2 ghi `diffusion_proxies` (một_hop + two_hop, inference trên full graph)
+- **Person 1** ghi 1 row: `mc_ic_labeling` với `inference_sec_full_graph = projected_total_hours * 3600` (đọc từ `ic_runtime_benchmark.json`), `train_sec = null`. **PHẢI ghi trước M5** — Person 3 cần để tính Speedup.
+- Person 2 ghi `diffusion_proxies` (one_hop + two_hop, inference trên full graph), `train_sec = null`
 - Person 3 ghi tất cả Group 1–5 models sau khi chạy inference
 - Append vào cùng file — không overwrite
 
@@ -201,6 +205,7 @@ Schema bắt buộc (để các thành viên khác đọc được không cần 
   "n_runs_per_node": 100,
   "rho_mean": 0.42,
   "rho_std": 0.03,
+  "hidden_betweenness_real_subgraph_mean": 0.00089,
   "hidden_betweenness_null_mean": 0.00031,
   "hidden_betweenness_null_std": 0.00005,
   "interpretation": "Null graph Hidden nodes do NOT show elevated betweenness — typology reflects true structural position, not degree-distribution artifact."
@@ -208,8 +213,10 @@ Schema bắt buộc (để các thành viên khác đọc được không cần 
 ```
 
 - `rho_mean/rho_std`: Spearman ρ (null IC rank vs real IC rank) trung bình ± std qua 3 realizations
-- `hidden_betweenness_null_mean`: mean betweenness của Hidden quadrant trên null graphs
-- `interpretation`: câu kết luận tự động (viết code tự sinh dựa trên so sánh real vs null betweenness)
+- `hidden_betweenness_real_subgraph_mean`: mean betweenness của Hidden nodes trong **real** graph 500-node subgraph (cùng scope với null để comparable)
+- `hidden_betweenness_null_mean/std`: mean betweenness của Hidden nodes trên **null** graph 500-node subgraph, averaged over 3 realizations
+- Cả hai `*_betweenness_*` đều dùng `nx.betweenness_centrality(G.subgraph(500_nodes), normalized=True)` — cùng scope, cùng hàm → comparable
+- `interpretation`: câu kết luận tự động (viết code tự sinh dựa trên so sánh `hidden_betweenness_real_subgraph_mean` vs `hidden_betweenness_null_mean`)
 
 #### Join rule (để khỏi dính lỗi dtype)
 
@@ -410,8 +417,10 @@ IC scores + split_masks ──────► typology thật ──────
    | ρ > 0.9 | **RESTRUCTURE**: proxies là primary, GNN là secondary; báo cả team ngay |
 4. IC pilot + diagnostics (CV / non-degenerate checks)
    - Output: `outputs/day1_benchmark/ic_pilot_diagnostics.json`
-     - Fields bắt buộc: `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `n_pilot_nodes`, `n_pilot_runs`, `cv_noise_count` (số nodes có CV > 0.50), `ks_results` (dict per feature — xem schema dưới)
+     - Fields bắt buộc (10 fields + ks_results): `n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count` (số nodes có CV > 0.50), `jaccard_stability` (ghi SAU khi chạy 3 MC stability experiments — phải ≥ 0.85), `ks_results` (dict per feature — xem schema dưới)
    - Nếu `cv_score < 0.3` → cascade quá degenerate, báo team trước khi chạy full IC
+
+   > **Note về thứ tự ghi file:** `ic_pilot_diagnostics.json` được ghi 2 lần — lần 1 sau pilot run (chưa có `jaccard_stability`), lần 2 sau 3 MC stability experiments (thêm `jaccard_stability`). Script `ic_labels_primary.py` tự update file bằng `json.load` → `json.dump`.
 
    **Schema của `ks_results` (KS representativeness check — 3 features):**
    ```python
@@ -507,6 +516,16 @@ IC scores + split_masks ──────► typology thật ──────
    - Rule cứng: `test_frac=0.20`, `stratify=degree_quintile` (q=5), `seed=42`
    - Dùng flag `--test-frac 0.20 --seed 42` trong `ic_labels_primary.py`
    - Ghi số `n_train / n_test` vào `docs/day1_decisions.md` để team biết
+
+7. **[M3] Views/IC alignment check** — chạy ngay sau khi có `ic_scores_primary.parquet` (final run)
+   ```python
+   from scipy.stats import spearmanr
+   df = pd.read_parquet(PATHS.ic_scores)
+   rho_views_ic, pval = spearmanr(df["views"], df["ic_score_mean"])
+   # Ghi vào docs/day1_decisions.md Phần 4:
+   # views/IC Spearman ρ = {rho_views_ic:.3f} (p = {pval:.4f})
+   ```
+   Kết quả quyết định narrative RQ2 — xem bảng fallback tại Milestone M3.
 
 **Gợi ý phân tách file để giảm conflict:**
 
@@ -613,8 +632,7 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 - Dead account report tồn tại: `outputs/stage0_data_quality/dead_account_report.json` có `n_dead`, `pct_dead`, `mean_degree_dead`, `mean_degree_live`.
 - LCC report tồn tại: `outputs/stage0_data_quality/lcc_report.json` có `n_nodes_total`, `n_nodes_lcc`, `pct_lcc`, `n_components`.
 - Day-1 artifacts sinh ra được: `ic_runtime_benchmark.json` và `one_hop_correlation.json`; `docs/day1_decisions.md` đã điền N_seeds, N_runs, narrative_branch.
-- IC pilot diagnostics JSON tồn tại: `ic_pilot_diagnostics.json` có đủ 6 fields + `ks_results`; `cv_score > 0.3`.
-- Jaccard stability ≥ 0.85 across 3 MC seeds.
+- IC pilot diagnostics JSON tồn tại: `outputs/day1_benchmark/ic_pilot_diagnostics.json` có đủ **10 fields** (`n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count`, `jaccard_stability`) + `ks_results`; `cv_score > 0.3`; `jaccard_stability ≥ 0.85`.
 - Bootstrap 95% CI đã tính (nếu thời gian cho phép): cột `ic_ci_lower`, `ic_ci_upper` trong `ic_scores_primary.parquet`.
 - `split_masks.parquet` tồn tại, schema đúng, coverage = 100% labeled nodes, test_frac ≈ 0.20.
 
@@ -643,9 +661,10 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - Input: `data/processed/graph_active.edgelist` (hoặc graph_csr.npz)
    - Script: `src/graph/community.py` (đã có sẵn) — Louvain, `resolution=1.0`, `seed=42`
    - **Library:** `python-louvain` (`community.best_partition(G_nx, resolution=1.0, random_state=42)`) hoặc `cdlib` — KHÔNG dùng NetworkX Louvain (không support `random_state`)
-   - Output thêm vào `node_attributes.parquet` (hoặc file riêng `community_features.parquet`):
+   - Output: **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`)
      - `community_id`: int (Louvain partition)
      - `cross_community_edge_fraction`: float (fraction neighbors in different community)
+   - **Lý do file riêng:** Person 1 owns `node_attributes.parquet`. Person 2 ghi đè sẽ gây merge conflict. Consumers (Person 2, 3) join on `node_id` khi cần.
    - Scope: ALL active nodes (phủ 100%)
    - **Công thức `cross_community_edge_fraction` (per node):**
      ```python
@@ -873,20 +892,34 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - Node set: 500 nodes được sample từ labeled nodes (seed=42 để reproducible)
    - Sau IC trên null: apply cùng typology threshold (IC top-10%, views top-10%) → đếm Hidden nodes → lấy betweenness trung bình của Hidden group trên null graph
 
-   **Betweenness trên null graph — cách tính (scope: 500-node subgraph):**
+   **Betweenness trên null graph — cách tính (scope: 500-node subgraph cho CẢ real và null):**
+
+   > ⚠ **Scope consistency rule:** KHÔNG so sánh subgraph betweenness (null) với full-graph betweenness (từ centrality_table.parquet via NetworKit). Hai giá trị này có đơn vị khác nhau — không comparable. Phải tính subgraph betweenness cho CẢ HAI phía với cùng 500-node scope.
+
    ```python
    import networkx as nx
 
-   # Null graph chỉ có 500 nodes → betweenness exact OK (NetworkX)
-   # Dùng subgraph của null_G chứa 500 sampled nodes và edges giữa chúng
+   # ─── Real graph: subgraph betweenness trên 500-node subset ─────────────────
+   # Dùng cùng G_real (real NetworkX graph) và sample_500_node_ids
+   G_real_sub = G_real.subgraph(sample_500_node_ids)
+   betweenness_real = nx.betweenness_centrality(G_real_sub, normalized=True)
+   hidden_on_real = [n for n in sample_500_node_ids if real_typology.get(n) == "Hidden"]
+   hidden_bet_real = np.mean([betweenness_real.get(n, 0.0) for n in hidden_on_real]) if hidden_on_real else 0.0
+
+   # ─── Null graph: subgraph betweenness trên cùng 500-node subset ────────────
    G_null_sub = G_null.subgraph(sample_500_node_ids)
    betweenness_null = nx.betweenness_centrality(G_null_sub, normalized=True)
-   # Với mỗi realization: lấy betweenness của Hidden-on-null nodes
-   hidden_on_null = [n for n in sample_500_node_ids if null_typology[n] == "Hidden"]
-   hidden_bet_null = np.mean([betweenness_null.get(n, 0.0) for n in hidden_on_null])
+   hidden_on_null = [n for n in sample_500_node_ids if null_typology.get(n) == "Hidden"]
+   hidden_bet_null = np.mean([betweenness_null.get(n, 0.0) for n in hidden_on_null]) if hidden_on_null else 0.0
+
+   # ─── Interpretation ─────────────────────────────────────────────────────────
+   # Nếu hidden_bet_real >> hidden_bet_null:
+   #     Hidden-node betweenness là structural (không phải degree artifact) ✅
+   # Nếu hidden_bet_real ≈ hidden_bet_null:
+   #     Betweenness là consequence của degree distribution → report as limitation
    ```
-   - KHÔNG dùng NetworKit ApproxBetweenness2 cho null (500 nodes → exact fast enough)
-   - KHÔNG reuse real-graph betweenness — null graph có degree sequence khác
+   - KHÔNG dùng NetworKit betweenness từ `centrality_table.parquet` phía để compare với null (scope khác)
+   - 500 nodes → NetworkX exact betweenness fast enough (~vài giây)
 
 **Gợi ý entrypoint (để review dễ):**
 
@@ -915,12 +948,12 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 
 **DoD cho Track B:**
 
-- `community_id` và `cross_community_edge_fraction` có trong `node_attributes.parquet` (hoặc file riêng), phủ 100% active nodes; dùng `python-louvain` với `resolution=1.0, random_state=42`.
+- `community_id` và `cross_community_edge_fraction` có trong **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`), phủ 100% active nodes; dùng `python-louvain` với `resolution=1.0, random_state=42`.
 - Proxies chạy xong trên FULL active graph (missing = 0), `runtime_breakdown.csv` có `inference_sec_full_graph`.
 - Typology: `typology_quadrant_report.json` tồn tại tại `outputs/mapr2026_v3_results/`, mỗi quadrant ≥ 150 nodes (`min_quadrant_ok: true`); nếu chưa đạt → apply two-sample strategy và set `two_sample_applied: true`.
 - Structural profiling: MWU + Cliff's delta (`threshold Δ ≥ 0.20`) + BH-FDR cho 6 columns, kết quả ghi ra `structural_profiling.csv` với đúng 6 hàng.
 - `life_time` validation: chạy được cả 2 methods (partial Spearman + stratified MWU), ghi p_corrected (không phải p_raw) vào `lifetime_validation.json`. **Success target: ≥ 3/5 degree quintiles significant** (`cliffs_delta_threshold=0.20, fdr_alpha=0.05`).
-- Null model: 3 realizations × 500 nodes × 100 runs, output `null_model_typology_summary.json` đúng schema **(9 fields: timestamp, n_nodes, n_realizations, n_runs_per_node, rho_mean, rho_std, hidden_betweenness_null_mean, hidden_betweenness_null_std, interpretation)** — xem Format spec Mục 2.
+- Null model: 3 realizations × 500 nodes × 100 runs, output `null_model_typology_summary.json` đúng schema **(10 fields: timestamp, n_nodes, n_realizations, n_runs_per_node, rho_mean, rho_std, hidden_betweenness_real_subgraph_mean, hidden_betweenness_null_mean, hidden_betweenness_null_std, interpretation)** — xem Format spec Mục 2. **Cả hai betweenness dùng cùng scope (500-node subgraph, NetworkX exact) để comparable.**
 
 **Threshold rule (đã lock tại M0):** top-10% cho cả IC và views (`classification_threshold: 0.10`).
 
@@ -1036,7 +1069,10 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
      y_pred = ridge.predict(X_test)
      runtime_sec = time.time() - t0   # embed + fit + predict (toàn bộ)
      ```
-     - `runtime_sec` = embed + train Ridge + predict (không tính I/O load)
+     - `runtime_sec` trong `baseline_ranking_metrics.csv` = embed + train Ridge + predict (không tính I/O load) — dùng để so sánh fair với Group 1–3.
+     - `inference_sec_full_graph` trong `runtime_breakdown.csv` = **chỉ `ridge.predict(X_test)` time** (cực nhanh, << 1 giây). Đây là "inference" tương đương GNN inference.
+     - Embed + fit = "training cost" → ghi vào cột `train_sec` (optional column, chỉ trong `runtime_breakdown.csv`, không bắt buộc).
+     - ⚠ Node2Vec là **inductive cần re-embed** nếu graph thay đổi — không giống GNN inference (one-pass full graph). Đây là điểm yếu cần note trong paper.
      - Embed trên labeled nodes (không nhất thiết cần 168k) — nhưng dùng FULL graph để random walks có context đủ rộng
    - **MLP raw attributes:**
      - Features: `[log1p(views), views/life_time, life_time]` (normalize min-max trước khi vào MLP)
@@ -1225,6 +1261,39 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 - `src/mapr2026_v3/run_baselines.py`
 - `src/mapr2026_v3/run_surrogates.py`
 
+**Contract của `src/mapr2026_v3/_shared.py` (để không cần hỏi nhau path):**
+```python
+# _shared.py — KHÔNG sửa riêng; mọi người đều đọc file này
+from pathlib import Path
+
+class PATHS:
+    # ─── Processed data ──────────────────────────────────────────────────────
+    # NORMALIZATION RULE: tất cả parquet chứa RAW columns (views, life_time, degree...).
+    # Normalize (min-max/z-score) on-the-fly TRONG MỖI model script. KHÔNG pre-normalize.
+    # Lý do: MLP dùng train-only scaler (inductive); GNN dùng full-graph scaler (transductive).
+    # Pre-normalize trong parquet sẽ gây conflict giữa 2 scaler policy này.
+    graph_csr         = "data/processed/graph_csr.npz"
+    node_attributes   = "data/processed/node_attributes.parquet"
+    centrality_table  = "data/processed/centrality_table.parquet"
+    community_features= "data/processed/community_features.parquet"   # Person 2 owns; separate from node_attributes
+    ic_scores         = "data/processed/ic_scores_primary.parquet"
+    regression_tgts   = "data/processed/regression_targets.parquet"
+    split_masks       = "data/processed/split_masks.parquet"
+    diffusion_proxies = "data/processed/diffusion_proxies.parquet"
+    typology_labels   = "data/processed/typology_labels_ic_views.parquet"
+    # ─── Outputs ─────────────────────────────────────────────────────────────
+    lcc_report        = "outputs/stage0_data_quality/lcc_report.json"
+    day1_dir              = "outputs/day1_benchmark"
+    ic_runtime_benchmark  = "outputs/day1_benchmark/ic_runtime_benchmark.json"
+    one_hop_correlation   = "outputs/day1_benchmark/one_hop_correlation.json"
+    ic_pilot_diagnostics  = "outputs/day1_benchmark/ic_pilot_diagnostics.json"
+    results_dir           = "outputs/mapr2026_v3_results"
+    baseline_csv      = "outputs/mapr2026_v3_results/baseline_ranking_metrics.csv"
+    surrogate_csv     = "outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv"
+    runtime_csv       = "outputs/mapr2026_v3_results/runtime_breakdown.csv"
+```
+> Nếu cần thêm path mới → thêm vào `PATHS` trong `_shared.py` rồi commit riêng — không hardcode path string trong business logic.
+
 **Cách test harness trước khi IC labels xong (mock mode):**
 
 ```python
@@ -1284,6 +1353,8 @@ Agenda bắt buộc:
 
 **Done khi:** `docs/m0_decisions.md` được commit, cả 3 người chạy được dry-run.
 
+> ⚠ **Theo v3 Implementation Plan:** paper writing (Intro + Related Work + Methodology) phải bắt đầu từ **Ngày 8/4**. Nếu chưa assign người viết paper tại M0, phải quyết định ngay tại buổi M0 — không để unassigned.
+
 ---
 
 ### Milestone M1 — Unblock song song (6/4 buổi chiều → 7/4)
@@ -1293,6 +1364,7 @@ Agenda bắt buộc:
 | Person | Việc phải merge | Artifact tạo ra |
 |---|---|---|
 | Person 1 | `export_csr.py` (small mode) | `graph_csr.npz` |
+| Person 1 | Dead account audit + LCC check | `outputs/stage0_data_quality/lcc_report.json`, `dead_account_report.json` |
 | Person 1 | `ic_labels_primary.py --dry-run` | `split_masks.parquet` (mock) |
 | Person 2 | `diffusion_proxies.py --dry-run` | `diffusion_proxies.parquet` (header) |
 | Person 3 | `eval_ranking_harness.py` skeleton | import `load_split_mask()` chạy được |
@@ -1309,12 +1381,14 @@ Agenda bắt buộc:
 |---|---|---|
 | Person 1 | Chạy `day1_benchmark.py` (real mode, 100 nodes × 50 runs) | `ic_runtime_benchmark.json` |
 | Person 1 | Chạy one-hop ρ check (200 pilot nodes × 50 runs) | `one_hop_correlation.json` |
-| Cả team | Họp online 30 phút, đọc kết quả | Điền Phần 3 của `docs/m0_decisions.md` |
+| Cả team | Họp online 30 phút, đọc kết quả | Điền **Phần 3** của `docs/day1_decisions.md` (N_seeds, N_runs, narrative_branch) |
 
 **Decision gate:**
-- `projected_hours < 4h` → N_seeds=5000, N_runs=200
-- `4h–8h` → N_seeds=3000, N_runs=150
-- `> 8h` → N_seeds=2000, N_runs=100 (ghi limitation)
+> ⚠ **Naming note:** `N_seeds` ở đây = **`n_sample`** (số labeled nodes được chọn để chạy IC simulation) — KHÔNG phải số random seeds của IC (mỗi node chỉ dùng 1 deterministic seed = `42 + node_index`). Giá trị này đồng bộ với `n_sample` trong M0 Decision Record.
+
+- `projected_hours < 4h` → **n_sample=5000**, N_runs=200
+- `4h–8h` → **n_sample=3000**, N_runs=150
+- `> 8h` → **n_sample=2000**, N_runs=100 (ghi limitation)
 - `one_hop_rho < 0.8` → GNN là primary contribution
 - `one_hop_rho 0.8–0.9` → GNN + 2-hop baseline head-to-head
 - `one_hop_rho > 0.9` → **restructure:** proxies là primary, GNN là secondary; title changes
@@ -1327,7 +1401,32 @@ Agenda bắt buộc:
 | `GNN-raw-attr ≤ two-hop` | "2-hop analytical approximation O(E²) achieves ρ ≈ X with MC IC, closely matching GNN surrogate — weighted-cascade dynamics are well-approximated by local structural summaries. GNN's value lies in efficient inference as graph evolves." |
 | `views/IC ρ > 0.8` | "We find high popularity-diffusion agreement (ρ > 0.8) on Twitch's dense graph. The small divergent subset (Hidden influencers) shows systematically higher betweenness and cross-community connectivity." |
 
-**Done khi:** `docs/m0_decisions.md` Phần 3 được commit với N_seeds, N_runs, narrative_branch.
+**Template của `docs/day1_decisions.md`** (Person 1 tạo file, team cùng điền):
+
+```markdown
+## Phần 1 — IC Runtime Benchmark (6/4 sáng)
+- per_sim_ms: __
+- projected_total_hours: __
+- Decision: n_sample = __, N_runs = __
+
+## Phần 2 — One-Hop ρ Check (6/4 chiều)
+- spearman_rho: __
+- narrative_branch: [gnn_primary / gnn_and_2hop / restructure]
+
+## Phần 3 — Compute Budget Lock (điền tại M2 team meeting — 7/4)
+- n_sample (final confirmed): __
+- N_runs (final confirmed): __
+- narrative_branch (confirmed): __
+- Signed off: Person 1 __, Person 2 __, Person 3 __
+
+## Phần 4 — Views/IC Alignment (điền sau khi có IC labels — M3)
+- spearmanr(views, ic_score_mean): rho = __, p = __
+- RQ2 narrative tier: [strong_divergence / moderate / high_agreement]
+```
+
+> **Phân biệt 2 files:** `docs/m0_decisions.md` = quyết định kiến trúc cố định (threshold, split, scope — lock tại M0). `docs/day1_decisions.md` = quyết định runtime (compute budget, GNN narrative, views/IC ρ — điền dần theo tiến độ).
+
+**Done khi:** `docs/day1_decisions.md` Phần 3 được commit với N_seeds, N_runs, narrative_branch.
 
 ---
 
@@ -1343,6 +1442,16 @@ Agenda bắt buộc:
 | Person 3 | Chạy baseline ranking thật (Group 1–2) | 12/4 |
 
 **Done khi:** `baseline_ranking_metrics.csv` có ít nhất Group 1–2 rows với real IC labels.
+
+**[M3] Views/IC alignment check — narrative fallback cho RQ2:**
+
+Sau khi Person 1 ghi `spearmanr(views, ic_score_mean)` vào `docs/day1_decisions.md` Phần 4, cả team chọn narrative theo bảng:
+
+| views/IC Spearman ρ | Narrative RQ2 |
+|---|---|
+| ρ < 0.70 | "Strong divergence: popularity không phản ánh diffusion potential — Hidden influencers tồn tại và chiếm vai trò cấu trúc (betweenness cao, cross-community cao)." |
+| 0.70–0.85 | "Moderate divergence: Hidden quadrant tồn tại và structurally distinct — standard narrative cho paper." |
+| ρ > 0.85 | "High popularity-diffusion agreement. Hidden influencers (small subset) vẫn show systematically higher betweenness và cross-community connectivity — emphasize structural distinction thay vì size." |
 
 ---
 
