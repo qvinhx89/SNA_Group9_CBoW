@@ -5,6 +5,7 @@ Implementation scaffold for the project: **Finding the Most Influential Users in
 ## Project Goal
 
 Build an end-to-end, reproducible pipeline to:
+
 - Compute structural influence signals (Degree, PageRank, Betweenness, k-shell).
 - Construct SIS and 2x2 typology (True, Hidden, Overrated, Non-influencer).
 - Validate with single-seed and multi-seed IC simulations.
@@ -52,10 +53,24 @@ Build an end-to-end, reproducible pipeline to:
 
 ## Quick Start
 
+### Prerequisites
+
+- **Python: 3.10–3.12 (64-bit)**
+  - The pinned dependencies in `requirements.txt` are not compatible with Python 3.13.
+
 1. Create and activate a virtual environment.
 2. Install dependencies:
 
 ```bash
+pip install -r requirements.txt
+```
+
+#### Recommended (Windows + Anaconda): create a Python 3.12 conda env
+
+```powershell
+conda env create -f environment.yml
+conda activate sna_group9_cbow_py312
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 

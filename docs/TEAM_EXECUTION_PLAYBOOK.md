@@ -25,11 +25,13 @@ Nguyên tắc:
 - Mọi thay đổi tham số bắt buộc ghi vào experiment registry.
 
 ### Bức tranh toàn cảnh nhiệm vụ (Big Picture)
+
 Để dễ hình dung trước khi bắt tay làm, khối lượng công việc được chia tổng quan như sau:
-- **Lead (Vĩnh)** - *Người ghép nối & Mô phỏng:* Lo setup luồng chung, kiểm soát quy trình. Đảm nhiệm phần khắt khe nhất là chạy mô phỏng mô hình lan truyền (IC Model) để tìm ra chiến lược gieo mầm (seed) tối ưu (giải quyết **RQ2, RQ3**).
-- **Thành viên A (Vĩ)** - *Chuyên gia Cấu trúc mạng:* Tập trung phân tích nền tảng, tính toán các độ đo trung tâm (Centrality), phân tích cộng đồng (Community) và K-shell để rút ra phân loại (typology) của các influencer (giải quyết **RQ1**).
-- **Thành viên B (Hải)** - *Kỹ sư Machine Learning:* Dùng các đặc trưng rút trích từ dữ liệu mạng lưới để huấn luyện mô hình phân loại (Machine Learning), nhằm dự đoán độ chính xác của việc tìm ra influencer (giải quyết **RQ4**).
-*(**Lưu ý:** Đoạn đầu setup môi trường làm sạch dữ liệu và đoạn cuối ráp báo cáo thì cả 3 sẽ cùng phối hợp làm tuần tự).*
+
+- **Lead (Vĩnh)** - _Người ghép nối & Mô phỏng:_ Lo setup luồng chung, kiểm soát quy trình. Đảm nhiệm phần khắt khe nhất là chạy mô phỏng mô hình lan truyền (IC Model) để tìm ra chiến lược gieo mầm (seed) tối ưu (giải quyết **RQ2, RQ3**).
+- **Thành viên A (Vĩ)** - _Chuyên gia Cấu trúc mạng:_ Tập trung phân tích nền tảng, tính toán các độ đo trung tâm (Centrality), phân tích cộng đồng (Community) và K-shell để rút ra phân loại (typology) của các influencer (giải quyết **RQ1**).
+- **Thành viên B (Hải)** - _Kỹ sư Machine Learning:_ Dùng các đặc trưng rút trích từ dữ liệu mạng lưới để huấn luyện mô hình phân loại (Machine Learning), nhằm dự đoán độ chính xác của việc tìm ra influencer (giải quyết **RQ4**).
+  _(**Lưu ý:** Đoạn đầu setup môi trường làm sạch dữ liệu và đoạn cuối ráp báo cáo thì cả 3 sẽ cùng phối hợp làm tuần tự)._
 
 ---
 
@@ -47,6 +49,18 @@ Thứ tự tổng thể:
 ---
 
 ## 4. Giai đoạn A - Setup môi trường (bắt buộc cho cả 3 người)
+
+### A0. Chốt phiên bản Python (bắt buộc)
+
+- Repo pin dependencies trong `requirements.txt` và **chỉ hỗ trợ Python 3.10–3.12 (64-bit)**.
+- Nếu bạn đang dùng **Python 3.13** thì `numpy==1.26.0` / `scipy==1.12.0` sẽ không cài được → phải đổi env.
+
+Khuyến nghị (Windows + Anaconda):
+
+    conda env create -f environment.yml
+    conda activate sna_group9_cbow_py312
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
 
 ### A1. Dựng đúng thư mục dự án
 
@@ -325,4 +339,3 @@ Lệnh gợi ý:
 - Xong các nhánh song song D1 + D2 + D3: 75%
 - Xong tích hợp và review (E): 90%
 - Xong reproducibility check và chốt nộp (F): 100%
-
