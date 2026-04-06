@@ -33,10 +33,13 @@ Scaffold behavior
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
+from sklearn.model_selection import train_test_split
 
 from _shared import PATHS, ensure_parent, load_csr_npz, now_iso, require_columns
 
@@ -53,12 +56,138 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mock-from-sis", default=PATHS.sis_table)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--n-runs", type=int, default=50)
+    p.add_argument("--n-jobs", type=int, default=-1,
+                   help="Parallel jobs for IC simulation in real mode")
     # M0-locked defaults — change only via explicit flag and update docs/m0_decisions.md
     p.add_argument("--n-sample", type=int, default=5000,
                    help="Number of labeled nodes to sample for IC (real mode only)")
     p.add_argument("--test-frac", type=float, default=0.20,
                    help="Held-out fraction for evaluation (M0-locked: 0.20)")
     return p.parse_args()
+
+
+def _sample_labeled_indices(degrees: np.ndarray, n_sample: int, seed: int) -> np.ndarray:
+    n_nodes = len(degrees)
+    if n_sample <= 0:
+        raise ValueError("n_sample must be > 0")
+    if n_sample >= n_nodes:
+        return np.arange(n_nodes, dtype=np.int64)
+
+    all_idx = np.arange(n_nodes, dtype=np.int64)
+    quintiles = pd.qcut(
+        pd.Series(degrees.astype(float)), q=5, labels=False, duplicates="drop"
+    ).to_numpy()
+
+    try:
+        _, sampled = train_test_split(
+            all_idx,
+            test_size=int(n_sample),
+            random_state=seed,
+            stratify=quintiles,
+        )
+    except ValueError:
+        rng = np.random.default_rng(seed)
+        sampled = rng.choice(all_idx, size=int(n_sample), replace=False)
+
+    return np.sort(sampled.astype(np.int64))
+
+
+def _simulate_ic_once(
+    source: int,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    inv_degrees: np.ndarray,
+    rng: np.random.Generator,
+) -> int:
+    activated = {int(source)}
+    frontier = [int(source)]
+
+    while frontier:
+        next_frontier: list[int] = []
+        for node in frontier:
+            start_idx = int(indptr[node])
+            end_idx = int(indptr[node + 1])
+            for nb_raw in indices[start_idx:end_idx]:
+                nb = int(nb_raw)
+                if nb in activated:
+                    continue
+                p = float(inv_degrees[nb])
+                if p <= 0.0:
+                    continue
+                if rng.random() < p:
+                    activated.add(nb)
+                    next_frontier.append(nb)
+        frontier = next_frontier
+
+    return len(activated)
+
+
+def _simulate_ic_node_summary(
+    source: int,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    inv_degrees: np.ndarray,
+    n_runs: int,
+    worker_seed: int,
+) -> tuple[float, float]:
+    rng = np.random.default_rng(worker_seed)
+    runs = np.empty(n_runs, dtype=np.int32)
+    for i in range(n_runs):
+        runs[i] = _simulate_ic_once(source, indptr, indices, inv_degrees, rng)
+    return float(runs.mean()), float(runs.std(ddof=0))
+
+
+def _real_ic_scores(
+    node_ids: np.ndarray,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    degrees: np.ndarray,
+    n_sample: int,
+    n_runs: int,
+    seed: int,
+    n_jobs: int,
+) -> tuple[pd.DataFrame, np.ndarray]:
+    sampled_rows = _sample_labeled_indices(degrees=degrees, n_sample=n_sample, seed=seed)
+
+    inv_degrees = np.zeros_like(degrees, dtype=float)
+    mask = degrees > 0
+    inv_degrees[mask] = 1.0 / degrees[mask].astype(float)
+
+    def _worker(row: int) -> tuple[float, float]:
+        return _simulate_ic_node_summary(
+            source=int(row),
+            indptr=indptr,
+            indices=indices,
+            inv_degrees=inv_degrees,
+            n_runs=n_runs,
+            worker_seed=seed + int(row),  # M0/plan: primary worker_seed = 42 + node_index
+        )
+
+    t0 = time.time()
+    stats = Parallel(n_jobs=n_jobs, backend="loky")(
+        delayed(_worker)(int(row)) for row in sampled_rows
+    )
+    elapsed = time.time() - t0
+
+    means = np.array([m for m, _ in stats], dtype=float)
+    stds = np.array([s for _, s in stats], dtype=float)
+    sampled_node_ids = node_ids[sampled_rows].astype(str)
+
+    df_ic = pd.DataFrame(
+        {
+            "node_id": sampled_node_ids,
+            "ic_score_mean": means,
+            "ic_score_std": stds,
+            "n_runs": int(n_runs),
+            "p_model": "weighted_cascade",
+        }
+    )
+
+    print(
+        "[OK] Real IC simulation completed "
+        f"(n_labeled={len(df_ic):,}, n_runs={n_runs}, elapsed_sec={elapsed:.2f})"
+    )
+    return df_ic, sampled_rows
 
 
 def _mock_ic_scores(node_ids: np.ndarray, sis_path: Path | None, seed: int, n_runs: int) -> pd.DataFrame:
@@ -193,13 +322,24 @@ def main() -> None:
                 "when CSR is missing."
             )
 
-    if not args.dry_run:
-        raise NotImplementedError(
-            "Implement weighted-cascade IC Monte Carlo labeling on CSR (plus stability checks). "
-            "Run with --dry-run to generate mock schema-correct outputs."
+    if args.dry_run:
+        df_ic = _mock_ic_scores(
+            node_ids=node_ids, sis_path=Path(args.mock_from_sis), seed=args.seed, n_runs=args.n_runs
+        )
+        sampled_rows = None
+    else:
+        csr = load_csr_npz(csr_path)
+        df_ic, sampled_rows = _real_ic_scores(
+            node_ids=csr["node_ids"],
+            indptr=csr["indptr"],
+            indices=csr["indices"],
+            degrees=csr["degrees"],
+            n_sample=int(args.n_sample),
+            n_runs=int(args.n_runs),
+            seed=int(args.seed),
+            n_jobs=int(args.n_jobs),
         )
 
-    df_ic = _mock_ic_scores(node_ids=node_ids, sis_path=Path(args.mock_from_sis), seed=args.seed, n_runs=args.n_runs)
     require_columns(df_ic, ["node_id", "ic_score_mean", "ic_score_std", "n_runs", "p_model"], "ic_scores")
 
     ensure_parent(args.out_ic)
@@ -221,11 +361,14 @@ def main() -> None:
     degrees_aligned: np.ndarray | None = None
     if csr_path.exists():
         csr = load_csr_npz(csr_path)
-        # Align degrees to df_ic rows via node_id lookup
-        id_to_deg = dict(zip(csr["node_ids"].tolist(), csr["degrees"].tolist()))
-        degrees_aligned = np.array(
-            [id_to_deg.get(nid, 0) for nid in df_ic["node_id"].tolist()], dtype=np.int64
-        )
+        if sampled_rows is not None:
+            degrees_aligned = csr["degrees"][sampled_rows].astype(np.int64)
+        else:
+            # Dry-run path: align by node_id lookup
+            id_to_deg = dict(zip(csr["node_ids"].tolist(), csr["degrees"].tolist()))
+            degrees_aligned = np.array(
+                [id_to_deg.get(nid, 0) for nid in df_ic["node_id"].tolist()], dtype=np.int64
+            )
     df_mask = _create_split_mask(df_ic, degrees=degrees_aligned,
                                  test_frac=args.test_frac, seed=args.seed)
     require_columns(df_mask, ["node_id", "split"], "split_masks")
@@ -235,7 +378,7 @@ def main() -> None:
     n_test = int((df_mask["split"] == "test").sum())
     n_train = len(df_mask) - n_test
     print(
-        "[OK] Wrote dry-run IC artifacts: "
+        "[OK] Wrote IC artifacts: "
         f"{args.out_ic}, {args.out_reg}, {args.out_cls}, {args.out_mask} "
         f"(split: {n_train} train / {n_test} test, timestamp={now_iso()})"
     )

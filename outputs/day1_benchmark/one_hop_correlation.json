@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-04-06T11:31:30",
+  "dry_run": false,
+  "spearman_rho": 0.7391903714947583,
+  "p_value": 7.814871409002748e-36,
+  "decision_branch": "viable_gnn",
+  "pilot_config": {
+    "pilot_nodes": 200,
+    "pilot_runs": 50,
+    "n_valid_nodes": 200,
+    "seed": 42,
+    "sampling": "degree_quintile_stratified",
+    "p_model": "weighted_cascade"
+  },
+  "decision_gate": {
+    "lt_0_8": "viable_gnn",
+    "between_0_8_0_9": "two_hop_primary",
+    "gt_0_9": "restructure"
+  }
+}
