@@ -173,7 +173,7 @@ print(f"One-hop vs IC pilot: ρ={rho:.3f}, Jaccard@10%={jaccard_10:.3f}, NDCG@10
 IC Simulation Backend:   igraph (C) + CSR numpy arrays — TUYỆT ĐỐI KHÔNG dùng NetworkX BFS
 Parallel IC:             joblib Parallel(prefer='loky') + CSR shared-memory arrays
 Graph Analytics:         NetworKit (C++) cho betweenness approximate
-Community Detection:     python-louvain hoặc cdlib (Louvain algorithm)
+Community Detection:     python-louvain (seed sweep + best modularity run)
 GNN:                     PyTorch Geometric (PyG) ≥ 2.5, torch ≥ 2.0
 Embeddings:              node2vec library (dimensions=64, walks=20-30)
 Stats:                   scipy.stats, statsmodels (BH correction), sklearn
@@ -460,14 +460,21 @@ def null_model_typology_comparison(G_nx, sampled_nodes_500,
 
 ```python
 import community as community_louvain  # python-louvain
+import numpy as np
 
-def compute_community_features(G_nx, resolution=1.0, seed=42):
+def compute_community_features(G_nx, resolution=1.0, n_runs=10, seed_start=0):
     """
     Louvain community detection — O(N log N), vài phút trên 168k nodes.
     BẮT BUỘC để support claim "Hidden nodes are cross-community bridges."
     """
-    partition = community_louvain.best_partition(G_nx, resolution=resolution,
-                                                  random_state=seed)
+    partitions, modularities = [], []
+    for seed in range(seed_start, seed_start + n_runs):
+        p = community_louvain.best_partition(G_nx, resolution=resolution, random_state=seed)
+        q = community_louvain.modularity(p, G_nx)
+        partitions.append(p)
+        modularities.append(q)
+
+    partition = partitions[int(np.argmax(modularities))]  # best run by modularity
     # community_id cho mỗi node
     community_ids = partition
 
@@ -996,7 +1003,9 @@ pagerank_alpha: 0.85
 # Community detection
 community_algorithm: louvain
 louvain_resolution: 1.0
-louvain_seed: 42
+louvain_n_runs: 10
+louvain_seed_start: 0
+louvain_select_best_by: modularity
 compute_cross_community_fraction: true
 
 # ─── Baselines ─────────────────────────────────────────────────

@@ -15,21 +15,13 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import importlib
 import json
 import logging
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import yaml
-
-try:
-    import community as community_louvain
-except ImportError:
-    community_louvain = None
-
-try:
-    from community import community_louvain as community_louvain_submodule
-except ImportError:
-    community_louvain_submodule = None
 
 try:
     from sklearn.metrics import normalized_mutual_info_score
@@ -42,6 +34,47 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _import_python_louvain() -> Optional[object]:
+    """Import python-louvain robustly even when this file name shadows `community`.
+
+    Running this script directly (src/graph/community.py) can shadow the
+    third-party package `community`. To avoid that, temporarily remove this
+    script directory from sys.path while importing.
+    """
+    script_file = Path(__file__).resolve()
+    script_dir = script_file.parent
+
+    original_sys_path = list(sys.path)
+    existing_community = sys.modules.pop("community", None)
+    mod: Optional[object] = None
+
+    try:
+        filtered_path: list[str] = []
+        for p in original_sys_path:
+            resolved = Path(p if p else ".").resolve()
+            if resolved == script_dir:
+                continue
+            filtered_path.append(p)
+
+        sys.path = filtered_path
+        mod = importlib.import_module("community")
+    except Exception:
+        mod = None
+    finally:
+        sys.path = original_sys_path
+        if mod is None and existing_community is not None:
+            sys.modules["community"] = existing_community
+
+    if mod is None:
+        return None
+
+    mod_file = getattr(mod, "__file__", None)
+    if mod_file is not None and Path(mod_file).resolve() == script_file:
+        return None
+
+    return mod
+
+
 def _resolve_louvain_backend() -> Tuple[str, Optional[object]]:
     """
     Resolve a Louvain backend from available libraries.
@@ -50,28 +83,18 @@ def _resolve_louvain_backend() -> Tuple[str, Optional[object]]:
     -------
     Tuple[str, Optional[object]]
         (backend_name, backend_module)
-        backend_name in {"python-louvain", "networkx"}
+        backend_name is always "python-louvain"
     """
-    if (
-        community_louvain is not None
-        and hasattr(community_louvain, "best_partition")
-        and hasattr(community_louvain, "modularity")
+    community_louvain = _import_python_louvain()
+    if community_louvain is not None and hasattr(community_louvain, "best_partition") and hasattr(
+        community_louvain, "modularity"
     ):
         return "python-louvain", community_louvain
 
-    if (
-        community_louvain_submodule is not None
-        and hasattr(community_louvain_submodule, "best_partition")
-        and hasattr(community_louvain_submodule, "modularity")
-    ):
-        return "python-louvain", community_louvain_submodule
-
-    if hasattr(nx.community, "louvain_communities"):
-        return "networkx", None
-
     raise ImportError(
-        "No compatible Louvain backend found. Install python-louvain "
-        "(pip install python-louvain) or use networkx>=2.8."
+        "python-louvain is required for this pipeline. "
+        "Install with: pip install python-louvain. "
+        "If already installed, run from project root with the configured interpreter."
     )
 
 
@@ -103,24 +126,14 @@ def run_louvain_single(G: nx.Graph, seed: int, resolution: float = 1.0) -> Tuple
     Tuple[Dict, float]
         (partition dict, modularity Q)
     """
-    backend_name, backend_module = _resolve_louvain_backend()
+    _, backend_module = _resolve_louvain_backend()
+    if backend_module is None:
+        raise ImportError("python-louvain backend selected but module is unavailable")
 
-    if backend_name == "python-louvain":
-        if backend_module is None:
-            raise ImportError("python-louvain backend selected but module is unavailable")
-        best_partition_fn = getattr(backend_module, "best_partition")
-        modularity_fn = getattr(backend_module, "modularity")
-        partition = best_partition_fn(G, random_state=seed, resolution=resolution)
-        modularity = modularity_fn(partition, G)
-        return partition, modularity
-
-    # Fallback: NetworkX Louvain communities
-    communities = nx.community.louvain_communities(G, resolution=resolution, seed=seed)
-    partition = {}
-    for community_idx, members in enumerate(communities):
-        for node in members:
-            partition[node] = int(community_idx)
-    modularity = nx.community.modularity(G, communities)
+    best_partition_fn = getattr(backend_module, "best_partition")
+    modularity_fn = getattr(backend_module, "modularity")
+    partition = best_partition_fn(G, random_state=seed, resolution=resolution)
+    modularity = modularity_fn(partition, G)
     return partition, float(modularity)
 
 

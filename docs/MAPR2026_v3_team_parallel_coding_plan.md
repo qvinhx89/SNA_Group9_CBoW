@@ -442,8 +442,16 @@ IC scores + split_masks ──────► typology thật ──────
 
 4. IC pilot + diagnostics (CV / non-degenerate checks)
    - Output: `outputs/day1_benchmark/ic_pilot_diagnostics.json`
-     - Fields bắt buộc (10 fields + ks_results): `n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count` (số nodes có CV > 0.50), `jaccard_stability` (ghi SAU khi chạy 3 MC stability experiments — phải ≥ 0.85), `ks_results` (dict per feature — xem schema dưới)
+     - Fields bắt buộc (10 fields + ks_results + per_quintile_cv + robust_diagnostics): `n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count` (số nodes có CV > 0.50), `jaccard_stability` (ghi SAU khi chạy 3 MC stability experiments), `ks_results` (dict per feature — xem schema dưới), `per_quintile_cv` (Q1..Q5), `robust_diagnostics` (`p_reach_gt_1`, `p_reach_ge_5`, `run_count_stability_tau_by_quintile`)
+     - Robust diagnostics (soft, strongly recommended):
+       - `p_reach_gt_1 = P(reach > 1)`; nếu `< 0.20` thì cảnh báo regime degenerate.
+       - `p_reach_ge_5 = P(reach >= 5)`; nếu `< 0.05` thì cảnh báo influence tập trung immediate neighborhood.
+       - `run_count_stability_tau_by_quintile`: Kendall tau giữa `N_runs` và `N_runs/2` cho từng quintile.
    - Nếu `cv_score < 0.3` → cascade quá degenerate, báo team trước khi chạy full IC
+     - **Rule tách 2 gate (đóng mâu thuẫn hard-threshold):**
+       - **Regression-ready gate (primary):** `cv_score > 0.3` và có `per_quintile_cv` đầy đủ → được phép tiếp tục pipeline với `regression_targets.parquet`.
+       - **Binary-ready gate (secondary):** `jaccard_stability >= 0.85` mới coi `classification_labels.parquet` là non-provisional; nếu thấp hơn thì giữ binary ở trạng thái provisional (không block Stage 5–7 theo nhánh regression).
+     - **Low-degree limitation note (soft, strongly recommended):** nếu `per_quintile_cv.Q1.cv < 0.15` và `per_quintile_cv.Q2.cv < 0.20`, ghi `known limitation` vào `docs/day1_decisions.md`: mô hình tập trung claim ở overall ranking, tránh claim fine-grained ranking trong cùng degree band.
 
    > **Note về thứ tự ghi file:** `ic_pilot_diagnostics.json` được ghi 2 lần — lần 1 sau pilot run (chưa có `jaccard_stability`), lần 2 sau 3 MC stability experiments (thêm `jaccard_stability`). Script `ic_labels_primary.py` tự update file bằng `json.load` → `json.dump`.
 
@@ -528,7 +536,7 @@ IC scores + split_masks ──────► typology thật ──────
    def jaccard(A, B): return len(A & B) / len(A | B) if A | B else 1.0
    pairs = [(0,1), (0,2), (1,2)]
    jaccard_stability = np.mean([jaccard(sets[i], sets[j]) for i, j in pairs])
-   # Threshold: jaccard_stability >= 0.85 → labels ổn định
+    # Threshold: jaccard_stability >= 0.85 → binary labels non-provisional (regression vẫn là primary gate)
    ```
 
    **Bootstrap 95% CI per node:**
@@ -574,7 +582,7 @@ p_model           : weighted_cascade  p(u,v) = 1/degree(v)
 n_mc_seeds_stab   : 3  (independent MC experiments cho Jaccard check)
 n_runs_primary    : 200  (điều chỉnh sau Day-1 benchmark)
 n_runs_stability  : 150  (stability check dùng ít runs hơn để tiết kiệm compute)
-Jaccard threshold : 0.85 (nếu thấp hơn → tăng n_runs)
+Jaccard threshold : 0.85 (binary-ready gate; nếu thấp hơn thì binary = provisional, chỉ tăng n_runs khi budget cho phép)
 ```
 
 **IC simulation core — pseudocode bắt buộc (implement từ đây, không dùng NetworkX BFS):**
@@ -642,18 +650,23 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 > - Stability: `worker_seed = mc_seed * 10000 + node` → mc*seed=0,1,2 → 3 \_genuinely independent* MC experiments
 > - Nếu dùng cùng seed cho cả 3 MC experiments → Jaccard sẽ = 1.0 (artificial, không phải ổn định thật sự)
 
-**Pilot diagnostics — phải report đủ 6 metrics (v3 Section 4.1), pilot = 200 nodes × 50 runs:**
+**Pilot diagnostics — report core + robust metrics (v3 Section 4.1), pilot = 200 nodes × 50 runs:**
 
-| Metric                                    | Threshold | Ý nghĩa                           |
-| ----------------------------------------- | --------- | --------------------------------- |
-| `mean_reach`                              | report    | mean single-seed reach            |
-| `median_reach`                            | < 5% LCC  | nếu cao hơn → cascade explosive   |
-| `iqr_reach`                               | report    | spread của distribution           |
-| `top10_to_median_ratio`                   | >> 1      | nếu ≈ 1 → ranking vô nghĩa        |
-| `rank_stability` (Spearman giữa MC seeds) | report    |                                   |
-| `cv_score`                                | **> 0.3** | nếu thấp → cascade chết quá nhanh |
+| Metric                                    | Threshold                                | Ý nghĩa                                                       |
+| ----------------------------------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `mean_reach`                              | report                                   | mean single-seed reach                                        |
+| `median_reach`                            | < 5% LCC                                 | nếu cao hơn → cascade explosive                               |
+| `iqr_reach`                               | report                                   | spread của distribution                                       |
+| `top10_to_median_ratio`                   | >> 1                                     | tail separation ratio; nếu ≈ 1 → ranking vô nghĩa             |
+| `p_reach_gt_1` (`P(reach > 1)`)           | > 0.20                                   | nếu thấp hơn → regime quá degenerate                          |
+| `p_reach_ge_5` (`P(reach >= 5)`)          | > 0.05                                   | nếu thấp hơn → influence chủ yếu quanh immediate neighborhood |
+| `rank_stability` (Spearman giữa MC seeds) | report                                   |                                                               |
+| `cv_score`                                | **> 0.3**                                | nếu thấp → cascade chết quá nhanh                             |
+| `run_count_stability_tau_by_quintile`     | > 0.95 @ N_runs=100 (optional downshift) | nếu đạt ngưỡng có thể giảm runs để tiết kiệm compute          |
 
 > **`cv_noise_threshold = 0.50`** (v3 Section 15): node nào có per-node CV > 0.50 là "high-variance node" → exclude khỏi stability metrics, ghi lại count. Cascade quá noisy trên node đó → cần tăng n_runs.
+
+> **Run-count stability curve (soft, strongly recommended):** với mỗi degree quintile, tính Kendall tau giữa ranking ở `N_runs` và `N_runs/2` (ví dụ 100 vs 50). Nếu tau > 0.95 tại `N_runs=100`, có thể downshift ngân sách runs một cách có kiểm soát.
 
 **Stratified sampling với KS check (v3 Section 4.4):**
 
@@ -667,7 +680,9 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 - Dead account report tồn tại: `outputs/stage0_data_quality/dead_account_report.json` có `n_dead`, `pct_dead`, `mean_degree_dead`, `mean_degree_live`.
 - LCC report tồn tại: `outputs/stage0_data_quality/lcc_report.json` có `n_nodes_total`, `n_nodes_lcc`, `pct_lcc`, `n_components`.
 - Day-1 artifacts sinh ra được: `ic_runtime_benchmark.json` và `one_hop_correlation.json`; `docs/day1_decisions.md` đã điền `n_sample`, `N_runs`, `narrative_branch`.
-- IC pilot diagnostics JSON tồn tại: `outputs/day1_benchmark/ic_pilot_diagnostics.json` có đủ **10 fields** (`n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count`, `jaccard_stability`) + `ks_results`; `cv_score > 0.3`; `jaccard_stability ≥ 0.85`.
+- IC pilot diagnostics JSON tồn tại: `outputs/day1_benchmark/ic_pilot_diagnostics.json` có đủ **10 fields** (`n_pilot_nodes`, `n_pilot_runs`, `mean_reach`, `median_reach`, `iqr_reach`, `top10_to_median_ratio`, `rank_stability`, `cv_score`, `cv_noise_count`, `jaccard_stability`) + `ks_results` + `per_quintile_cv` + `robust_diagnostics` (`p_reach_gt_1`, `p_reach_ge_5`, `run_count_stability_tau_by_quintile`); `cv_score > 0.3` (regression-ready).
+- Rule low-degree limitation rõ ràng: nếu `Q1<0.15` và `Q2<0.20` thì `docs/day1_decisions.md` phải có note "within-degree ranking noise-dominated".
+- Rule consume labels rõ ràng: nếu `jaccard_stability < 0.85` thì `classification_labels.parquet` chỉ dùng dạng provisional; không chặn downstream nhánh regression.
 - Bootstrap 95% CI đã tính (nếu thời gian cho phép): cột `ic_ci_lower`, `ic_ci_upper` trong `ic_scores_primary.parquet`.
 - `split_masks.parquet` tồn tại, schema đúng, coverage = 100% labeled nodes, test_frac ≈ 0.20.
 
@@ -680,7 +695,7 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 **Runbook tối thiểu:**
 
 - Unblock team ngay: chạy 3 lệnh ở Mục 2.1 (A).
-- Real mode: implement IC (primary: worker_seed=42+node; stability: mc_seed\*10000+node), pilot diagnostics 6 metrics, KS check, stability 3 MC seeds (n_runs=150 each).
+- Real mode: implement IC (primary: worker_seed=42+node; stability: mc_seed\*10000+node), pilot diagnostics core+robust metrics, KS check, stability 3 MC seeds (n_runs=150 each).
 
 ---
 
@@ -699,8 +714,16 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - Output: **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`)
      - `community_id`: int (Louvain partition)
      - `cross_community_edge_fraction`: float (fraction neighbors in different community)
-   - **Lý do file riêng:** Person 1 owns `node_attributes.parquet`. Person 2 ghi đè sẽ gây merge conflict. Consumers (Person 2, 3) join on `node_id` khi cần.
-   - Scope: ALL active nodes (phủ 100%)
+     - **Lý do file riêng:** Person 1 owns `node_attributes.parquet`. Person 2 ghi đè sẽ gây merge conflict. Consumers (Person 2, 3) join on `node_id` khi cần.
+     - Scope: ALL active nodes (phủ 100%)
+     - **B9 sensitivity (soft, strongly recommended):** chạy thêm resolution sweep `{0.5, 1.0, 2.0}` để sanity-check resolution limit trên dense graph.
+       - Output gợi ý: `outputs/mapr2026_v3_results/louvain_resolution_sensitivity.json`
+       - Fields gợi ý: `resolution, modularity, n_communities, mean_nmi_louvain`
+       - Rule: giữ `resolution=1.0` làm primary run để giữ consistency; sweep chỉ là sensitivity/supporting evidence. Chỉ đổi primary resolution nếu team re-lock trong `docs/m0_decisions.md`.
+       - Decision rule (soft, strongly recommended):
+         - Nếu `n_communities < 20` hoặc `%nodes_top3_communities > 50%` tại `resolution=1.0` → nghi over-merge.
+         - Nếu `n_communities > 200` và singleton quá nhiều → nghi over-split.
+         - Target practical: `30–80 communities` với size distribution không degenerate; nếu lệch mạnh thì team re-lock resolution trong `docs/m0_decisions.md` trước khi chạy downstream profiling.
    - **Công thức `cross_community_edge_fraction` (per node):**
 
      ```python
@@ -803,8 +826,14 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 
    - `min_quadrant_ok = all(q["n"] >= 150 for q in quadrants.values())`
    - Ghi ra file này ngay sau khi gán label — trước khi chạy structural profiling
-
    - **Two-sample strategy nếu Hidden quadrant < 150:** tăng `n_sample` lên **8.000–10.000 nodes** (từ mặc định 5.000), augment với Sample B (high-betweenness + low-views nodes từ full graph). Sample B chỉ dùng cho typology analysis, KHÔNG dùng để train GNN. Candidates: `betweenness > quantile(0.70)` AND `views < quantile(0.30)` AND chưa có trong Sample A.
+   - **Residual-based divergence backup (soft, strongly recommended):**
+     - Trigger: khi `min_quadrant_ok=false` kéo dài hoặc MWU power thấp dù đã áp dụng two-sample strategy.
+     - Định nghĩa: `divergence_score = z(rank(IC)) - z(rank(views))`
+     - `Hidden-like`: top decile của `divergence_score`
+     - `Overrated-like`: bottom decile của `divergence_score`
+     - Output gợi ý: `outputs/mapr2026_v3_results/residual_divergence_report.json`
+     - Rule: đây là backup/sensitivity branch, KHÔNG thay thế typology top-10 M0-locked trong main contract.
 
 4. Structural profiling — Hidden vs Overrated (v3 Section 11)
    - Columns cần: `degree`, `pagerank`, `kshell`, `betweenness`, **`cross_community_edge_fraction`**, `life_time`
@@ -868,6 +897,11 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - Method 1: Partial Spearman (IC rank vs life_time | degree controlled)
    - Method 2: Stratified MWU by degree quintile, BH-FDR corrected
    - **CẢNH BÁO:** KHÔNG dùng `life_time` để validate GNN-full predictions (GNN-full đã thấy life_time trong features)
+   - **Language fallback (soft, strongly recommended):** nếu life_time yếu (`partial_spearman_rho < 0.05` hoặc `n_quintiles_significant < 3`), chạy external corroboration theo language:
+     - `NMI(community_id, language)` để kiểm tra community-language alignment.
+     - So sánh language diversity trong neighborhood giữa Hidden vs Overrated.
+     - Output gợi ý: `outputs/mapr2026_v3_results/language_validation.json`.
+     - Rule: language fallback là corroboration bổ sung, KHÔNG thay thế life_time report.
 
    **Partial Spearman implementation (không có hàm sẵn trong scipy):**
 
@@ -912,7 +946,7 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
      "n_quintiles_significant": <int>,
      "success": <bool>,
      "quintile_results": [
-       {"quintile": 0, "n_hidden": <int>, "n_overrated": <int>,
+             {"quintile": 0, "n_hidden": <int>, "n_non_hidden": <int>,
         "p_raw": <float>, "p_corrected": <float>, "cliffs_delta": <float>, "significant": <bool>},
        ...
      ]
@@ -926,6 +960,15 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - So sánh TYPOLOGY QUADRANT (không chỉ rank correlation) giữa real graph và null
    - Câu hỏi: "Nếu null cũng có Hidden quadrant với betweenness cao → typology là degree-distribution artifact"
    - Output: `null_model_typology_summary.json` (rho_mean±std, hidden_betweenness_null_mean)
+     - **Permutation null (soft, strongly recommended):**
+       - Mục tiêu: giảm nguy cơ kết luận "configuration null inconclusive" và kiểm tra trực tiếp cơ chế divergence views-IC.
+       - Nhánh 1 (bắt đầu với nhánh này): **views-permutation null**
+         - Giữ nguyên graph + IC scores, permute `views` across labeled nodes, rebuild typology nhiều lần.
+         - Output gợi ý: `outputs/mapr2026_v3_results/views_permutation_null_summary.json`.
+       - Nhánh 2 (optional nếu còn thời gian): **IC-score permutation null**
+         - Giữ nguyên graph + views, permute `ic_score_mean`, rebuild typology.
+         - Output gợi ý: `outputs/mapr2026_v3_results/ic_permutation_null_summary.json`.
+       - Rule: configuration model vẫn là primary null trong contract; permutation null là sensitivity bổ sung.
 
    **Configuration model generation (Python API bắt buộc):**
 
@@ -1100,10 +1143,10 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - **Group 1 — Raw features O(1):** `rank(views)`, `rank(views/life_time)`, `rank(degree)`
      - Column `views`: lấy từ `node_attributes.parquet`, cột `views` (raw count — KHÔNG normalize)
      - Column `views/life_time`: nếu `node_attributes.parquet` đã có `views_per_day` → dùng trực tiếp; nếu không → tính on-the-fly: `df["views"] / df["life_time"].clip(lower=1)`
-     - `runtime_sec` Group 1 = thời gian load file + rank (rất nhanh, ghi ~0.01s nếu < 0.1s)
+     - `runtime_sec` Group 1 = **inference-only** trên full active graph (rank/score generation), không tính file load
    - **Group 2 — Centrality O(N log N → NE):** PageRank (α=0.85), k-shell, Betweenness (NetworKit `ApproxBetweenness2`, `epsilon=0.10`, `delta=0.10`) — reuse artifacts Stage 1–2
-     - **Centrality scores đã được precompute từ Stage 1–2** (Person 1) → Person 3 chỉ load từ `node_attributes.parquet`, KHÔNG recompute
-     - `runtime_sec` Group 2 = **thời gian load + apply test mask + tính Spearman** (không tính thời gian precompute centrality — đó là one-time cost của Person 1)
+     - **Centrality scores đã được precompute từ Stage 1–2** (Person 1) → Person 3 load từ `centrality_table.parquet`, KHÔNG recompute
+     - `runtime_sec` Group 2 = **inference-only** trên full active graph (generate score vector từ artifact precompute), không tính file load/metric computation
    - **Group 3 — Diffusion proxies:** one-hop O(E) + two-hop naive O(Σ d(v)^2) từ `diffusion_proxies.parquet` (full graph, filter test mask)
 
 3. **Group 4 — Shallow Embedding Baselines** (v3 Section 7 Group 4 — ghi vào `baseline_ranking_metrics.csv`, KHÔNG phải surrogate CSV):
@@ -1111,29 +1154,33 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
      - Library: **`node2vec`** (`pip install node2vec`) hoặc **`pecanpy`** (nhanh hơn cho large graph — `pip install pecanpy`)
      - Params: `dim=64, walks=20` (⚠ KHÔNG phải 200 — 10x chậm hơn), `walk_len=20`, `p=1, q=1` (unbiased random walk)
      - Downstream: LR regression (`sklearn.linear_model.Ridge` hoặc `LinearRegression`) trên embedding → predict `y = log1p(ic_score_mean)`
-     - Measure: `time.time()` toàn bộ inference pass (embed → predict) = `runtime_sec`
+     - Measure runtime tách riêng: `train_sec` (embed + fit) và `runtime_sec` (inference-only `predict` trên full active graph)
 
      **Flow chuẩn (để không nhầm train/test split):**
 
      ```python
      # Bước 1: Embed TẤT CẢ labeled nodes (train + test) — chỉ tính 1 lần
-     t0 = time.time()
+     t0_train = time.time()
      embeddings = model.fit_transform(G_labeled)   # shape [n_labeled, 64]
 
      # Bước 2: Fit Ridge trên TRAIN nodes
      X_train = embeddings[train_mask_local]   # local index trong labeled subset
      y_train = y[train_mask_local]
      ridge = Ridge(alpha=1.0).fit(X_train, y_train)
+     train_sec = time.time() - t0_train
 
-     # Bước 3: Predict trên TEST nodes → compute_metrics
-     X_test = embeddings[test_mask_local]
-     y_pred = ridge.predict(X_test)
-     runtime_sec = time.time() - t0   # embed + fit + predict (toàn bộ)
+     # Bước 3: Inference-only trên full active graph (runtime contract)
+     t0_inf = time.time()
+     y_pred_full = ridge.predict(embeddings)
+     runtime_sec = time.time() - t0_inf
+
+     # Bước 4: Lấy test slice để compute_metrics
+     y_pred = y_pred_full[test_mask_local]
      ```
 
-     - `runtime_sec` trong `baseline_ranking_metrics.csv` = embed + train Ridge + predict (không tính I/O load) — dùng để so sánh fair với Group 1–3.
-     - `inference_sec_full_graph` trong `runtime_breakdown.csv` = **chỉ `ridge.predict(X_test)` time** (cực nhanh, << 1 giây). Đây là "inference" tương đương GNN inference.
-     - Embed + fit = "training cost" → ghi vào cột `train_sec` (optional column, chỉ trong `runtime_breakdown.csv`, không bắt buộc).
+     - `runtime_sec` trong `baseline_ranking_metrics.csv` = **inference-only** (`predict`) trên full active graph.
+     - `inference_sec_full_graph` trong `runtime_breakdown.csv` = thời gian `predict` trên full active graph (không phải test-only).
+     - Embed + fit = training cost → ghi `train_sec` trong `runtime_breakdown.csv`.
      - ⚠ Node2Vec là **inductive cần re-embed** nếu graph thay đổi — không giống GNN inference (one-pass full graph). Đây là điểm yếu cần note trong paper.
      - Embed trên labeled nodes (không nhất thiết cần 168k) — nhưng dùng FULL graph để random walks có context đủ rộng
 
@@ -1143,26 +1190,26 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
      - Optimizer: Adam, `lr=0.001`, **epochs=100 cố định** (KHÔNG dùng early stopping — tránh cần val split thêm; epochs đủ nhỏ để không overfit)
      - Loss: HuberLoss(`delta=1.0`) — nhất quán với GNN
 
-     **Min-max scaler — fit trên train_mask ONLY (tránh data leakage):**
+   **Min-max scaler — fit trên train_mask ONLY (tránh data leakage):**
 
-     ```python
-     from sklearn.preprocessing import MinMaxScaler
+   ```python
+   from sklearn.preprocessing import MinMaxScaler
 
-     df_labeled = pd.read_parquet("data/processed/node_attributes.parquet")
-     df_labeled = df_labeled.merge(split_mask_df, on="node_id")
+   df_labeled = pd.read_parquet("data/processed/node_attributes.parquet")
+   df_labeled = df_labeled.merge(split_mask_df, on="node_id")
 
-     df_labeled["feat_views_log"]     = np.log1p(df_labeled["views"])
-     df_labeled["feat_views_per_day"] = df_labeled["views"] / df_labeled["life_time"].clip(lower=1)
-     feat_cols = ["feat_views_log", "feat_views_per_day", "life_time"]
+   df_labeled["feat_views_log"]     = np.log1p(df_labeled["views"])
+   df_labeled["feat_views_per_day"] = df_labeled["views"] / df_labeled["life_time"].clip(lower=1)
+   feat_cols = ["feat_views_log", "feat_views_per_day", "life_time"]
 
-     scaler = MinMaxScaler()
-     train_rows = df_labeled[df_labeled["split"] == "train"]
-     test_rows  = df_labeled[df_labeled["split"] == "test"]
+   scaler = MinMaxScaler()
+   train_rows = df_labeled[df_labeled["split"] == "train"]
+   test_rows  = df_labeled[df_labeled["split"] == "test"]
 
-     X_train = scaler.fit_transform(train_rows[feat_cols].values)   # fit on train
-     X_test  = scaler.transform(test_rows[feat_cols].values)        # transform test
-     # Không fit lại scaler trên test — đây là tiêu chuẩn để tránh leakage
-     ```
+   X_train = scaler.fit_transform(train_rows[feat_cols].values)   # fit on train
+   X_test  = scaler.transform(test_rows[feat_cols].values)        # transform test
+   # Không fit lại scaler trên test — đây là tiêu chuẩn để tránh leakage
+   ```
 
    - **Lưu ý naming:** Master plan v3 gọi đây là "Group 4 Baselines" (không phải "surrogates"). Kết quả phải vào `baseline_ranking_metrics.csv` cùng với Group 1–3 để so sánh đầy đủ trong Table 2 của paper.
 
@@ -1518,12 +1565,12 @@ Agenda bắt buộc:
 
 **Mục tiêu:** IC labels thật → unblock toàn bộ pipeline.
 
-| Person   | Việc                                                      | Deadline gợi ý |
-| -------- | --------------------------------------------------------- | -------------- |
-| Person 1 | MC IC simulation (full n_sample × N_runs từ M2)           | 10/4           |
-| Person 1 | Label stability check (Jaccard ≥ 0.85) + split_masks thật | 10/4           |
-| Person 2 | Build typology IC×views (real IC labels)                  | 12/4           |
-| Person 3 | Chạy baseline ranking thật (Group 1–2)                    | 12/4           |
+| Person   | Việc                                                                  | Deadline gợi ý |
+| -------- | --------------------------------------------------------------------- | -------------- |
+| Person 1 | MC IC simulation (full n_sample × N_runs từ M2)                       | 10/4           |
+| Person 1 | Label stability report (Jaccard + per-quintile CV) + split_masks thật | 10/4           |
+| Person 2 | Build typology IC×views (real IC labels)                              | 12/4           |
+| Person 3 | Chạy baseline ranking thật (Group 1–2)                                | 12/4           |
 
 **Done khi:** `baseline_ranking_metrics.csv` có ít nhất Group 1–2 rows với real IC labels.
 
@@ -1565,31 +1612,32 @@ Sau khi Person 1 ghi `spearmanr(views, ic_score_mean)` vào `docs/day1_decisions
 
 ## 4b) Risk Management (v3 Section 19)
 
-| Rủi ro                                                                                      | Xác suất   | Impact       | Action                                                                         |
-| ------------------------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------ |
-| `one_hop_rho > 0.9` + top-k alignment cao (`jaccard_at_10pct > 0.8`, `ndcg_at_10pct > 0.9`) | Trung bình | **Critical** | M2: check trước; nếu đủ 3 điều kiện thì restructure, nếu không giữ GNN + 2-hop |
-| IC runtime > 8h                                                                             | Trung bình | **Critical** | M2: reduce n_sample=2k, N_runs=100; ghi limitation                             |
-| GNN không beat cheap proxies                                                                | Trung bình | Thấp         | Prepared narrative "negative result" vẫn publishable                           |
-| Hidden quadrant < 150 nodes                                                                 | Trung bình | Cao          | Expand 8–10k sample + Sample B strategy (Person 2 Mục 3)                       |
-| `views/IC ρ > 0.8`                                                                          | Trung bình | Thấp         | Prepared narrative "high agreement" (Mục 4 M2)                                 |
-| loky OOM với full graph                                                                     | Thấp       | Cao          | Reduce `n_jobs`; monitor RAM ≥ 32 GB khi chạy                                  |
-| PyG installation issues                                                                     | Thấp       | Trung bình   | Setup M0; fallback: DGL nếu PyG fail                                           |
-| Paper > 6 trang                                                                             | Trung bình | **Blocker**  | Cắt theo bảng dưới                                                             |
+| Rủi ro                                                                                      | Xác suất   | Impact       | Action                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `one_hop_rho > 0.9` + top-k alignment cao (`jaccard_at_10pct > 0.8`, `ndcg_at_10pct > 0.9`) | Trung bình | **Critical** | M2: check trước; nếu đủ 3 điều kiện thì restructure, nếu không giữ GNN + 2-hop                                                                                                              |
+| IC runtime > 8h                                                                             | Trung bình | **Critical** | M2: reduce n_sample=2k, N_runs=100; ghi limitation                                                                                                                                          |
+| GNN không beat cheap proxies                                                                | Trung bình | Thấp         | Prepared narrative "negative result" vẫn publishable                                                                                                                                        |
+| Hidden quadrant < 150 nodes                                                                 | Trung bình | Cao          | Expand 8–10k sample + Sample B strategy (Person 2 Mục 3)                                                                                                                                    |
+| `views/IC ρ > 0.8`                                                                          | Trung bình | Thấp         | Prepared narrative "high agreement" (Mục 4 M2)                                                                                                                                              |
+| Louvain partition quá nhạy với resolution (B9)                                              | Trung bình | Trung bình   | Chạy `louvain_resolution_sensitivity.json`; nếu `<20 communities` hoặc `top3>50%` thì nghi over-merge, nếu `>200` + nhiều singleton thì nghi over-split; chỉ đổi resolution sau khi re-lock |
+| loky OOM với full graph                                                                     | Thấp       | Cao          | Reduce `n_jobs`; monitor RAM ≥ 32 GB khi chạy                                                                                                                                               |
+| PyG installation issues                                                                     | Thấp       | Trung bình   | Setup M0; fallback: DGL nếu PyG fail                                                                                                                                                        |
+| Paper > 6 trang                                                                             | Trung bình | **Blocker**  | Cắt theo bảng dưới                                                                                                                                                                          |
 
 ## 4c) Scope Reduction — Cắt khi cần (v3 Section 16)
 
 Nếu timeline tight, cắt theo thứ tự này (an toàn nhất trước):
 
-| Có thể cắt                                         | Phải giữ bắt buộc                                   |
-| -------------------------------------------------- | --------------------------------------------------- |
-| Uniform-p sensitivity variant                      | Weighted cascade IC (primary)                       |
-| Graph perturbation test                            | Label stability (Jaccard ≥ 0.85)                    |
-| 5% / 15% thresholds (chỉ giữ 10%)                  | Null model (3 realizations × 500 nodes × 100 runs)  |
-| Eigenvector/betweenness trong GNN features         | One-hop + two-hop proxies (Group 3)                 |
-| GNN-full variant                                   | Community detection (Louvain + cross_comm_fraction) |
-| Bootstrap CI (strongly recommended nhưng optional) | GNN-raw-attr (primary) + GNN-graph-only (ablation)  |
-| Detailed betweenness profiling                     | BH-FDR correction cho tất cả MWU                    |
-| Secondary metrics (P@10%)                          | life_time validation của typology                   |
+| Có thể cắt                                         | Phải giữ bắt buộc                                                 |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| Uniform-p sensitivity variant                      | Weighted cascade IC (primary)                                     |
+| Graph perturbation test                            | Label stability report (3 seeds; binary-ready nếu Jaccard ≥ 0.85) |
+| 5% / 15% thresholds (chỉ giữ 10%)                  | Null model (3 realizations × 500 nodes × 100 runs)                |
+| Eigenvector/betweenness trong GNN features         | One-hop + two-hop proxies (Group 3)                               |
+| GNN-full variant                                   | Community detection (Louvain + cross_comm_fraction)               |
+| Bootstrap CI (strongly recommended nhưng optional) | GNN-raw-attr (primary) + GNN-graph-only (ablation)                |
+| Detailed betweenness profiling                     | BH-FDR correction cho tất cả MWU                                  |
+| Secondary metrics (P@10%)                          | life_time validation của typology                                 |
 
 **Quy tắc:** Không cắt bất kỳ mục nào ở cột phải mà không thảo luận cả team + ghi vào `docs/experiment_registry.md`.
 
@@ -1688,4 +1736,4 @@ Tối thiểu cần có (tạo folder nếu chưa có):
 
 > **Tất cả bước 2–9:** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).
-> **BH-FDR:** tất cả MWU p-values phải corrected bằng `multipletests(method='fdr_bh')` — report p_corrected.
+> **BH-FDR:** áp dụng cho MWU của Person 2 (structural profiling + `life_time` validation). Person 3 không bắt buộc chạy MWU.
