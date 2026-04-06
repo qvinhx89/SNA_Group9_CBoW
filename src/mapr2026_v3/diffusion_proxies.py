@@ -51,9 +51,30 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _resolve_io_path(path_like: str | Path) -> Path:
+    """Resolve relative I/O paths for both run contexts.
+
+    Supports running from either:
+    - repository root
+    - src/mapr2026_v3
+    """
+    p = Path(path_like)
+    if p.is_absolute():
+        return p
+
+    # Prefer current working directory when it already points to a valid location.
+    if p.exists() or p.parent.exists():
+        return p
+
+    # Fallback to repository root relative to this file.
+    repo_root = Path(__file__).resolve().parents[2]
+    return repo_root / p
+
+
 def main() -> None:
     args = parse_args()
-    csr_path = Path(args.csr)
+    csr_path = _resolve_io_path(args.csr)
+    out_path = _resolve_io_path(args.out)
     node_ids: np.ndarray
 
     if csr_path.exists():
@@ -66,8 +87,8 @@ def main() -> None:
             )
 
         # Dry-run fallback: derive node_ids from node attributes or SIS.
-        attrs_path = Path(PATHS.node_attributes)
-        sis_path = Path(PATHS.sis_table)
+        attrs_path = _resolve_io_path(PATHS.node_attributes)
+        sis_path = _resolve_io_path(PATHS.sis_table)
 
         if attrs_path.exists():
             df_attrs = pd.read_parquet(attrs_path)
@@ -104,9 +125,9 @@ def main() -> None:
     )
     require_columns(df, ["node_id", "one_hop_spread", "two_hop_spread"], "diffusion_proxies")
 
-    ensure_parent(args.out)
-    df.to_parquet(args.out, index=False)
-    print(f"[OK] Wrote dry-run proxies placeholder: {args.out} (timestamp={now_iso()})")
+    ensure_parent(out_path)
+    df.to_parquet(out_path, index=False)
+    print(f"[OK] Wrote dry-run proxies placeholder: {out_path} (timestamp={now_iso()})")
 
 
 if __name__ == "__main__":
