@@ -83,6 +83,7 @@ Các artifact này đã tồn tại và **được xem là input nền tảng** 
 **Contract tối thiểu**
 
 - `centrality_table.parquet` có `node_id`, `degree`, `pagerank`, `betweenness`, `kshell`, `views`.
+- Betweenness: **NetworKit `ApproxBetweenness2`**, `epsilon=0.10`, `delta=0.10` (NOT NetworkX — quá chậm cho 168k nodes).
 - `community_labels.parquet` map phủ 100% active nodes.
 
 ### A3) Stage 3 — SIS artifacts (không còn là “label” trong plan mới)
@@ -161,8 +162,19 @@ Tạo trước typology vì structural profiling cần `cross_community_edge_fra
   - threshold: top-10% cho cả IC và views (M0-locked, đồng bộ `classification_threshold=0.10`)
 
 **Output phụ đi kèm:**
+- `outputs/mapr2026_v3_results/typology_quadrant_report.json` — quadrant counts + threshold + sizing check
+  - Schema: `timestamp, n_total, ic_threshold, views_threshold, quadrants {True/Hidden/Overrated/Non: {n, pct}}, min_quadrant_ok (bool), two_sample_applied (bool)`
+  - Ghi ngay sau khi gán label, trước khi chạy structural profiling
 - `outputs/mapr2026_v3_results/structural_profiling.csv` — MWU + Cliff's Δ + p_corrected (BH-FDR) cho 6 columns: `degree, pagerank, kshell, betweenness, cross_community_edge_fraction, life_time`
+  - Schema: `feature, group_hidden_mean, group_overrated_mean, mwu_stat, p_raw, p_corrected, cliffs_delta, significant`
+  - Thứ tự hàng: 1 hàng per feature (6 hàng tổng)
 - `outputs/mapr2026_v3_results/lifetime_validation.json` — partial Spearman + stratified MWU results
+  - Schema: `partial_spearman_rho, partial_spearman_p, n_quintiles_tested, n_quintiles_significant, success (bool), quintile_results (list)`
+  - Mỗi phần tử `quintile_results`: `{quintile, n_hidden, n_overrated, p_raw, p_corrected, cliffs_delta, significant}`
+
+**Success target cho `life_time` validation (v3 config `lifetime_n_quintiles_significant_target=3`):**
+- ≥ 3/5 degree quintiles phải có MWU p_corrected < 0.05 (BH-FDR) **và** Cliff's Δ ≥ 0.20 (hidden vs non-hidden)
+- Nếu < 3/5 quintiles significant → ghi limitation; KHÔNG dừng pipeline
 
 **CẢNH BÁO `life_time` (v3 Section 10):**
 - DÙNG để validate IC-based typology (IC labels không thấy life_time → independent) ✅
@@ -177,7 +189,10 @@ Tạo trước typology vì structural profiling cần `cross_community_edge_fra
 
 Lý do: `runtime_sec` trong `baseline_ranking_metrics.csv` đo full-graph inference để so sánh fair với GNN inference. Person 3 sẽ filter theo `split_masks.parquet` khi tính ranking metrics — Person 2 không cần filter.
 
-Cần thêm output phụ: `outputs/mapr2026_v3_results/runtime_breakdown.csv` (ghi ít nhất `model_name, inference_sec_full_graph`).
+Output phụ bắt buộc: `outputs/mapr2026_v3_results/runtime_breakdown.csv`
+- columns tối thiểu: `model_name`, `inference_sec_full_graph`
+- Person 2 ghi dòng `diffusion_proxies` khi chạy Stage 6; Person 3 append tất cả model Group 1–5
+- Dùng để tính "Speedup: MC IC vs GNN inference" trong Table runtime của paper
 
 ### B6) Evaluation-ready tables (Task C metrics)
 
@@ -200,6 +215,13 @@ Cần thêm output phụ: `outputs/mapr2026_v3_results/runtime_breakdown.csv` (g
 
 Không đụng nếu không cần. Chỉ đảm bảo chạy ổn và artifact A1 tồn tại.
 
+**LCC check bắt buộc (Day 7/4 theo timeline):**
+- Verify active graph có 1 dominant connected component (LCC) chiếm phần lớn nodes
+- Output: `outputs/stage0_data_quality/lcc_report.json` **(path đã lock — không dùng `stage0_audit/`)**
+  - Fields: `n_nodes_total`, `n_nodes_lcc`, `pct_lcc`, `n_components`
+- Nếu `pct_lcc < 90%` → báo cả team; IC sampling nên restrict về LCC
+- Pilot diagnostics sử dụng `median_reach < 5% of n_nodes_lcc` làm threshold "cascade too explosive"
+
 ### Stage 1 (đã có) — Centrality + community + k-shell
 
 Có thể reuse y nguyên nếu chưa đổi preprocessing.
@@ -209,14 +231,37 @@ Có thể reuse y nguyên nếu chưa đổi preprocessing.
 **Lý do:** mọi IC/proxy đều cần CSR + mapping.
 
 - Input: `graph_active.edgelist`
-- Output: `graph_csr.npz`
+- Output: `graph_csr.npz` với keys bắt buộc: `indptr`, `indices`, `degrees`, `node_ids`
+
+**Determinism rule (bắt buộc):** sort `node_id` tăng dần trước khi build CSR — đảm bảo mọi lần chạy lại ra cùng `row_index ↔ node_id` mapping. Cụ thể:
+```python
+sorted_nodes = sorted(G.nodes())   # sort string node_ids ascending
+node2idx = {n: i for i, n in enumerate(sorted_nodes)}
+node_ids = np.array(sorted_nodes)  # save vào npz
+```
+- `degrees[i] == indptr[i+1] - indptr[i]` phải đúng cho mọi `i`
+- `node_ids[i]` là string node_id của row `i`; consumer dùng `node2idx = {n: i for i, n in enumerate(node_ids)}`
 
 ### Stage 3 (MỚI, “Day-1 critical”) — Benchmark runtime + one-hop ρ check
 
 **Lý do:** quyết định toàn bộ compute budget và GNN narrative.
 
 - Input: CSR + degrees (+ list nodes)
-- Output: artifacts B2
+- Output: artifacts B2 (`ic_runtime_benchmark.json`, `one_hop_correlation.json`, `docs/day1_decisions.md`)
+
+**Decision gate — phải ghi vào `docs/day1_decisions.md` và commit:**
+
+| Projected runtime | N_seeds | N_runs | Action |
+|---|---|---|---|
+| < 4h | 5.000 | 200 | Proceed as planned |
+| 4–8h | 3.000 | 150 | Ghi limitation về compute |
+| > 8h | 2.000 | 100 | Ghi limitation + báo cả team |
+
+| Spearman ρ (one-hop vs IC) | Narrative branch |
+|---|---|
+| ρ < 0.8 | GNN là primary — proceed |
+| 0.8–0.9 | Add 2-hop as stronger baseline; GNN may still win |
+| ρ > 0.9 | **RESTRUCTURE**: proxies primary, GNN secondary — báo team |
 
 ### Stage 4 (MỚI) — IC pilot diagnostics + label stability + split mask
 
@@ -234,6 +279,31 @@ Có thể reuse y nguyên nếu chưa đổi preprocessing.
 - **Stability check**: `worker_seed = mc_seed * 10000 + node` với `mc_seed ∈ {0,1,2}` — 3 genuinely independent MC experiments, `n_runs=150` each
 - **Pilot diagnostics**: `n_pilot_nodes=200`, `n_pilot_runs=50` — subset để verify non-degenerate
 - `cv_noise_threshold=0.50`: node nào có per-node CV > 0.50 → exclude khỏi stability metrics
+
+**Pilot diagnostics — phải report đủ 6 metrics (v3 Section 4.1):**
+
+| Metric | Threshold | Ý nghĩa |
+|---|---|---|
+| `mean_reach` | report | mean single-seed reach |
+| `median_reach` | < 5% LCC | cascade too explosive nếu cao hơn |
+| `iqr_reach` | report | spread của distribution |
+| `top10_to_median_ratio` | >> 1 | nếu ≈ 1 → ranking vô nghĩa |
+| `rank_stability` (Spearman giữa MC seeds) | report | |
+| `cv_score` | **> 0.3** | nếu thấp → cascade chết quá nhanh |
+
+**Stratified sampling + KS representativeness check (v3 Section 4.4):**
+- Dùng `pd.qcut(degree, q=5)` để stratify (cùng rule với split mask)
+- Sau sampling: chạy KS test trên `degree`, `kshell`, `pagerank`
+- Warn nếu KS stat > 0.10 (threshold: `ks_test_threshold=0.10`)
+- Ghi `ks_results` vào `ic_pilot_diagnostics.json` với schema:
+  ```json
+  "ks_results": {
+    "degree":   {"ks_stat": <float>, "p_value": <float>, "warn": <bool>},
+    "kshell":   {"ks_stat": <float>, "p_value": <float>, "warn": <bool>},
+    "pagerank": {"ks_stat": <float>, "p_value": <float>, "warn": <bool>}
+  }
+  ```
+  (`warn` = true nếu `ks_stat > 0.10`)
 
 **Stop condition:** Nếu `split_masks.parquet` chưa tồn tại sau Stage 4 → Stage 7 (surrogate) không được chạy.
 
@@ -257,7 +327,7 @@ Có thể reuse y nguyên nếu chưa đổi preprocessing.
   - `typology_labels_ic_views.parquet` (all labeled nodes, threshold top-10%, M0-locked)
   - `outputs/mapr2026_v3_results/structural_profiling.csv` (MWU + Cliff's Δ + BH-FDR p_corrected)
   - `outputs/mapr2026_v3_results/lifetime_validation.json` (partial Spearman + stratified MWU)
-  - `null_model_typology_summary.json` (**spec: 500 nodes × 3 realizations × 100 runs/node**)
+  - `outputs/mapr2026_v3_results/null_model_typology_summary.json` (**spec: 500 nodes × 3 realizations × 100 runs/node**)
 - Scripts: `src/mapr2026_v3/typology_ic_views.py`, `src/mapr2026_v3/null_model_typology.py`
 
 **Null model spec chi tiết (v3 Section 5):**
@@ -265,6 +335,21 @@ Có thể reuse y nguyên nếu chưa đổi preprocessing.
 - 3 realizations: configuration model `seed=realization*100`
 - 100 runs/node: đủ để ổn định IC estimate trên null graph
 - So sánh: TYPOLOGY QUADRANT (không chỉ rank correlation) — câu hỏi: "null graph có Hidden với betweenness cao không?"
+
+**Schema bắt buộc cho `null_model_typology_summary.json`:**
+```json
+{
+  "timestamp": "<ISO 8601>",
+  "n_nodes": 500,
+  "n_realizations": 3,
+  "n_runs_per_node": 100,
+  "rho_mean": <float>,
+  "rho_std": <float>,
+  "hidden_betweenness_null_mean": <float>,
+  "hidden_betweenness_null_std": <float>,
+  "interpretation": "<str>"
+}
+```
 
 **Two-sample strategy (v3 Section 4.5):**
 - Nếu Hidden quadrant < 150 sau lần sample đầu → tăng `n_sample` lên **8.000–10.000 nodes**, đồng thời augment Sample B (high-betweenness + low-views nodes từ full graph)
@@ -294,17 +379,35 @@ Chỉ làm sau khi đã có **tất cả**:
 - Day-1 narrative branch đã lock (M2)
 
 **Phân chia Group 4 vs Group 5 (quan trọng cho cấu trúc results table):**
-- **Group 4 (Shallow Embedding Baselines):** Node2Vec+LR (`dim=64, walks=20, walk_len=20`) + MLP raw attr (`[views_log, views/day, life_time]`) → kết quả vào `baseline_ranking_metrics.csv` (cùng với Group 1–3)
-- **Group 5 (GNN ablation, 4 variants):** GNN-raw-attr / GNN-graph-only / GNN-centrality / GNN-full → kết quả vào `surrogate_ranking_metrics.csv` (với `mean±std` 5 seeds)
+- **Group 4 (Shallow Embedding Baselines):** Node2Vec+LR + MLP raw attr → `baseline_ranking_metrics.csv` (cùng với Group 1–3)
+- **Group 5 (GNN ablation, 4 variants):** GNN-raw-attr / GNN-graph-only / GNN-centrality / GNN-full → `surrogate_ranking_metrics.csv` (`mean±std` 5 seeds)
+
+**Group 4 implementation specs:**
+- **Node2Vec:** library `node2vec` hoặc `pecanpy` (ưu tiên pecanpy cho large graph); `dim=64, walks=20, walk_len=20, p=1, q=1`; downstream: Ridge regression → predict `log1p(ic_score_mean)`
+- **MLP raw attr:** features `[log1p(views), views/life_time, life_time]` normalized min-max; architecture `Linear(3→128) → ReLU → Dropout(0.3) → Linear(128→1)`; optimizer Adam `lr=0.001`, epochs=100, loss HuberLoss(`delta=1.0`)
 
 **GNN hyperparams bắt buộc (v3 Section 9):**
 ```
-Model:       GraphSAGE (PyTorch Geometric ≥ 2.5, torch ≥ 2.0)
-hidden_dim:  128,  n_layers: 2,  dropout: 0.30
-lr:          0.001,  epochs: 200
-Loss:        HuberLoss(delta=1.0)
-Hardware:    GPU ≥ 8GB VRAM; fallback: DGL nếu PyG fail
+Model:            GraphSAGE (PyTorch Geometric ≥ 2.5, torch ≥ 2.0)
+hidden_dim:       128,  n_layers: 2,  dropout: 0.30
+lr:               0.001,  epochs: 200
+Loss:             HuberLoss(delta=1.0)
+Hardware:         GPU ≥ 8GB VRAM; fallback: DGL nếu PyG fail
+training_seeds:   [42, 123, 456, 789, 1024]  → 5 seeds → report mean±std
 ```
+- `surrogate_ranking_metrics.csv` phải có `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `precision_mean`, `precision_std`, `runtime_sec`
+
+**Feature sets cho 4 ablation variants (v3 config `feature_sets`):**
+```
+gnn_raw_attr:    [views_log_norm, views_per_day_norm, life_time_norm]   ← min-max normalized
+gnn_graph_only:  [degree_norm]
+gnn_centrality:  [degree_norm, pagerank_norm, kshell_norm]
+gnn_full:        [degree_norm, pagerank_norm, kshell_norm,
+                  views_log_norm, views_per_day_norm, life_time_norm]
+```
+- Tất cả features dùng suffix `_norm` (min-max normalization trên toàn active graph)
+
+**⚠ GNN-raw-attr runtime note:** variant này KHÔNG cần centrality precompute → runtime comparison với proxies là fair hơn (không tính centrality overhead). Ghi rõ trong paper Table runtime.
 
 ---
 
