@@ -210,7 +210,7 @@ Lý do: `runtime_sec` trong `baseline_ranking_metrics.csv` đo full-graph infere
 
 Output phụ bắt buộc: `outputs/mapr2026_v3_results/runtime_breakdown.csv`
 
-- columns tối thiểu: `model_name`, `inference_sec_full_graph`
+- columns tối thiểu: `model_name`, `inference_sec_full_graph`, `train_sec` (optional/null)
 - Person 2 ghi dòng `diffusion_proxies` khi chạy Stage 6; Person 3 append tất cả model Group 1–5
 - Dùng để tính "Speedup: MC IC vs GNN inference" trong Table runtime của paper
 
@@ -228,6 +228,8 @@ Output phụ bắt buộc: `outputs/mapr2026_v3_results/runtime_breakdown.csv`
   - `mean±std` tính trên 5 training seeds `[42, 123, 456, 789, 1024]`
 
 **Consumer rule (M0-locked):** Person 3 load metrics target từ `regression_targets.parquet`, filter theo `split_masks.parquet` dùng `load_split_mask()` + `apply_test_mask()` từ `eval_ranking_harness.py`. Không tạo split mới.
+
+**Transductive claim lock (B10):** accuracy metrics chỉ hợp lệ trên held-out labeled nodes; full-graph inference chỉ dùng cho runtime/speedup. Không claim deployment accuracy trên unlabeled nodes nếu chưa có out-of-sample IC audit riêng (gợi ý 500-1000 nodes).
 
 > Lưu ý: phần GNN/Node2Vec có thể “scope cut” nếu tight; nhưng **Group 3 proxies + ranking metrics** là bắt buộc (vì quyết định narrative phụ thuộc one-hop).
 
@@ -382,6 +384,7 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 - **Regression-ready gate (primary):** `cv_score > 0.3` và có `per_quintile_cv` đầy đủ → tiếp tục pipeline với `regression_targets.parquet`.
 - **Binary-ready gate (secondary):** `jaccard_stability ≥ 0.85` mới coi `classification_labels.parquet` là non-provisional; nếu thấp hơn thì binary phải được gắn trạng thái provisional (không block nhánh regression).
 - **Low-degree limitation note (soft, strongly recommended):** nếu `per_quintile_cv.Q1.cv < 0.15` và `per_quintile_cv.Q2.cv < 0.20`, ghi `known limitation` vào `docs/day1_decisions.md`: tập trung claim ở overall ranking, tránh claim fine-grained ranking trong cùng degree band.
+- **Last-resort trigger (soft, strongly recommended):** chỉ kích hoạt các nhánh fallback (`restrict-to-LCC`, `uniform-p sensitivity`, `normalized reach`) khi đồng thời thỏa `median_reach < 2`, `p_reach_gt_1 < 0.20`, và `top10_to_median_ratio < 2`. Nếu chưa đồng thời thỏa 3 điều kiện này thì giữ weighted-cascade primary + diagnostics mặc định.
 
 **Stop condition:** Nếu `split_masks.parquet` chưa tồn tại sau Stage 4 → Stage 7 (surrogate) không được chạy.
 
@@ -445,6 +448,8 @@ def cross_community_fraction(node, G_neighbors, partition):
   - `outputs/mapr2026_v3_results/structural_profiling.csv` (MWU + Cliff's Δ + BH-FDR p_corrected)
   - `outputs/mapr2026_v3_results/lifetime_validation.json` (partial Spearman + stratified MWU)
   - `outputs/mapr2026_v3_results/null_model_typology_summary.json` (**spec: 500 nodes × 3 realizations × 100 runs/node**)
+  - `outputs/mapr2026_v3_results/views_permutation_null_summary.json` (**bắt buộc trong B5 core**)
+  - `outputs/mapr2026_v3_results/ic_permutation_null_summary.json` (**bắt buộc trong B5 core**)
 - Scripts: `src/mapr2026_v3/typology_ic_views.py`, `src/mapr2026_v3/null_model_typology.py`
 
 **Null model spec chi tiết (v3 Section 5):**
@@ -454,16 +459,17 @@ def cross_community_fraction(node, G_neighbors, partition):
 - 100 runs/node: đủ để ổn định IC estimate trên null graph
 - So sánh: TYPOLOGY QUADRANT (không chỉ rank correlation) — câu hỏi: "null graph có Hidden với betweenness cao không?"
 
-**Permutation null (soft, strongly recommended):**
+**Permutation null (B5 core - execution-locked):**
 
 - Mục tiêu: giảm nguy cơ kết luận "configuration null inconclusive" và kiểm tra trực tiếp cơ chế divergence views-IC.
-- Nhánh 1 (bắt đầu với nhánh này): **views-permutation null**
+- Nhánh 1 (**bắt buộc**): **views-permutation null**
   - Giữ nguyên graph + IC scores, permute `views` across labeled nodes, rebuild typology nhiều lần.
   - Output gợi ý: `outputs/mapr2026_v3_results/views_permutation_null_summary.json`.
-- Nhánh 2 (optional nếu còn thời gian): **IC-score permutation null**
+- Nhánh 2 (**bắt buộc**): **IC-score permutation null**
   - Giữ nguyên graph + views, permute `ic_score_mean`, rebuild typology.
   - Output gợi ý: `outputs/mapr2026_v3_results/ic_permutation_null_summary.json`.
-- Rule: configuration model vẫn là primary null trong contract; permutation null là sensitivity bổ sung.
+- Rule: configuration model vẫn là primary null trong contract; permutation null package (views-perm + IC-perm) là core của B5.
+- **Execution lock (bắt buộc):** Person 2 phải chạy và commit đủ cả 2 artifact permutation trước sign-off Stage 5.
 
 **Schema bắt buộc cho `null_model_typology_summary.json` (10 fields):**
 
@@ -499,6 +505,7 @@ def cross_community_fraction(node, G_neighbors, partition):
   - `Overrated-like`: bottom decile của `divergence_score`
 - Output gợi ý: `outputs/mapr2026_v3_results/residual_divergence_report.json`.
 - Rule: đây là backup/sensitivity branch, KHÔNG thay thế typology top-10 M0-locked trong main contract.
+  - **Execution lock (soft-branch nhưng phải log):** nếu trigger xảy ra thì Person 2 phải chạy branch này và commit artifact trước sign-off Stage 5.
 
 ### Stage 6 (MỚI) — Diffusion proxies (one-hop + two-hop)
 
@@ -507,7 +514,7 @@ def cross_community_fraction(node, G_neighbors, partition):
 - Input: `graph_csr.npz`
 - Output:
   - `data/processed/diffusion_proxies.parquet` — **FULL active graph** (M0-locked; không filter)
-  - `outputs/mapr2026_v3_results/runtime_breakdown.csv` — ghi `model_name`, `inference_sec_full_graph`
+  - `outputs/mapr2026_v3_results/runtime_breakdown.csv` — ghi `model_name`, `inference_sec_full_graph`, `train_sec` (optional/null)
 - Script: `src/mapr2026_v3/diffusion_proxies.py` (real mode, không `--dry-run`)
 
 **Công thức bắt buộc (xem chi tiết ở team_plan Person 2 Deliverable 2):**
@@ -545,7 +552,7 @@ Chỉ làm sau khi đã có **tất cả**:
 **Phân chia Group 4 vs Group 5 (quan trọng cho cấu trúc results table):**
 
 - **Group 4 (Shallow Embedding Baselines):** Node2Vec+LR + MLP raw attr → `baseline_ranking_metrics.csv` (cùng với Group 1–3)
-- **Group 5 (GNN ablation, 4 variants):** GNN-raw-attr / GNN-graph-only / GNN-centrality / GNN-full → `surrogate_ranking_metrics.csv` (`mean±std` 5 seeds)
+- **Group 5 (GNN ablation, 4 core variants + 1 optional sanity-check):** GNN-raw-attr / GNN-graph-only / GNN-centrality / GNN-full (+ optional `gnn_random`) → `surrogate_ranking_metrics.csv` (`mean±std` 5 seeds)
 
 **Group 4 implementation specs:**
 
@@ -573,9 +580,13 @@ gnn_graph_only:  [degree_norm]
 gnn_centrality:  [degree_norm, pagerank_norm, kshell_norm]
 gnn_full:        [degree_norm, pagerank_norm, kshell_norm,
                   views_log_norm, views_per_day_norm, life_time_norm]
+
+# Optional add-if-time sanity-check
+gnn_random:      [const_one]  # hoặc random noise feature cố định theo seed
 ```
 
 - Tất cả features dùng suffix `_norm` (min-max normalization trên toàn active graph)
+- `gnn_random` là add-if-time (không block deadline); nếu chạy thì ghi `model_name=gnn_random` trong `surrogate_ranking_metrics.csv`.
 
 **⚠ GNN-raw-attr runtime note:** variant này KHÔNG cần centrality precompute → runtime comparison với proxies là fair hơn (không tính centrality overhead). Ghi rõ trong paper Table runtime.
 
@@ -642,30 +653,32 @@ Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dư�
 
 ## F2. Risk Management (v3 Section 19)
 
-| Rủi ro                                                                                      | Xác suất   | Impact       | Action                                                                         |
-| ------------------------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------ |
-| `one_hop_rho > 0.9` + top-k alignment cao (`jaccard_at_10pct > 0.8`, `ndcg_at_10pct > 0.9`) | Trung bình | **Critical** | M2: check trước; nếu đủ 3 điều kiện thì restructure, nếu không giữ GNN + 2-hop |
-| IC runtime > 8h                                                                             | Trung bình | **Critical** | M2: reduce n_sample=2k, N_runs=100; ghi limitation                             |
-| GNN không beat cheap proxies                                                                | Trung bình | Thấp         | Prepared "negative result" narrative — vẫn publishable                         |
-| Hidden quadrant < 150 nodes                                                                 | Trung bình | Cao          | Expand 8–10k sample + Sample B (Stage 5)                                       |
-| `views/IC ρ > 0.8`                                                                          | Trung bình | Thấp         | Prepared "high agreement" fallback narrative                                   |
-| loky OOM với full graph                                                                     | Thấp       | Cao          | Reduce `n_jobs`; RAM ≥ 32 GB khi chạy parallel IC                              |
-| PyG installation issues                                                                     | Thấp       | Trung bình   | Setup M0; fallback: DGL                                                        |
-| Paper > 6 trang IEEE                                                                        | Trung bình | **Blocker**  | Cắt theo bảng Scope Reduction dưới                                             |
+| Rủi ro                                                                                      | Xác suất   | Impact       | Action                                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `one_hop_rho > 0.9` + top-k alignment cao (`jaccard_at_10pct > 0.8`, `ndcg_at_10pct > 0.9`) | Trung bình | **Critical** | M2: check trước; nếu đủ 3 điều kiện thì restructure, nếu không giữ GNN + 2-hop                                                              |
+| IC runtime > 8h                                                                             | Trung bình | **Critical** | M2: reduce n_sample=2k, N_runs=100; ghi limitation                                                                                          |
+| GNN không beat cheap proxies                                                                | Trung bình | Thấp         | Prepared "negative result" narrative — vẫn publishable                                                                                      |
+| Hidden quadrant < 150 nodes                                                                 | Trung bình | Cao          | Expand 8–10k sample + Sample B (Stage 5)                                                                                                    |
+| `views/IC ρ > 0.8`                                                                          | Trung bình | Thấp         | Prepared "high agreement" fallback narrative                                                                                                |
+| Thiếu permutation null package (B5)                                                         | Trung bình | Cao          | Không sign-off Stage 5 nếu thiếu `views_permutation_null_summary.json` hoặc `ic_permutation_null_summary.json`                              |
+| Overclaim accuracy trên unlabeled nodes (B10)                                               | Trung bình | Trung bình   | Khóa wording transductive: metric chỉ trên held-out labeled; full-graph chỉ runtime; nếu cần claim rộng hơn thì chạy out-of-sample IC audit |
+| loky OOM với full graph                                                                     | Thấp       | Cao          | Reduce `n_jobs`; RAM ≥ 32 GB khi chạy parallel IC                                                                                           |
+| PyG installation issues                                                                     | Thấp       | Trung bình   | Setup M0; fallback: DGL                                                                                                                     |
+| Paper > 6 trang IEEE                                                                        | Trung bình | **Blocker**  | Cắt theo bảng Scope Reduction dưới                                                                                                          |
 
 ## F3. Scope Reduction — Cắt theo thứ tự ưu tiên (v3 Section 16)
 
-| Có thể cắt                                    | Phải giữ bắt buộc                                                 |
-| --------------------------------------------- | ----------------------------------------------------------------- |
-| Uniform-p sensitivity variant                 | Weighted cascade IC (primary)                                     |
-| Graph perturbation test                       | Label stability report (3 seeds; binary-ready nếu Jaccard ≥ 0.85) |
-| 5% / 15% thresholds                           | Null model (3 realizations × 500 × 100 runs)                      |
-| Eigenvector centrality baseline               | One-hop + two-hop proxies (Group 3)                               |
-| GNN-full variant                              | Community detection (Louvain + cross_comm_fraction)               |
-| Bootstrap CI (strongly recommended, optional) | GNN-raw-attr + GNN-graph-only ablation                            |
-| Detailed betweenness profiling                | BH-FDR correction cho tất cả MWU p-values                         |
-| Secondary metrics (Precision@10%)             | life_time validation của IC typology                              |
-| Dead account detailed breakdown               | Dead account % stat trong limitations                             |
+| Có thể cắt                                    | Phải giữ bắt buộc                                                            |
+| --------------------------------------------- | ---------------------------------------------------------------------------- |
+| Uniform-p sensitivity variant                 | Weighted cascade IC (primary)                                                |
+| Graph perturbation test                       | Label stability report (3 seeds; binary-ready nếu Jaccard ≥ 0.85)            |
+| 5% / 15% thresholds                           | Null package: configuration model + views-permutation + IC-score permutation |
+| Eigenvector centrality baseline               | One-hop + two-hop proxies (Group 3)                                          |
+| GNN-full variant                              | Community detection (Louvain + cross_comm_fraction)                          |
+| Bootstrap CI (strongly recommended, optional) | GNN-raw-attr + GNN-graph-only ablation                                       |
+| Detailed betweenness profiling                | BH-FDR correction cho tất cả MWU p-values                                    |
+| Secondary metrics (Precision@10%)             | life_time validation của IC typology                                         |
+| Dead account detailed breakdown               | Dead account % stat trong limitations                                        |
 
 ---
 

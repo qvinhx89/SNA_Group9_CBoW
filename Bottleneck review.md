@@ -1,5 +1,3 @@
-
-
 # Phân tích Bottleneck và Tài liệu Tham khảo Cần thiết
 
 ---
@@ -47,6 +45,7 @@ Nếu CV < 0.3, ranking IC scores gần như vô nghĩa — đa số nodes có s
 > Review này dùng p ≈ 1/81 như activation probability "trung bình" — điều này không chính xác. Với weighted cascade `p(u,v) = 1/degree(v)`, xác suất activation phụ thuộc vào degree của **node đích** v, không phải nguồn. Vì 1/x là hàm lồi, **Jensen's inequality** cho: `E[1/degree(v)] > 1/E[degree(v)] = 1/81`. Trên scale-free network (heavy-tailed degree), các low-degree nodes đóng góp mạnh vào kỳ vọng này — p thực sự trung bình qua tất cả các cạnh cao hơn 1/81 đáng kể.
 >
 > Hệ quả: IC distribution rất có khả năng **bimodal theo degree quintile**, không phải uniformly degenerate:
+>
 > - **Hub nodes (degree quintile Q5)**: nhiều neighbors có degree trung bình thấp → p cao → cascade spread meaningful → reach phân bố rộng
 > - **Low-degree nodes (Q1–Q4)**: neighbors cũng thường là large-degree (preferential attachment) → p thấp → reach ≈ 1–3
 >
@@ -61,8 +60,9 @@ Pilot diagnostics 200 nodes × 50 runs phải report đầy đủ: mean, median,
 **Per-quintile CV diagnostic (bắt buộc trên pilot 200 nodes):** Chia 200 pilot nodes thành 5 degree quintiles (Q1–Q5, ~40 nodes mỗi nhóm). Tính CV riêng cho từng quintile. Nếu CV_Q1 < 0.15 và CV_Q2 < 0.20, confirm rằng ranking trong low-degree group là noise-dominated — ghi vào `docs/day1_decisions.md` là known limitation. GNN evaluation nên focus vào overall ranking (toàn bộ n_sample) chứ không claim "accurately ranks nodes within a degree band."
 
 **Diagnostics robust hơn CV** — đặc biệt cần thiết ở low-mean regimes khi CV dễ bị nhiễu:
+
 - **P(reach > 1)**: tỷ lệ cascades có ít nhất 1 node bị lây nhiễm ngoài seed. Nếu P(reach > 1) < 0.2 → regime quá degenerate, cần thêm runs hoặc check LCC.
-- **P(reach > 5)**: tỷ lệ cascades spread được ≥ 5 nodes. Nếu P(reach > 5) < 0.05 → hầu hết influence chỉ trong immediate neighborhood.
+- **P(reach >= 5)**: tỷ lệ cascades spread được ≥ 5 nodes. Nếu P(reach >= 5) < 0.05 → hầu hết influence chỉ trong immediate neighborhood.
 - **Tail separation ratio**: `mean_reach(top-10%) / median_reach`. Nếu ratio > 5 → tail phân hóa đủ mạnh, labels vẫn usable dù median ≈ 1–2.
 - **Run-count stability curve**: plot Kendall τ giữa N_runs và N_runs/2 cho mỗi quintile. Nếu τ > 0.95 ở N_runs=100, giảm xuống 100 để tiết kiệm compute (50% savings).
 
@@ -138,6 +138,23 @@ Cần plot learning curves: Spearman ρ vs training epochs cho mỗi variant. N�
 
 Cần test xem removing views_log khỏi GNN-raw-attr (chỉ giữ views/day + life_time) có thay đổi performance đáng kể không. Nếu có → views là key feature, indirect leakage concern lớn hơn. Nếu không → GNN thực sự learn từ temporal attributes (và views_log chỉ là correlated noise).
 
+**Fallback Paper Narrative nếu cả GNN-raw-attr VÀ GNN-graph-only đều không beat MLP-raw-attr (tức là message passing không giúp ích):**
+
+_(a) Adjusted claim (thay thế claim "GNN superior"):_
+
+> "GNN-based models did not outperform feature-only baselines (MLP-raw-attr) on influence prediction, suggesting that local neighborhood structure — as captured by message-passing at this graph scale — does not provide additional signal beyond node-level degree features under the weighted cascade model."
+
+_(b) Mandatory limitation sentence (bắt buộc đưa vào Discussion hoặc Conclusions):_
+
+> "We note that the GNN was trained on a transductive split with n_sample ≪ |V|; performance may improve with full-graph inductive training or with larger labeled sets, which we leave for future work."
+
+_(c) Những gì vẫn giữ trong paper — đây là finding defensible, không phải failure:_
+
+- **Table 3 runtime comparison** (GNN inference speedup vs MC IC) → **vẫn giữ nguyên** — speedup claim không phụ thuộc vào accuracy của GNN
+- **Ablation table** (MLP-raw-attr vs GNN-raw-attr vs GNN-graph-only) → **vẫn báo cáo đầy đủ** — cho thấy topology không giúp ích ở scale Twitch, đây là finding về regime của graph learning
+- **RQ3 answer**: "Topology-aware GNN does not improve over topology-free baseline at Twitch scale under transductive training" — câu này IS a defensible paper contribution vì nó resolves an open empirical question
+- **Framing chuyển hướng**: Focus narrative sang "IC-based GNN speedup" (runtime benefit) thay vì "IC-based GNN accuracy" (predictive benefit)
+
 ### Tài liệu cần đọc
 
 Hamilton, Ying & Leskovec (2017), "Inductive Representation Learning on Large Graphs" (NeurIPS 2017) — GraphSAGE paper gốc. Section 5 analysis cho thấy aggregation function (mean vs LSTM vs pool) ảnh hưởng performance khác nhau trên từng dataset. Mean aggregation (plan v3 dùng) ổn nhất nhưng least expressive.
@@ -160,7 +177,7 @@ Configuration model bảo toàn degree sequence nhưng phá hủy community stru
 
 ### Những thứ cần thử nghiệm
 
-Cần thử dk-series graph hoặc stochastic block model thay vì configuration model — những null models này bảo toàn thêm clustering hoặc community structure, tạo so sánh fair hơn. Tuy nhiên implementation phức tạp hơn và có thể ngoài scope 25 ngày.
+> ⚠ **[NICE-TO-HAVE — Future work. OUT OF SCOPE cho 25-ngày execution.]** Cần thử dk-series graph hoặc stochastic block model thay vì configuration model — những null models này bảo toàn thêm clustering hoặc community structure, tạo so sánh fair hơn. Tuy nhiên implementation phức tạp hơn và hoàn toàn ngoài scope 25 ngày. Bỏ qua trong execution hiện tại; chỉ ghi là future work trong paper.
 
 Phương án pragmatic: chạy configuration model nhưng report rõ "null model differs from real graph in clustering and community structure" và interpret kết quả accordingly. Nếu null Hidden nodes CŨNG có high betweenness, finding mạnh hơn (betweenness elevated even when topology randomized). Nếu không, inconclusive (expected, because clustering destroyed).
 
@@ -281,6 +298,7 @@ IEEE conference paper formatting guidelines (2-column template). Xem cụ thể 
 Louvain algorithm tối ưu modularity Q — nhưng modularity có **resolution limit** (Fortunato & Barthélemy, 2007): các community nhỏ hơn một scale threshold nhất định bị merge vào community lớn hơn dù structure rõ ràng. Threshold này xấp xỉ `O(√E)` với E là số cạnh — cụ thể hơn là `√(E/2)` cho hai community dày đặc ngang nhau, hoặc `√(2E)` cho clique-like communities; exact value phụ thuộc vào mật độ nội bộ của community (xem Figure 1 của F&B 2007). Trên Twitch (`E ≈ 6.8M`), threshold này nằm trong khoảng **~1800–3700 nodes** tùy theo community density. Điểm mấu chốt: mọi community nhỏ hơn ~2000 nodes đều có nguy cơ bị absorbed — và với Twitch là dense graph (mean degree 81), nguy cơ này là **thực tế, không phải lý thuyết**.
 
 Với `mean_degree ≈ 81` (dense graph) và `resolution=1.0`, Louvain có thể:
+
 - **Over-merge**: nhiều tight-knit gaming sub-community (e.g., "Dota 2 streamers," "CS:GO streamers") bị gộp vào 1–2 mega-communities
 - **Produce trivial partition**: vài community >10k nodes + nhiều singletons → `cross_community_edge_fraction` mất discriminative power
 - **Under-detect language sub-communities**: Twitch graph có natural language-based structure (EN, DE, FR, PT, RU). Nếu EN community quá lớn, Louvain split arbitrarily thay vì theo meaningful topological seams
@@ -290,12 +308,14 @@ Nếu `community_features.parquet` có community partition không meaningful, m�
 ### Những thứ cần thử nghiệm
 
 **Bước 1 — Sensitivity sweep:** Chạy Louvain với 3 giá trị `resolution ∈ {0.5, 1.0, 2.0}` và report với mỗi giá trị:
+
 - Tổng số communities
 - Size distribution: (min, Q1, median, Q3, max) và % nodes trong top-3 communities
 - Modularity Q
 - NMI(community_label, language) — xem community có align với language groups không
 
 **Bước 2 — Decision rule:**
+
 - Nếu `resolution=1.0` cho < 20 communities hoặc > 50% nodes trong 3 communities lớn nhất → over-merging, tăng resolution
 - Nếu `resolution=1.0` cho > 200 communities với nhiều singletons → over-splitting, giảm resolution
 - Target: 30–80 communities với size distribution reasonably non-degenerate
@@ -325,6 +345,7 @@ Blondel, Guillaume, Lambiotte & Lefebvre (2008), "Fast unfolding of communities 
 Plan v3 dùng **transductive evaluation**: GNN trained và evaluated trên cùng graph, IC labels available chỉ cho `n_sample` nodes (train/val/test split trong tập labeled này). Tuy nhiên paper muốn claim "GNN có thể deployed để predict IC rank cho toàn bộ 168k nodes" — claim này **không được support bởi evaluation protocol hiện tại**.
 
 Cụ thể:
+
 - **Evaluation protocol**: GNN learns từ `n_sample ≈ 2k–5k` labeled nodes, accuracy được đo trên held-out test set trong `n_sample` này
 - **Full-graph inference** (168k nodes) được report chỉ cho **runtime** assessment (speedup vs MC IC)
 - **Accuracy của predictions trên 163k+ unlabeled nodes**: completely unknown và **không được measured**
@@ -354,36 +375,80 @@ Zhu, Ghahramani & Lafferty (2003), "Semi-supervised learning using Gaussian fiel
 
 ---
 
+## Bảng Phân Tầng Ưu Tiên (Must / Should / Nice)
+
+| Bottleneck | Tên                  | Tier       | Lý do                                                         |
+| ---------- | -------------------- | ---------- | ------------------------------------------------------------- |
+| B1         | One-Hop ρ Check      | **MUST**   | Day-1 gate — quyết định toàn bộ narrative GNN                 |
+| B2         | Weighted Cascade CV  | **MUST**   | Validates IC metric trước khi labeling                        |
+| B2′        | Per-Quintile CV      | **MUST**   | Sub-experiment của B2, primary diagnostic bắt buộc            |
+| B3         | Views/IC Divergence  | **MUST**   | RQ2 core claim — typology validity                            |
+| B4         | Feature Fairness     | **MUST**   | Ablation cho GNN paper claim; MLP-raw-attr baseline           |
+| B5         | Typology Null Models | **MUST**   | Null 2 (IC-perm) + Null 3 (views-perm) đều cần                |
+| B6         | MC Simulation Budget | **MUST**   | Day-1 runtime benchmark quyết định n_sample + N_runs          |
+| B7         | life_time Validation | **MUST**   | External validation; prepare fallback narrative sớm           |
+| B8         | Paper Writing Budget | **SHOULD** | Planning tool — không ảnh hưởng results nhưng prevent overrun |
+| B9         | Louvain Resolution   | **SHOULD** | Sensitivity sweep cần thiết; nếu skip → footnote kết quả      |
+| B10        | GNN Eval Gap         | **SHOULD** | Framing claim — bắt buộc address nếu submit conference        |
+| dk-series  | dk-series typing     | **NICE**   | Future work — OUT OF SCOPE 25 ngày                            |
+
+> **Quy tắc tối giản khi bị áp lực thời gian:** Drop theo thứ tự B8 → B9 → B10. **B1–B7 là core, không được bỏ.** Nếu B9 bị skip, ghi vào limitations: "Louvain resolution=1.0 without sensitivity analysis." Nếu B10 bị skip, dùng Option A+C framing trong paper (cite Yang & Leskovec 2016, Kipf & Welling 2017).
+
+---
+
 ## Tổng hợp: Priority Matrix
 
-| # | Bottleneck | Khả năng xảy ra | Impact nếu xảy ra | Khi nào biết | Hành động | Đã xử lý trong plan? |
-|---|---|---|---|---|---|---|
-| B1 | One-hop dominate IC | Trung bình-Cao | **Restructure paper** | Day 1 chiều | Pilot 200 nodes trước mọi thứ | ✅ 3-metric gate trong M2 |
-| B2 | IC cascade degenerate (global) | Thấp-Trung bình | Labels vô nghĩa nếu global CV fail | Day 1–2 | CV check + histogram + **per-quintile CV** | ✅ pilot diagnostics JSON |
-| B2′ | Within-quintile noise (Q1–Q4) | **Cao** | Limitation trong paper, GNN fine-ranking fail | Day 1–2 | Per-quintile CV diagnostic | ⚠ Chưa có trong plan — thêm vào Day-1 report |
-| B3 | Typology quadrant quá nhỏ | Trung bình-Cao | Statistical power thấp (MWU) | Day 3–4 | Estimate ρ(views,IC) từ pilot sớm | ⚠ Plan có two-sample strategy nhưng chưa có power pre-check |
-| B4 | GNN không beat proxy | Trung bình | Thấp (publishable với fallback) | Day 15–18 | Fallback narrative sẵn sàng | ✅ Fallback narratives trong plan |
-| B5 | Null model inconclusive | Trung bình | Thấp — compress thành 1 câu | Day 16–18 | Permutation null thêm vào B5 | ⚠ Permutation null không có trong plan |
-| B6 | Runtime vượt budget | Trung bình | **Delay pipeline** | Day 1 sáng | Benchmark 100×50 trước tiên | ✅ Budget tiers trong plan |
-| B7 | life_time validation fail | Trung bình-Cao | Mất external validation | Day 17–18 | Test partial ρ trên pilot | ⚠ Language fallback chưa có trong plan |
-| B8 | Paper > 6 trang | Cao | **Blocker submission** | Day 21+ | Quyết định cắt RQ sớm (Day 5) | ⚠ Không có explicit cut plan |
-| B9 | Louvain resolution sai | Trung bình | Community features vô nghĩa | Day 5–6 | Resolution sweep {0.5,1.0,2.0} | ⚠ Plan lock resolution=1.0 nhưng không có sensitivity check |
-| B10 | GNN deployment claim quá mạnh | Trung bình | Reviewer reject/major revision | Paper writing | Framing cẩn thận + cite precedent | ⚠ Chưa có explicit framing note trong plan |
+| #   | Bottleneck                     | Khả năng xảy ra | Impact nếu xảy ra                             | Khi nào biết  | Hành động                                  | Đã xử lý trong plan?                                        |
+| --- | ------------------------------ | --------------- | --------------------------------------------- | ------------- | ------------------------------------------ | ----------------------------------------------------------- |
+| B1  | One-hop dominate IC            | Trung bình-Cao  | **Restructure paper**                         | Day 1 chiều   | Pilot 200 nodes trước mọi thứ              | ✅ 3-metric gate trong M2                                   |
+| B2  | IC cascade degenerate (global) | Thấp-Trung bình | Labels vô nghĩa nếu global CV fail            | Day 1–2       | CV check + histogram + **per-quintile CV** | ✅ pilot diagnostics JSON                                   |
+| B2′ | Within-quintile noise (Q1–Q4)  | **Cao**         | Limitation trong paper, GNN fine-ranking fail | Day 1–2       | Per-quintile CV diagnostic                 | ⚠ Chưa có trong plan — thêm vào Day-1 report                |
+| B3  | Typology quadrant quá nhỏ      | Trung bình-Cao  | Statistical power thấp (MWU)                  | Day 3–4       | Estimate ρ(views,IC) từ pilot sớm          | ⚠ Plan có two-sample strategy nhưng chưa có power pre-check |
+| B4  | GNN không beat proxy           | Trung bình      | Thấp (publishable với fallback)               | Day 15–18     | Fallback narrative sẵn sàng                | ✅ Fallback narratives trong plan                           |
+| B5  | Null model inconclusive        | Trung bình      | Thấp — compress thành 1 câu                   | Day 16–18     | Permutation null thêm vào B5               | ⚠ Permutation null không có trong plan                      |
+| B6  | Runtime vượt budget            | Trung bình      | **Delay pipeline**                            | Day 1 sáng    | Benchmark 100×50 trước tiên                | ✅ Budget tiers trong plan                                  |
+| B7  | life_time validation fail      | Trung bình-Cao  | Mất external validation                       | Day 17–18     | Test partial ρ trên pilot                  | ⚠ Language fallback chưa có trong plan                      |
+| B8  | Paper > 6 trang                | Cao             | **Blocker submission**                        | Day 21+       | Quyết định cắt RQ sớm (Day 5)              | ⚠ Không có explicit cut plan                                |
+| B9  | Louvain resolution sai         | Trung bình      | Community features vô nghĩa                   | Day 5–6       | Resolution sweep {0.5,1.0,2.0}             | ⚠ Plan lock resolution=1.0 nhưng không có sensitivity check |
+| B10 | GNN deployment claim quá mạnh  | Trung bình      | Reviewer reject/major revision                | Paper writing | Framing cẩn thận + cite precedent          | ⚠ Chưa có explicit framing note trong plan                  |
 
 ### Chú giải cột "Đã xử lý trong plan?"
+
 - ✅ = mitigation đã có trong `MAPR2026_v3_team_parallel_coding_plan.md` hoặc `MAPR2026_Implementation_Plan_v3.md`
 - ⚠ = bottleneck được identify nhưng plan chưa có explicit action item — cần team chủ động handle
 
 ### Bottlenecks cần action ngay (Day 1–2):
+
 1. **B1**: Measure `one_hop_rho`, `jaccard_at_10pct`, `ndcg_at_10pct` → write to `one_hop_correlation.json`
 2. **B2′**: Per-quintile CV → ghi vào `ic_pilot_diagnostics.json` hoặc `docs/day1_decisions.md`
 3. **B6**: `per_sim_ms` benchmark → decision tier → lock `n_sample`, `N_runs`
 
 ### Bottlenecks cần quyết định trước Day 8 (paper writing start):
+
 4. **B8**: Quyết định structure 2 RQ hay 4 RQ — commit trước khi viết Section 3
 5. **B9**: Lock Louvain resolution vào `docs/m0_decisions.md` trước khi Person 2 runs community detection
 6. **B10**: Agree on framing: transductive evaluation + cite Yang & Leskovec (2016)
 
+---
+
+## Kế Hoạch Hành Động Theo Ngày (Day 1–25)
+
+| Ngày        | Bottleneck | Owner    | Deliverable chính                                                                       | Gate / Điều kiện tiếp tục                          |
+| ----------- | ---------- | -------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Day 1 sáng  | B6         | Person 1 | `ic_runtime_benchmark.json` — per_sim_ms, projected_hours                               | n_sample + N_runs locked                           |
+| Day 1 chiều | B1         | Person 1 | `one_hop_correlation.json` — spearman ρ, Jaccard@10%, NDCG@10%                          | GNN narrative branch locked                        |
+| Day 1 cuối  | B2′        | Person 1 | Per-quintile CV table (Q1–Q5), P(reach>1), P(reach>5), tail sep ratio                   | CV_global > 0.3? Bimodal signal rõ?                |
+| Day 2–4     | B2         | Person 1 | IC pilot run (200 nodes × N_runs) → `ic_pilot_diagnostics.json` + Jaccard stability     | jaccard_stability ≥ 0.85                           |
+| Day 5–10    | B6 (main)  | Person 1 | IC labels full n_sample nodes → `ic_labels_primary.parquet`                             | IC labels done; CV + stability confirmed           |
+| Day 5–7     | B9         | Person 2 | Louvain sensitivity sweep {0.5, 1.0, 2.0} → số communities, modularity Q, NMI(language) | resolution locked → `m0_decisions.md`              |
+| Day 7–12    | B3         | Person 2 | Views/IC ρ, 2×2 typology quadrants, residual divergence backup                          | Quadrant sizes checked; narrative tier decided     |
+| Day 10–15   | B5         | Person 2 | Null 2 (IC-score perm) + Null 3 (views-perm) → p-values                                 | p < 0.05 OR fallback narrative ready               |
+| Day 8–18    | B7         | Person 2 | life_time + language external validation → partial ρ, NMI                               | Pass OR limitation sentence drafted                |
+| Day 8–18    | B4         | Person 3 | GNN train (all 4 variants) + MLP-raw-attr baseline → ablation table                     | RMSE vs baselines; "both fail" narrative if needed |
+| Day 18–20   | B10        | Person 3 | Eval gap framing → choose Option A/B/C                                                  | Paper claim adjusted; cite precedent               |
+| Day 20–25   | B8         | All      | Paper draft, section word budget enforced, figures/tables finalized                     | ≤ 6 pages, ≤ 2600 words                            |
+
+> **Note về parallel track:** Person 2 và Person 3 có thể start track của mình ngay từ Day 5–8 khi Person 1's IC labels từ pilot (Day 2–4) sẵn sàng — không cần chờ full IC labeling hoàn thành. Artifact contracts trong coding plan quy định exactly những file nào mỗi người cần để unblock.
 
 ---
 
@@ -413,749 +478,163 @@ Dưới góc nhìn **reviewer SNA/graph learning**, mình đánh giá:
 4. **runtime của MC IC là bottleneck compute lớn nhất**
 5. **6 trang IEEE không đủ nếu không cắt story sớm**
 
-Tuy nhiên, **vẫn có một số chỗ cần chỉnh/giảm overclaim**, và cũng có **một vài bottleneck quan trọng chưa được nêu đủ rõ**.  
-Ngoài ra, giữa các file MAPR2026 vẫn còn vài **inconsistency nội bộ** mà nếu không sửa thì sẽ làm bottleneck trở nên “self-inflicted”.
+Tuy nhiên, **vẫn có một số chỗ cần chỉnh/giảm overclaim**, và cũng có **một vài bottleneck quan trọng chưa được nêu đủ rõ**.
+
+> ✅ **Tất cả inconsistency nội bộ giữa các file MAPR2026 đã được giải quyết qua các lần review.** Phần Phụ lục này lưu lại lịch sử phân tích và danh sách tài liệu tham khảo để đối chiếu khi viết paper. Không còn “self-inflicted bottleneck” do file mâu thuẫn nhau.
 
 ---
 
-# 1. Đánh giá tổng quan Bottleneck docs so với 3 file MAPR2026
+# Phụ lục A: Tài liệu Tham Khảo
 
-## 1.1 Nhận định chung
-Bottleneck docs **không đi chệch plan v3**, ngược lại nó giúp plan v3 thực tế hơn.  
-Nó đúng ở chỗ:
-
-- không giả định GNN sẽ thắng
-- coi one-hop check là **gating decision**
-- xem runtime là **critical-path**
-- nhìn thấy rủi ro statistical power của typology
-- cảnh báo null model/configuration model có thể chưa đủ
-- cảnh báo external validation bằng `life_time` có thể fail
-- nhìn đúng bài toán page-budget 6 trang
-
-## 1.2 Nhưng có 3 điểm cần hiệu chỉnh lớn
-### (A) Một số claim đang **hơi quá mạnh**
-Ví dụ:
-- “one-hop dominate toàn bộ IC ranking”
-- “GNN story sụp đổ”
-- “configuration model không informative”
-
-Những câu này **đúng như cảnh báo**, nhưng nên viết là **empirical risk / gating condition**, không phải định đề chắc chắn.
-
-### (B) Một số remedy trong Bottleneck docs còn **chưa tối ưu cho 25 ngày**
-Ví dụ:
-- đề xuất three-hop / nhiều null model phức tạp / dk-series
-- thêm directed reinterpretation của Twitch
-- nhiều sensitivity layer quá sâu
-
-Về mặt khoa học thì hay, nhưng với MAPR 25 ngày thì cần phân tầng:
-- **must-have**
-- **should-have**
-- **nice-to-have**
-
-### (C) Có vài bottleneck quan trọng **chưa được chỉ ra hoặc chưa nói đủ**
-Mình sẽ bổ sung ở phần 4.
+Danh sách đầy đủ các tài liệu cần đọc cho project, phân nhóm theo chủ đề.
 
 ---
 
-# 2. Đánh giá từng bottleneck: đúng tới đâu, cần sửa gì
+## Nhóm A — Diffusion / Local-vs-Global Influence
 
----
+1. **Kempe, Kleinberg & Tardos (2003)** — KDD
+   Foundation của IC model / influence maximization. Must-read.
 
-## Bottleneck 1 — One-hop spread có thể dominate IC ranking
+2. **Chen, Wang & Wang (2010)** — KDD
+   PMIA; rất hữu ích để justify local approximation trong low-p regime.
 
-## Đánh giá
-**Đúng và rất quan trọng.** Đây là bottleneck đúng nhất trong cả tài liệu.
+3. **Lü et al. (2016)** — _Physics Reports_
+   Survey mạnh nhất cho vital nodes / spreading dynamics.
 
-Với weighted cascade:
-\[
-p(u,v)=1/\deg(v)
-\]
-trên một graph undirected và khá dense như Twitch, hoàn toàn có khả năng:
-- cascade chủ yếu sống trong 1–2 hops
-- one-hop analytical proxy có Spearman rất cao với MC IC
-
-Điều này phù hợp với trực giác từ IM literature:
-- local structure thường rất mạnh trong low-probability diffusion regime  
-(Kempe et al., 2003; Chen, Wang & Wang, 2010; Lü et al., 2016).
-
-## Điểm cần chỉnh
-### 1) Không nên coi đây là “gần như chắc chắn”
-Nó là **gating question**, không phải assumption.
-
-### 2) Spearman một mình là chưa đủ để “kill GNN story”
-Cần thêm ít nhất:
-- **Jaccard@top-10%**
-- hoặc **NDCG@10%**
-- hoặc **Precision@10%**
-
-Vì có thể:
-- Spearman toàn cục rất cao
-- nhưng top influencer set vẫn khác đáng kể
-
-### 3) Two-hop complexity đang bị understated ở vài chỗ
-Trong docs có đoạn ngầm coi two-hop vẫn “rẻ”.  
-Thực ra full-graph naive two-hop có complexity gần:
-
-\[
-\sum_{v} d(v)^2
-\]
-
-chứ **không phải O(E)** theo nghĩa đẹp.  
-Trên heavy-tailed graph, đây có thể khá đắt.
-
-## Đề xuất sửa
-### Gating decision cho Day 1 nên là:
-- **Spearman ρ**
-- **Jaccard@10%**
-- **NDCG@10%**
-
-Ví dụ:
-- nếu ρ > 0.9 **và** Jaccard@10% > 0.8 → GNN không còn là headline
-- nếu ρ > 0.9 nhưng Jaccard@10% thấp → vẫn còn lý do giữ GNN
-
-### Baseline nên bổ sung
-Ngoài one-hop / two-hop, có thể cân nhắc 1 baseline “local-global bridge”:
-- **LocalRank** (Chen et al., 2012)
-- hoặc **Collective Influence** (Morone & Makse, 2015)
-
-Nếu kịp, mình nghiêng về **LocalRank** hơn vì dễ frame hơn cho spreading proxy.
-
-## Tài liệu phù hợp
-- Kempe, Kleinberg & Tardos (2003), KDD — IC model foundation
-- Chen, Wang & Wang (2010), KDD — PMIA / local influence approximation
-- Lü et al. (2016), *Physics Reports* — survey vital nodes
-- Chen et al. (2012), *Physica A* — LocalRank
-- Morone & Makse (2015), *Nature* — Collective Influence
-
----
-
-## Bottleneck 2 — IC cascade distribution có thể degenerate
-
-## Đánh giá
-**Đúng**, nhưng phần hiện tại cần tinh chỉnh.
-
-Weighted cascade có thể cho:
-- median reach rất thấp
-- distribution lệch mạnh
-- nhiều node gần như reach = 1
-- ranking noisy ở boundary
-
-Đây là risk thật.
-
-## Điểm cần chỉnh
-### 1) `CV > 0.3` không nên là điều kiện duy nhất
-CV hữu ích, nhưng với mean thấp thì CV rất dễ méo.  
-Nếu median reach gần 1, CV có thể đánh lừa.
-
-### 2) Không nên dùng “mean p ≈ 1/81” để suy ra regime quá mạnh
-Twitch có heavy-tailed degree. Với weighted cascade, important thing không phải mean degree đơn giản, mà là:
-- degree distribution
-- harmonic structure
-- hub-to-leaf interaction
-- component structure / clustering
-
-Nói cách khác: **mean degree alone không đủ** để kết luận cascade chắc chắn chết nhanh.
-
-## Đề xuất sửa
-Thay vì chỉ dùng:
-- mean
-- median
-- IQR
-- CV
-
-hãy thêm 3 diagnostic mạnh hơn:
-
-### (a) Proportion of non-trivial cascades
-\[
-P(\text{reach} > 1), \quad P(\text{reach} > 5)
-\]
-
-### (b) Tail separation
-\[
-\text{top-10\% mean reach} / \text{median reach}
-\]
-
-### (c) Pairwise ordering stability
-Spearman hoặc Kendall giữa:
-- 50 vs 100 runs
-- 100 vs 150 runs
-- 150 vs 200 runs
-
-Nếu ordering ổn định thì label vẫn usable dù median thấp.
-
-### (d) Gini coefficient hoặc entropy của reach distribution
-Nếu có thời gian, Gini rất hợp để đo “phân hóa influence proxy”.
-
-## Điểm framing quan trọng
-**Median reach = 1 không tự động làm paper chết.**  
-Nếu tail tách đủ mạnh và top-k ordering ổn định, ranking task vẫn có ý nghĩa.
-
-## Tài liệu phù hợp
-- Kitsak et al. (2010), *Nature Physics*
-- Pastor-Satorras & Vespignani (2001), *PRL* — epidemic threshold
-- Lü et al. (2016), *Physics Reports*
-- Ling et al. (2023), DeepIM — weighted cascade usage
-
----
-
-## Bottleneck 3 — Typology quadrant sizes và statistical power
-
-## Đánh giá
-**Rất đúng**. Đây là bottleneck thật cho Task B.
-
-Nếu \(\rho(\text{views}, \text{IC})\) cao:
-- Hidden và Overrated sẽ rất nhỏ
-- MWU theo degree quintile sẽ thiếu power
-- Cliff’s delta khó significant sau BH correction
-
-## Điểm cần chỉnh
-### 1) Chỉ tăng sample size chưa chắc đủ
-Nếu correlation quá cao, tăng từ 5k lên 10k có thể vẫn không cứu được nhiều.
-
-### 2) Two-sample strategy hợp lý nhưng phải được frame cẩn thận
-Sample B là **targeted sample**, nên:
-- dùng cho **profiling / illustration**
-- không dùng cho unbiased prevalence claims
-- không dùng để report population rates như thể representative
-
-## Đề xuất sửa
-### Backup analysis nên có thêm một nhánh threshold-free
-Nếu quadrants nhỏ, dùng thêm:
-- **residual analysis**
-  - residual = standardized(IC rank) − standardized(views rank)
-- hoặc rank-difference score
-
-Rồi define:
-- Hidden-like = residual top decile
-- Overrated-like = residual bottom decile
-
-Cách này giúp:
-- giảm phụ thuộc vào top-10 × top-10 hard cut
-- tăng sample size của nhóm phân kỳ
-
-### Nên report thêm
-- quadrant counts + CI đơn giản
-- sensitivity at top-10 và top-20 (chỉ nếu cần, không cần 5/10/15/20 đầy đủ)
-
-## Tài liệu phù hợp
-- Cha et al. (2010), ICWSM — *The Million Follower Fallacy*
-- Bakshy et al. (2011), WSDM — influence variability
-- Cohen (1988) — power/effect size background
-- Benjamini & Hochberg (1995)
-
----
-
-## Bottleneck 4 — GNN feature leakage / ablation interpretation
-
-## Đánh giá
-**Đúng một nửa, cần sửa ngôn ngữ.**
-
-Ở đây nên phân biệt:
-
-- **Leakage thật**: feature chứa thông tin được derive trực tiếp từ target construction
-- **Confounding / fairness issue**: feature là strong proxy của label vì cùng phụ thuộc graph structure
-
-Với plan v3:
-- dùng centrality features để predict IC labels **không hẳn là leakage**
-- nhưng nếu làm vậy thì claim “message passing học higher-order structure beyond hand-crafted features” sẽ yếu
-
-## Điểm rất quan trọng cần sửa trong v3
-### Có lỗi nội bộ trong v3:
-Ở phần paper structure / independence matrix có dòng kiểu:
-
-> GNN-raw-attr features | Views-independent? ✅ Yes (no views)
-
-Điều này **sai**.  
-Vì `gnn_raw_attr` trong config đang dùng:
-- `views_log`
-- `views_per_day`
-- `life_time`
-
-=> **không thể ghi là views-independent**.
-
-## Đề xuất sửa
-### 1) Đổi wording bottleneck
-Từ “feature leakage” thành:
-> **feature fairness / confounding with hand-crafted structural summaries**
-
-### 2) Thêm một baseline rất đáng giá:
-- **GNN-constant-features** hoặc **GNN-random-features**
-
-Lợi ích:
-- test pure topology + message passing
-- tách rõ vai trò của node attributes
-
-### 3) Sắp xếp narrative cho GNN nên là:
-- **Primary comparison**: MLP-raw-attr vs GNN-raw-attr
-- **Ablation**: GNN-graph-only / GNN-centrality / GNN-full
-
-Cách này sạch hơn so với lấy GNN-full làm trọng tâm.
-
-## Tài liệu phù hợp
-- Hamilton et al. (2017), GraphSAGE
-- Xu et al. (2019), GIN / expressiveness
-- Errica et al. (2020), fair comparison of GNNs
-- You et al. (2019), P-GNN
-
----
-
-## Bottleneck 5 — Null model: configuration model có thể không đủ informative
-
-## Đánh giá
-**Đúng.** Đây là critique hợp lý.
-
-Configuration model chỉ bảo toàn degree sequence, nhưng phá:
-- clustering
-- modularity/community
-- core-periphery
-- assortativity
-
-Nên nếu null khác xa real graph thì kết luận “higher-order structure matters” cần viết khiêm tốn hơn.
-
-## Điểm cần chỉnh
-### 1) Không nên nói configuration model “vô dụng”
-Nó vẫn là **first-order null** rất hợp lý nếu claim của bạn là:
-> “degree sequence alone cannot explain the observed typology.”
-
-### 2) Nhưng không nên over-interpret
-Nếu real vs null khác nhau, kết luận đúng nhất là:
-> **degree sequence alone is insufficient**
-
-chứ không phải đã chứng minh đầy đủ mọi higher-order structure.
-
-## Đề xuất sửa
-### Null model nên có 2 tầng nếu kịp
-#### Tier 1 — bắt buộc
-- **degree-preserving null**
-  - configuration model **hoặc**
-  - degree-preserving edge swaps
-
-#### Tier 2 — rất nên có nếu còn sức
-- **views-permutation null**
-  - giữ graph + IC score cố định
-  - permute `views` across nodes
-  - rebuild typology
-  - kiểm tra Hidden/Overrated structure còn không
-
-Đây là null rất mạnh và rẻ compute.  
-Nó trực tiếp trả lời:
-> “phân kỳ views–IC có phải chỉ là artifact của marginal views distribution không?”
-
-### Community sensitivity
-Nếu dùng Louvain, nên report tối thiểu:
-- số communities
-- modularity Q
-- resolution = 1.0
-- maybe một quick sensitivity 0.5 / 1.0 / 2.0 nếu kịp
-
-## Tài liệu phù hợp
-- Fosdick et al. (2018), *SIAM Review* — configuration model review
-- Orsini et al. (2015), *Nature Communications* — dk-series/randomness
-- Newman (2006), PNAS — modularity
-- Blondel et al. (2008), Louvain
-
----
-
-## Bottleneck 6 — Runtime và compute budget
-
-## Đánh giá
-**Đúng hoàn toàn**, và thậm chí có thể vẫn đang hơi lạc quan.
-
-Đây là bottleneck implementation lớn nhất.
-
-## Điểm cần chỉnh
-### 1) `CSR + Python loop` chưa phải “C backend”
-Điều này phải nói thật rõ.
-
-Trong v3 có chỗ phrasing làm người đọc có thể hiểu như:
-- CSR + numpy = rất nhanh như C
-
-Không đúng.  
-Nếu inner loop vẫn là Python thì vẫn rất có thể chậm.
-
-### 2) `joblib loky` không tự động đảm bảo shared memory tối ưu
-Nếu không memmap rõ ràng, large arrays vẫn có thể tốn RAM hoặc serialize nhiều.
-
-### 3) Two-hop full-graph cũng có thể là bottleneck không nhỏ
-Bottleneck docs có nhắc nhưng nên nhấn mạnh hơn.
-
-## Đề xuất sửa
-### Must-have engineering changes
-1. **Benchmark thật ngày 1**: đúng như docs
-2. Nếu per-sim quá chậm:
-   - ưu tiên **Numba JIT (`@njit`)**
-   - hoặc Cython / C++ backend
-3. Với `joblib loky`:
-   - explicit memmap / shared read-only arrays
-4. Tránh dùng Python `set` trong inner loop nếu có thể
-   - dùng boolean mask / preallocated arrays
-
-### Cảnh báo nhỏ về NDlib
-Bottleneck docs gợi ý NDlib là hướng đáng xem.  
-**Mình khuyên cẩn thận**: NDlib hữu ích về API, nhưng historical implementations của nó không hẳn là lựa chọn nhanh nhất cho workload kiểu này nếu backend vẫn xoay quanh Python/NetworkX.
-
-Nếu mục tiêu là speed:
-- **Numba**
-- **igraph / graph-tool**
-- hoặc custom compiled loop  
-thường đáng tin hơn.
-
-## Tài liệu phù hợp
-- DeepIM (2023) cho weighted cascade setup
-- NDlib docs: nên coi là exploratory, không phải mặc định giải pháp nhanh nhất
-- Numba docs / igraph docs: engineering guidance, không nhất thiết cần cite trong paper
-
----
-
-## Bottleneck 7 — `life_time` external validation có thể fail
-
-## Đánh giá
-**Đúng**, và đây là cảnh báo nên giữ nguyên.
-
-`life_time` nhiều khả năng correlate với:
-- degree
-- views
-- tenure
-- account maturity
-
-nên sau khi control, signal còn lại có thể rất yếu.
-
-## Điểm cần chỉnh
-### 1) Không nên đặt quá nhiều kỳ vọng vào `life_time`
-Nó là:
-- **corroboration**
-- không phải validation mạnh
-
-### 2) Nếu GNN primary dùng `life_time`, không được dùng `life_time` để validate GNN predictions
-Điểm này v3 đã hiểu, nhưng nên nhấn mạnh hơn.
-
-## Đề xuất sửa
-### Nếu raw data có các field này, có thể cân nhắc thêm:
-- `language`
-- `mature`
-- `created_at` / `updated_at` derived recency
-- neighborhood language diversity
-
-Nhưng chỉ dùng nếu thật sự có và sạch.
-
-### Nếu không có external variable tốt hơn:
-hãy chuẩn bị từ đầu câu limitation:
-> “External corroboration is limited because all available covariates in the Twitch snapshot are themselves entangled with tenure and popularity.”
-
-## Tài liệu phù hợp
-- Rozemberczki et al. (2021) — dataset semantics
-- Aral & Walker (2012), *Science*
-- Bakshy et al. (2011), WSDM
-
----
-
-## Bottleneck 8 — 6 trang IEEE không đủ
-
-## Đánh giá
-**Đúng 100%**.  
-Bottleneck docs phân tích rất đúng chỗ này.
-
-Hiện v3 vẫn có xu hướng muốn kể quá nhiều:
-- IC operationalization
-- stability
-- typology
-- null model
-- structural profiling
-- external validation
-- 5 baseline groups
-- 4 GNN variants
-- runtime
-- sensitivity
-
-=> chắc chắn chật.
-
-## Đề xuất sửa
-### Core story của paper nên ép về 3 câu hỏi thôi:
-#### RQ1
-Weighted-cascade IC có đủ stable/discriminative để dùng làm influence proxy không?
-
-#### RQ2
-Views và IC rank khác nhau như thế nào? Hidden/Overrated có profile cấu trúc ra sao?
-
-#### RQ3
-Analytical proxies và GNN xấp xỉ IC tốt đến đâu, với trade-off accuracy/runtime ra sao?
-
-### Cắt/merge
-- merge RQ4 vào RQ2
-- đưa nhiều sensitivity vào appendix / omit
-- main paper chỉ giữ:
-  - 1 main results table
-  - 1 typology figure
-  - 1 runtime mini-table
-
----
-
-# 3. Những điểm trong Bottleneck docs cần sửa trực tiếp
-
-Dưới đây là các chỉnh sửa mình đề xuất cho chính file Bottleneck docs.
-
----
-
-## 3.1 Sửa Bottleneck 1
-### Từ:
-> one-hop spread có thể dominate toàn bộ IC ranking
-
-### Thành:
-> one-hop spread is a critical **empirical gating baseline** under weighted cascade and may match MC IC surprisingly well, especially in low-hop regimes. This must be tested using both global rank metrics (Spearman/Kendall) and top-k metrics (NDCG/Jaccard@k).
-
----
-
-## 3.2 Sửa Bottleneck 2
-### Từ:
-> nếu CV < 0.3 thì labels gần như vô nghĩa
-
-### Thành:
-> low CV is a warning sign, but not sufficient to conclude the ranking is unusable. Label usefulness should be assessed jointly by distributional dispersion, tail separation, and rank stability across MC run counts.
-
----
-
-## 3.3 Sửa Bottleneck 4
-### Từ:
-> GNN feature leakage
-
-### Thành:
-> fairness/confounding in GNN feature design
-
-Và thêm note:
-> centrality-derived inputs are legitimate for ablation, but they weaken any claim that message passing alone contributes beyond hand-crafted structural summaries.
-
----
-
-## 3.4 Sửa Bottleneck 5
-### Từ:
-> configuration model có thể không informative
-
-### Thành:
-> configuration model is a valid degree-sequence null, but it supports only a **first-order** interpretation (“degree alone is insufficient”). It should not be over-interpreted as a full higher-order structural null.
-
----
-
-## 3.5 Sửa Bottleneck 6
-Thêm câu:
-> two-hop spread on the full graph is not O(E) in the naive implementation; its total complexity is closer to \(O(\sum_v d(v)^2)\), which can be substantial on heavy-tailed networks.
-
----
-
-# 4. Những bottleneck còn thiếu hoặc chưa nói đủ
-
-Đây là phần mình thấy quan trọng nhất để bổ sung.
-
----
-
-## Bottleneck 9 — Inconsistency giữa các file MAPR2026
-Hiện giữa v3, migration checklist và team plan vẫn có một số mâu thuẫn nhỏ nhưng nguy hiểm:
-
-### Ví dụ:
-1. **GNN-raw-attr có views nhưng independence matrix lại ghi views-independent**
-2. typology chỗ dùng `views_log`, chỗ dùng `views`
-3. `N_seeds` đôi lúc bị dùng để chỉ:
-   - số labeled nodes
-   - lúc khác lại nghe như số random seeds
-4. community features lúc ghi merge vào `node_attributes`, lúc ghi file riêng
-5. full-graph inference vs held-out labeled evaluation: có nơi rõ, có nơi mơ hồ
-
-## Khuyến nghị
-Tạo một file **`docs/schema_lock.md`** hoặc sửa `_shared.py` + M0 decisions để khóa cứng:
-- typology dùng **raw views**
-- GNN-raw-attr **not views-independent**
-- `n_labeled_nodes` thay cho `N_seeds`
-- community features = file riêng
-- metrics = test labeled only; runtime = full graph only
-
----
-
-## Bottleneck 10 — Sampling bias của labeled subset
-Bottleneck docs có nói quadrant size, nhưng chưa nhấn mạnh đủ **selection bias**.
-
-Nếu label chỉ có trên 2k–5k nodes sampled theo degree quintile, thì:
-- surrogate evaluation phản ánh sampled population
-- không tự động phản ánh full graph population
-
-## Khuyến nghị
-- giữ representative Sample A
-- nếu augment Sample B thì **không dùng nó cho surrogate metrics**
-- trong paper ghi rõ:
-  > “All predictive metrics are estimated on the representative labeled subset; targeted augmentation is used only for descriptive typology analysis.”
-
-Nếu kịp, thêm:
-- community-aware sanity check cho sample
-
----
-
-## Bottleneck 11 — Label uncertainty chưa được tận dụng trong training
-V3 có bootstrap CI cho IC scores, nhưng chưa tận dụng chúng cho model training.
-
-## Khuyến nghị
-Nếu còn thời gian:
-- dùng **sample weights**
-\[
-w_u = \frac{1}{\text{CI width}_u + \epsilon}
-\]
-hoặc inverse variance weighting trong regression loss.
-
-Nếu không làm, ít nhất:
-- report uncertainty bands
-- flag nodes near top-10 threshold with high uncertainty
-
-Đây là cách tăng defensibility mà không cần thêm model mới.
-
----
-
-## Bottleneck 12 — Louvain resolution sensitivity
-Bottleneck docs có nói null model và community structure, nhưng chưa nói rõ:
-
-- resolution = 1.0 là arbitrary
-- trên dense graph, Louvain có thể merge communities quá mạnh
-
-## Khuyến nghị nhẹ
-Không cần full sensitivity study. Chỉ cần:
-- report number of communities
-- modularity Q
-- maybe một quick check resolution 0.5 / 1.0 / 2.0 trên subgraph hoặc whole graph nếu rẻ
-
-Nếu cross-community fraction của Hidden vẫn cao ổn định thì claim mạnh hơn.
-
----
-
-## Bottleneck 13 — One-hop gating trên 200 pilot nodes có thể hơi mỏng
-200 nodes là ổn cho smoke test, nhưng nếu ρ rơi vào vùng sát ngưỡng 0.8–0.9 thì quyết định narrative có thể bị nhạy.
-
-## Khuyến nghị
-- nếu pilot rho ở vùng **0.78–0.92**, rerun thêm với **500 nodes** trước khi chốt narrative
-- đặc biệt nếu paper direction phụ thuộc hoàn toàn vào ngưỡng đó
-
----
-
-# 5. Đề xuất tài liệu/paper bổ sung theo từng bottleneck
-
-Dưới đây là bộ tài liệu mình khuyên giữ/prioritize.
-
----
-
-## Nhóm A — diffusion / local-vs-global influence
-1. **Kempe, Kleinberg & Tardos (2003)** — KDD  
-   Foundation của IC / influence maximization.
-
-2. **Chen, Wang & Wang (2010)** — KDD  
-   PMIA; rất hữu ích để justify local approximation.
-
-3. **Lü et al. (2016)** — *Physics Reports*  
-   Survey mạnh nhất cho vital nodes / spreading.
-
-4. **Chen et al. (2012)** — *Physica A*  
+4. **Chen et al. (2012)** — _Physica A_
    LocalRank; hợp để giải quyết bottleneck one-hop vs broader local proxy.
 
-5. **Morone & Makse (2015)** — *Nature*  
-   Collective Influence; tốt nếu muốn thêm 1 baseline local-global bridge.
+5. **Morone & Makse (2015)** — _Nature, 524_(7563), 65–68
+   Collective Influence algorithm; chứng minh influential spreaders ≠ luôn là high-degree hubs. Dùng để frame "one-hop/degree proxy vs actual IC rank divergence" là hiện tượng có precedent trong literature.
 
 ---
 
-## Nhóm B — spreading regimes / sensitivity
-6. **Kitsak et al. (2010)** — *Nature Physics*  
-   k-shell vs degree in spreading.
+## Nhóm B — Spreading Regimes / Sensitivity
 
-7. **Pastor-Satorras & Vespignani (2001)** — *PRL*  
-   Epidemic threshold intuition.
+6. **Kitsak et al. (2010)** — _Nature Physics_
+   k-shell vs degree in spreading; regime analysis rất relevant.
 
-8. **Ling et al. (2023), DeepIM** — ICML  
-   Dùng để justify weighted cascade setup, **không dùng cho 8% single-seed calibration**.
+7. **Pastor-Satorras & Vespignani (2001)** — _Physical Review Letters_
+   Epidemic threshold trên scale-free networks; intuition cho low-p regime.
 
----
+8. **Ling et al. (2023), DeepIM** — ICML
+   Dùng để justify weighted cascade setup; **không dùng cho 8% single-seed calibration trên Twitch.**
 
-## Nhóm C — popularity vs influence divergence
-9. **Cha et al. (2010)** — ICWSM  
-   *The Million Follower Fallacy*
-
-10. **Bakshy et al. (2011)** — WSDM  
-   empirical variability of influence
-
-11. **Aral & Walker (2012)** — *Science*  
-   social ties and influence pathways, useful for construct-validity discussion
+9. **Borgs, Brautbar, Chayes & Lucier (2014)** — SODA
+   RIS algorithm; convergence analysis cho MC IC simulations. Dùng để justify lựa chọn N_runs với (ε,δ)-approximation bound thay vì arbitrary heuristic.
 
 ---
 
-## Nhóm D — GNN fairness / expressiveness
-12. **Hamilton et al. (2017)** — NeurIPS  
-   GraphSAGE
+## Nhóm C — Popularity vs Influence Divergence
 
-13. **Xu et al. (2019)** — ICLR  
-   How Powerful Are GNNs?
+10. **Cha et al. (2010)** — ICWSM
+    _The Million Follower Fallacy_ — ρ(followers, retweets) ≈ 0.5 trên Twitter. Frame "views–IC divergence" với precedent.
 
-14. **Errica et al. (2020)** — ICLR  
-   fair comparison / benchmark mindset
+11. **Bakshy et al. (2011)** — WSDM
+    Empirical variability of influence; "Hidden influencer" concept.
 
-15. **You et al. (2019)** — ICML  
-   Position-aware GNNs; useful for limits of local message passing
+12. **Aral & Walker (2012)** — _Science_
+    Social ties and influence vs susceptibility; useful for construct-validity discussion.
 
 ---
 
-## Nhóm E — null models / community
-16. **Fosdick et al. (2018)** — *SIAM Review*  
-   fixed-degree random graph models
+## Nhóm D — GNN Fairness / Expressiveness
 
-17. **Orsini et al. (2015)** — *Nature Communications*  
-   dk-series/randomness in real networks
+13. **Hamilton, Ying & Leskovec (2017)** — NeurIPS
+    GraphSAGE — inductive representation learning. Transductive baseline provided for comparison.
 
-18. **Blondel et al. (2008)** — Louvain
+14. **Kipf & Welling (2017)** — ICLR
+    GCN — standard transductive node classification. Cite để justify transductive evaluation protocol khi labels scarce.
 
-19. **Newman (2006)** — modularity and community structure
+15. **Xu et al. (2019)** — ICLR
+    How Powerful Are GNNs? (GIN / expressiveness theory). Mean-aggregation GNN có thể approximate local analytical formula.
 
----
+16. **Errica et al. (2020)** — ICLR
+    Fair comparison của GNN vs MLP; hữu ích khi "GNN không thắng MLP-raw-attr."
 
-## Nhóm F — stats
-20. **Benjamini & Hochberg (1995)**
-21. **Cohen (1988)** — power/effect size background
+17. **You et al. (2019)** — ICML
+    Position-aware GNNs; limits of local message passing cho global rank prediction.
 
----
-
-# 6. Khuyến nghị sửa Bottleneck docs theo mức ưu tiên
-
-> **Status update:** Danh sách dưới đây phản ánh trạng thái sau khi đã update file. ✅ = đã xử lý, ⚠ = còn open.
-
-## Must-fix
-1. ✅ **Sửa lại Bottleneck 1**: dùng thêm top-k metrics (Jaccard@10%, NDCG@10%), không chỉ Spearman — đã có trong 3-metric gate
-2. ✅ **Sửa lại Bottleneck 2**: CV không phải criterion duy nhất — đã thêm Jensen's inequality correction + per-quintile CV diagnostic
-3. ✅ **Sửa lại Bottleneck 4**: independence matrix đã sửa GNN-raw-attr = ❌ views-independent trong v3 plan
-4. ✅ **Sửa lại Bottleneck 5**: configuration model = first-order null — note đã có trong B5 text
-5. ✅ **Sửa lại complexity của two-hop**: `O(Σ d(v)²)` đã cập nhật trong cả 3 files
-6. ✅ **Inconsistency giữa các MAPR2026 files** — tất cả đã RESOLVED trong session trước
-7. ⚠ **Sampling bias của labeled subset** — vẫn cần explicit mention trong paper limitations (xem B3 + B10)
-
-## Strongly recommended
-8. ⚠ **views-permutation null** — mentioned in B5 nhưng KHÔNG có trong plan; cần team xem xét thêm
-9. ⚠ **residual-based divergence analysis** làm backup nếu quadrants nhỏ — không có trong plan; good backup nếu B3 materializes
-10. ⚠ **GNN-random/constant-features** baseline — mentioned in B4 nhưng không có trong plan; thêm nếu có time
-11. ⚠ **uncertainty-aware training** note — out of 25-day scope; chỉ ghi limitation
-
-## Nice-to-have
-12. ✅ **Louvain resolution sensitivity** — đã bổ sung thành Bottleneck #9 đầy đủ trong danh sách chính
-13. ⚠ community-aware sample sanity check — nhẹ, thêm nếu B9 trigger cần rerun
-14. ⚠ one-hop gate rerun trên 500 pilot nodes nếu near threshold (pilot ρ ∈ [0.78, 0.92])
+18. **Yang & Leskovec (2016)** — ICML
+    "Revisiting Semi-Supervised Learning with Graph Embeddings" — standard framing cho transductive evaluation với partial labels. **Cite để justify B10 Option A+C.**
 
 ---
 
-# 7. Kết luận cuối cùng
+## Nhóm E — Null Models / Community Detection
 
-## Đánh giá của mình
-**Bottleneck docs nhìn chung là đúng, hợp lý, và rất có giá trị thực chiến cho project này.**  
-Nó đặc biệt tốt ở việc:
-- phá ảo tưởng “GNN chắc sẽ thắng”
-- nhìn đúng bottleneck compute
-- nhìn đúng bottleneck page-limit
-- nhìn đúng statistical fragility của typology
+19. **Fosdick, Larremore, Nishimura & Ugander (2018)** — _SIAM Review_
+    Configuration model variants, biases, và edge-swapping MCMC. First-order null.
 
-Tuy nhiên, để align hoàn toàn với **MAPR2026 plan v3**, mình khuyên:
+20. **Orsini et al. (2015)** — _Nature Communications_
+    dk-series null models; bảo toàn degree correlations nhiều orders hơn configuration model. NICE-TO-HAVE — future work.
 
-### Cần chỉnh ngay:
-- giảm các câu over-strong thành empirical gate
-- sửa một số hiểu nhầm về complexity / null model interpretation
-- bổ sung bottleneck về **sample bias**, **file inconsistency**, **uncertainty use**
-- thêm 1–2 null/backup analysis rẻ mà mạnh:
-  - **views permutation null**
-  - **residual-based divergence**
+21. **Blondel, Guillaume, Lambiotte & Lefebvre (2008)** — _Journal of Statistical Mechanics_
+    Louvain algorithm; resolution parameter semantics.
 
+22. **Newman (2006)** — PNAS
+    Modularity và resolution limit của community detection.
+
+23. **Fortunato & Barthélemy (2007)** — _PNAS, 104_(1), 36–41
+    Formal proof của resolution limit trong modularity optimization. **Must-read trước khi chọn Louvain resolution.**
+
+24. **Traag, Waltman & van Eck (2019)** — _Scientific Reports, 9_, 5233
+    Leiden algorithm — fixes Louvain's disconnected community artifact. Dùng nếu `leidenalg` available.
+
+25. **Lancichinetti & Fortunato (2009)** — _Physical Review E, 80_, 056117
+    Community detection benchmark (LFR graphs); realistic expectations cho Louvain trên dense graphs.
+
+---
+
+## Nhóm F — Statistics / Power Analysis
+
+26. **Benjamini & Hochberg (1995)** — _JRSS Series B_
+    FDR correction; cần hiểu khi BH correction trên 5 quintile tests inflate p-values.
+
+27. **Cohen (1988)** — "Statistical Power Analysis for the Behavioral Sciences"
+    Effect size interpretation; Cliff's delta ≥ 0.20 là small-to-medium effect.
+
+---
+
+## Nhóm G — Dataset Reference
+
+28. **Rozemberczki, Allen & Sarkar (2021)** — _Journal of Complex Networks_
+    Twitch dataset paper gốc. Semantic definitions của `views`, `life_time`, `language`, `mature`. Must-read.
+
+---
+
+# Phụ lục B: Status Checklist (cập nhật sau mỗi lần review)
+
+> **Status update (chốt sổ — final):** ✅ = đã xử lý và verified, ⚠ = open item cần team handle khi execute, 🚫 = OUT OF SCOPE 25 ngày.
+
+## Must-fix — Tất cả đã RESOLVED ✅
+
+1. ✅ **B1 three-hop removed**: đã thay bằng infeasibility statement O(Σ d(v)³) — không làm được ở Twitch scale
+2. ✅ **B1 3-metric gate**: Spearman ρ + Jaccard@10% + NDCG@10% — không chỉ Spearman đơn lẻ
+3. ✅ **B2 reordered**: Primary diagnostics (per-quintile CV, P(reach>k), tail sep, Kendall τ) TRƯỚC; ba hướng là LAST RESORT
+4. ✅ **B2 Jensen's inequality**: IC distribution bimodal by degree quintile, không uniformly degenerate
+5. ✅ **B4 MLP-raw-attr**: primary ablation baseline thêm vào; "both fail" fallback narrative có template
+6. ✅ **B5 Null 2 + Null 3**: IC-score permutation và views-permutation đều có trong B5 với mục tiêu phân biệt rõ
+7. ✅ **B5 dk-series labeled NICE-TO-HAVE / OUT OF SCOPE**
+8. ✅ **B6 simulation count**: 3.4M (không phải 5.4M); budget tier table có
+9. ✅ **Complexity two-hop**: O(Σ d(v)²) đã cập nhật trong cả 3 MAPR2026 files
+10. ✅ **GNN-raw-attr independence matrix**: ❌ views-independent đã sửa trong v3 plan
+11. ✅ **B9 (Louvain resolution)**: section đầy đủ với 4-step protocol + resolution sweep {0.5,1.0,2.0}
+12. ✅ **B10 (GNN eval gap)**: section đầy đủ với Options A/B/C
+13. ✅ **Inconsistency giữa MAPR2026 files**: tất cả đã RESOLVED (views vs views_log, N_seeds terminology, community_features path, independence matrix)
+14. ✅ **Priority Tiers table**: Must/Should/Nice cho tất cả 10 bottleneck
+15. ✅ **Day 1-25 Action Plan**: timeline với owner + deliverable + gate cho từng bottleneck
+16. ✅ **Phụ lục A**: 28 references đầy đủ phân nhóm theo chủ đề
+
+## Strongly Recommended — Cần team handle khi execute
+
+17. ⚠ **Sampling bias**: trong paper ghi rõ "All predictive metrics estimated on representative labeled subset; targeted augmentation used only for descriptive typology analysis" — xem B3 + B10
+18. ✅ **views-permutation null (Null 3)**: đã được lock trong coding plan + checklist (execution lock + artifact requirement)
+19. ✅ **residual-based divergence**: đã được lock trong coding plan + checklist theo trigger rõ ràng + artifact requirement
+20. ✅ **GNN-random-features baseline**: đã thêm dưới dạng add-if-time optional trong plan + checklist (`gnn_random`)
+
+## Nice-to-Have / Future Work
+
+21. 🚫 **dk-series null model**: OUT OF SCOPE 25 ngày — ghi footnote future work
+22. ⚠ **Community-aware sample sanity check**: nhẹ, thêm nếu B9 sweep trigger cần rerun partition
+23. ⚠ **One-hop gate rerun trên 500 nodes**: nếu pilot ρ ∈ [0.78, 0.92] → rerun trước khi chốt narrative
+24. 🚫 **Uncertainty-aware training** (inverse-variance weighting): OUT OF SCOPE 25 ngày — ghi limitation sentence
