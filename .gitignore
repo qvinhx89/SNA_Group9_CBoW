@@ -28,6 +28,16 @@ outputs/*
 !outputs/stage2/**
 !outputs/stage3/
 !outputs/stage3/**
+!outputs/day1_benchmark/
+!outputs/day1_benchmark/ic_runtime_benchmark.json
+!outputs/day1_benchmark/one_hop_correlation.json
+!outputs/day1_benchmark/ic_label_stability.json
+!outputs/day1_benchmark/ic_label_uncertainty.json
+!outputs/day1_benchmark/split_freeze_manifest.json
+!outputs/handoffs/
+outputs/handoffs/**
+!outputs/handoffs/**/
+!outputs/handoffs/**/manifest.json
 
 # Keep data artifacts ignored by default, but allow reproducibility bundle for Stage 0-3
 data/interim/*
@@ -44,6 +54,12 @@ data/processed/*
 !data/processed/kshell_table.parquet
 !data/processed/sis_table.parquet
 !data/processed/typology_labels.parquet
+!data/processed/graph_csr.npz
+!data/processed/ic_scores_primary.parquet
+!data/processed/ic_scores_primary_with_ci.parquet
+!data/processed/regression_targets.parquet
+!data/processed/classification_labels.parquet
+!data/processed/split_masks.parquet
 
 # OS/editor metadata
 .DS_Store
