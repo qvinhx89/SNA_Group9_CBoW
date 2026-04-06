@@ -694,8 +694,8 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 
 1. **[BẮT BUỘC] Community detection + cross-community features** (v3 Section 6)
    - Input: `data/processed/graph_active.edgelist` (hoặc graph_csr.npz)
-   - Script: `src/graph/community.py` (đã có sẵn) — Louvain, `resolution=1.0`, `seed=42`
-   - **Library:** `python-louvain` (`community.best_partition(G_nx, resolution=1.0, random_state=42)`) hoặc `cdlib` — KHÔNG dùng NetworkX Louvain (không support `random_state`)
+   - Script: `src/graph/community.py` (đã có sẵn) — Louvain seed sweep (`n_runs=10`, `seed_start=0`, `resolution=1.0`) + chọn **best run** theo modularity
+   - **Library:** `python-louvain` only — KHÔNG fallback sang NetworkX Louvain
    - Output: **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`)
      - `community_id`: int (Louvain partition)
      - `cross_community_edge_fraction`: float (fraction neighbors in different community)
@@ -704,8 +704,18 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
    - **Công thức `cross_community_edge_fraction` (per node):**
 
      ```python
-     partition = community.best_partition(G_nx, resolution=1.0, random_state=42)
-     # partition: dict {node_id: community_id}
+     import numpy as np
+
+     seeds = range(0, 10)
+     partitions, modularities = [], []
+     for s in seeds:
+         p = community.best_partition(G_nx, resolution=1.0, random_state=s)
+         q = community.modularity(p, G_nx)
+         partitions.append(p)
+         modularities.append(q)
+
+     partition = partitions[int(np.argmax(modularities))]
+     # partition: dict {node_id: community_id} from best run
 
      def cross_community_fraction(node, G_neighbors, partition):
          neighbors = list(G_neighbors[node])
@@ -996,7 +1006,7 @@ def run_ic_parallel(node_rows, indptr, indices, degrees, n_runs, seed_offset=42,
 
 **DoD cho Track B:**
 
-- `community_id` và `cross_community_edge_fraction` có trong **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`), phủ 100% active nodes; dùng `python-louvain` với `resolution=1.0, random_state=42`.
+- `community_id` và `cross_community_edge_fraction` có trong **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`), phủ 100% active nodes; dùng `python-louvain` seed sweep (`n_runs=10`, `seed_start=0`, `resolution=1.0`) + chọn best run theo modularity.
 - Proxies chạy xong trên FULL active graph (missing = 0), `runtime_breakdown.csv` có `inference_sec_full_graph`.
 - Typology: `typology_quadrant_report.json` tồn tại tại `outputs/mapr2026_v3_results/`, mỗi quadrant ≥ 150 nodes (`min_quadrant_ok: true`); nếu chưa đạt → apply two-sample strategy và set `two_sample_applied: true`.
 - Structural profiling: MWU + Cliff's delta (`threshold Δ ≥ 0.20`) + BH-FDR cho 6 columns, kết quả ghi ra `structural_profiling.csv` với đúng 6 hàng.
@@ -1649,15 +1659,15 @@ Tối thiểu cần có (tạo folder nếu chưa có):
 
 ### Person 2 — Trần Hùng Vĩ
 
-| #   | Việc                                            | Script                            | Artifact output                                                                                                   | Deadline |
-| --- | ----------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | Proxies skeleton (dry-run)                      | `diffusion_proxies.py --dry-run`  | placeholder                                                                                                       | M1 (7/4) |
-| 2   | **[BẮT BUỘC] Community detection**              | `src/graph/community.py`          | `data/processed/community_features.parquet` (columns: `node_id`, `community_id`, `cross_community_edge_fraction`) | 10/4     |
-| 3   | **Proxies thật (full graph)**                   | `diffusion_proxies.py`            | `diffusion_proxies.parquet` + `runtime_breakdown.csv`                                                             | 15/4     |
-| 4   | Typology IC×views                               | `typology_ic_views.py --pct 0.10` | `typology_labels_ic_views.parquet` + quadrant JSON                                                                | 12/4     |
-| 5   | Structural profiling (MWU + Cliff's Δ + BH-FDR) | `typology_ic_views.py`            | profiling report CSV                                                                                              | 18/4     |
-| 6   | **life_time validation typology**               | `typology_ic_views.py`            | partial Spearman + stratified MWU kết quả                                                                         | 18/4     |
-| 7   | Null model (500 nodes × 3 × 100 runs)           | `null_model_typology.py`          | `null_model_typology_summary.json`                                                                                | 18/4     |
+| #   | Việc                                            | Script                            | Artifact output                                                                                                                                                                 | Deadline |
+| --- | ----------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | Proxies skeleton (dry-run)                      | `diffusion_proxies.py --dry-run`  | dry-run header cho `data/processed/diffusion_proxies.parquet` (schema only; KHÔNG dùng cho evaluation/runtime)                                                                  | M1 (7/4) |
+| 2   | **[BẮT BUỘC] Community detection**              | `src/graph/community.py`          | `data/processed/community_features.parquet` (columns: `node_id`, `community_id`, `cross_community_edge_fraction`; scope=ALL active nodes, coverage=100%, `node_id` kiểu string) | 10/4     |
+| 3   | **Proxies thật (full graph)**                   | `diffusion_proxies.py`            | `diffusion_proxies.parquet` + `runtime_breakdown.csv`                                                                                                                           | 15/4     |
+| 4   | Typology IC×views                               | `typology_ic_views.py --pct 0.10` | `typology_labels_ic_views.parquet` + quadrant JSON                                                                                                                              | 12/4     |
+| 5   | Structural profiling (MWU + Cliff's Δ + BH-FDR) | `typology_ic_views.py`            | profiling report CSV                                                                                                                                                            | 18/4     |
+| 6   | **life_time validation typology**               | `typology_ic_views.py`            | partial Spearman + stratified MWU kết quả                                                                                                                                       | 18/4     |
+| 7   | Null model (500 nodes × 3 × 100 runs)           | `null_model_typology.py`          | `null_model_typology_summary.json`                                                                                                                                              | 18/4     |
 
 > Chú ý: **Bước 4 cần `ic_scores_primary.parquet`** (~10/4). Trong khi chờ: dùng `sis_table.parquet` làm mock.
 > **Bước 2 không phụ thuộc IC labels** — có thể làm ngay từ đầu song song với bước 1.

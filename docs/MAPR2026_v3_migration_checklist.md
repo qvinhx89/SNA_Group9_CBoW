@@ -150,10 +150,10 @@ Tạo trước typology vì structural profiling cần `cross_community_edge_fra
 
 - **Output: `data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`; Person 1 owns node_attributes):
   - `node_id`: str — join key; consumers join on column này (Stage 5 + structural profiling)
-  - `community_id`: int — Louvain partition, `resolution=1.0`, `seed=42`
+  - `community_id`: int — Louvain partition từ **best run** theo modularity, với seed sweep (`n_runs=10`, `seed_start=0`, `resolution=1.0`)
   - `cross_community_edge_fraction`: float — fraction of neighbors in a different community
 - Script: `src/graph/community.py` (đã có sẵn trong repo)
-- **Library: `python-louvain`** (`community.best_partition(G_nx, resolution=1.0, random_state=42)`) hoặc `cdlib`. KHÔNG dùng NetworkX Louvain (không reproducible với fixed seed).
+- **Library: `python-louvain` only**. KHÔNG fallback sang NetworkX Louvain.
 - Scope: ALL active nodes (phủ 100%)
 - **Lý do bắt buộc:** claim "Hidden nodes are cross-community bridges" không support được nếu thiếu cột này.
 
@@ -357,17 +357,26 @@ node_ids = np.array(sorted_nodes)  # save vào npz
 - Input: `data/processed/graph_active.edgelist`
 - Output: **`data/processed/community_features.parquet`** (file riêng — KHÔNG ghi vào `node_attributes.parquet`). Consumers (Person 2, Person 3) join on `node_id`.
 - Script: `src/graph/community.py` (đã có sẵn)
-- Library: `python-louvain` — **KHÔNG dùng NetworkX Louvain** (không support `random_state`)
-- Params: `community.best_partition(G_nx, resolution=1.0, random_state=42)`
+- Library: `python-louvain` — **KHÔNG fallback sang NetworkX Louvain**
+- Params: seed sweep + best run (`n_runs=10`, `seed_start=0`, `resolution=1.0`, chọn partition có modularity cao nhất; report `mean_nmi_louvain`)
 - **Có thể chạy song song với Stage 4 (không phụ thuộc IC labels)**
 
 **Công thức `cross_community_edge_fraction` (bắt buộc — không dùng proxy khác):**
 
 ```python
 import community   # pip install python-louvain
+import numpy as np
 
-partition = community.best_partition(G_nx, resolution=1.0, random_state=42)
-# partition: dict {node_id: community_id}
+seeds = range(0, 10)
+parts, qs = [], []
+for s in seeds:
+    p = community.best_partition(G_nx, resolution=1.0, random_state=s)
+    q = community.modularity(p, G_nx)
+    parts.append(p)
+    qs.append(q)
+
+partition = parts[int(np.argmax(qs))]  # best run by modularity
+# partition: dict {node_id: community_id} from best run
 
 def cross_community_fraction(node, G_neighbors, partition):
     neighbors = list(G_neighbors[node])
@@ -380,7 +389,7 @@ def cross_community_fraction(node, G_neighbors, partition):
 ```
 
 - Scope: **ALL active nodes** (phủ 100%) — không filter theo labeled/unlabeled
-- `community_id`: int (Louvain partition ID)
+- `community_id`: int (Louvain partition ID from best run)
 - `cross_community_edge_fraction`: float ∈ [0.0, 1.0]
 
 ### Stage 5 (ĐỔI/VIẾT MỚI) — IC×views typology + structural profiling + life_time validation + null model
