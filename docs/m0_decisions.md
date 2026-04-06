@@ -125,27 +125,40 @@ stratified_by_degree     : True
 artifact_path            : data/processed/split_masks.parquet
 split_sha256             : 005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104
 freeze_manifest          : outputs/day1_benchmark/split_freeze_manifest.json
-versioned_handoff_dir    : outputs/handoffs/person1_day1_20260406_p1_day1_v1
+versioned_handoff_dir    : outputs/handoffs/person1_day1_20260406_p1_day1_v2_provisional
 created_at               : see `outputs/day1_benchmark/split_freeze_manifest.json` -> `timestamp`
 ```
 
 ## Phần 6: P0 pre-handoff quality gate status (provisional/final)
 
 Artifacts mới đã tạo:
+- `outputs/day1_benchmark/ic_pilot_diagnostics.json`
 - `outputs/day1_benchmark/ic_label_stability.json`
 - `outputs/day1_benchmark/ic_label_uncertainty.json`
+- `outputs/day1_benchmark/quality_gate_report.json`
 - `data/processed/ic_scores_primary_with_ci.parquet`
-- `outputs/handoffs/person1_day1_20260406_p1_day1_v1/manifest.json`
+- `outputs/handoffs/person1_day1_20260406_p1_day1_v2_provisional/manifest.json`
 
 Kết quả chính:
 - Stability (3 MC seeds, 150 runs/seed):
 	- `jaccard_mean`: `0.3069298298144156`
 	- `jaccard_min`: `0.3020833333333333`
 	- `jaccard_pass_threshold (>=0.85)`: `False`
+- Pilot diagnostics:
+	- `cv_score`: `0.21087886200621908` (threshold > 0.3 => fail)
+	- `rank_stability`: `0.673199023270778`
+	- `jaccard_stability`: `0.14285714285714285`
 - Uncertainty quanh top-10 threshold:
 	- `boundary_ratio` (CI crosses threshold): `0.199`
 	- `n_boundary_among_y_top10`: `415 / 500`
 	- `ambiguous_ratio`: `0.155`
+
+Automated hard gate status:
+- `freeze_day1_handoff.py` mode `final` hiện **FAIL** với 3 check:
+	- `pilot_cv_score_pass = False`
+	- `stability_jaccard_mean_pass = False`
+	- `stability_jaccard_min_pass = False`
+- Chi tiết: `outputs/day1_benchmark/quality_gate_report.json`
 
 Trạng thái bàn giao cho downstream:
 - Runtime benchmark + one-hop branch: **FINAL cho planning**
