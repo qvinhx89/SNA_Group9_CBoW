@@ -141,6 +141,19 @@ def apply_test_mask(
     -------
     Filtered DataFrame (test nodes only), preserving original column order.
     """
+    # Guard against accidentally consuming dry-run diffusion proxies.
+    proxy_cols = {"one_hop_spread", "two_hop_spread"}
+    if proxy_cols.issubset(df.columns):
+        if len(df) == 0:
+            raise ValueError(
+                "apply_test_mask: diffusion proxies input is empty (likely dry-run header-only artifact)."
+            )
+        if df[["one_hop_spread", "two_hop_spread"]].isna().any().any():
+            raise ValueError(
+                "apply_test_mask: diffusion proxies contain NaN values (placeholder). "
+                "Run diffusion_proxies.py real mode before evaluation/runtime."
+            )
+
     test_ids = set(mask.loc[mask["split"] == "test", "node_id"].astype(str))
     filtered = df[df[node_id_col].astype(str).isin(test_ids)].copy()
     if len(filtered) == 0:
