@@ -1,4 +1,5 @@
 # MAPR 2026 — Implementation Plan v3.0
+
 ## Operationalizing Influence Potential via Weighted-Cascade IC Simulation and GNN Surrogate Learning on Twitch
 
 **Deadline submit:** 30/4/2026 | **Bắt đầu thực thi:** 6/4/2026 (còn 25 ngày)
@@ -13,12 +14,14 @@
 ### 0.1 Reframe cốt lõi
 
 **Hướng cũ (circular):**
+
 ```
 SIS = f(PageRank, Betweenness, k-shell)  →  define power user
 IC simulation                             →  validate SIS     ← CIRCULAR
 ```
 
 **Hướng mới (defensible):**
+
 ```
 Weighted Cascade p(u,v) = 1/degree(v)   ← parameter-free, no attributes
         ↓
@@ -36,21 +39,21 @@ IC score = OPERATIONALIZATION của influence potential
 
 ### 0.2 Ba nhiệm vụ tách biệt — KHÔNG trộn lẫn
 
-| Task | Câu hỏi nghiên cứu | Output chính |
-|---|---|---|
-| **A** | How to define influence proxy without behavioral logs? | IC scores, label stability |
+| Task  | Câu hỏi nghiên cứu                                           | Output chính                      |
+| ----- | ------------------------------------------------------------ | --------------------------------- |
+| **A** | How to define influence proxy without behavioral logs?       | IC scores, label stability        |
 | **B** | When do popularity metrics disagree with diffusion rankings? | 2×2 typology, structural profiles |
-| **C** | Can GNN approximate IC efficiently vs analytical baselines? | Spearman ρ, NDCG, speedup |
+| **C** | Can GNN approximate IC efficiently vs analytical baselines?  | Spearman ρ, NDCG, speedup         |
 
 ### 0.3 Framing language — nhất quán xuyên suốt paper
 
-| ❌ KHÔNG viết | ✅ PHẢI viết |
-|---|---|
-| "We identify real power users" | "We operationalize influence potential" |
-| "Ground truth influence" | "Simulation-defined influence proxy" |
-| "GNN predicts influencers" | "GNN approximates IC simulation efficiently" |
+| ❌ KHÔNG viết                     | ✅ PHẢI viết                                        |
+| --------------------------------- | --------------------------------------------------- |
+| "We identify real power users"    | "We operationalize influence potential"             |
+| "Ground truth influence"          | "Simulation-defined influence proxy"                |
+| "GNN predicts influencers"        | "GNN approximates IC simulation efficiently"        |
 | "Calibrated to 8% reach (DeepIM)" | "Pilot verified non-degenerate spread distribution" |
-| "IC validates our approach" | "IC is our definitional operationalization" |
+| "IC validates our approach"       | "IC is our definitional operationalization"         |
 
 ---
 
@@ -60,7 +63,7 @@ IC score = OPERATIONALIZATION của influence potential
 
 ### 1.1 Paragraph bắt buộc trong Section 3.1
 
-> *"The Twitch follower graph represents declared social affinity rather than observed information transmission. Influence on Twitch primarily occurs through live streams, raids, and chat interactions — channels not captured by static friendship edges. The Twitch Gamers dataset has been used in prior network analysis studies for community structure, node classification, and link prediction (Rozemberczki et al., 2021), establishing it as a standard benchmark for graph-level analysis despite the absence of behavioral diffusion logs. While this limits the behavioral realism of any diffusion simulation, prior work has established that social ties correlate with influence pathways in online platforms (Guille et al., 2013; Aral & Walker, 2012), making graph-based diffusion models a reasonable structural operationalization. We explicitly do not claim friendship edges are transmission channels; we treat the graph as a structural substrate on which a hypothetical diffusion process is simulated. All findings should be interpreted as properties of diffusion under this operationalization."*
+> _"The Twitch follower graph represents declared social affinity rather than observed information transmission. Influence on Twitch primarily occurs through live streams, raids, and chat interactions — channels not captured by static friendship edges. The Twitch Gamers dataset has been used in prior network analysis studies for community structure, node classification, and link prediction (Rozemberczki et al., 2021), establishing it as a standard benchmark for graph-level analysis despite the absence of behavioral diffusion logs. While this limits the behavioral realism of any diffusion simulation, prior work has established that social ties correlate with influence pathways in online platforms (Guille et al., 2013; Aral & Walker, 2012), making graph-based diffusion models a reasonable structural operationalization. We explicitly do not claim friendship edges are transmission channels; we treat the graph as a structural substrate on which a hypothetical diffusion process is simulated. All findings should be interpreted as properties of diffusion under this operationalization."_
 
 ### 1.2 Directionality — bắt buộc trong config và paper
 
@@ -75,7 +78,7 @@ graph_direction_note: >
 
 ### 1.3 Paragraph bắt buộc trong Section 5 (Limitations)
 
-> *"A fundamental limitation is that Twitch's follower network may not correspond to actual information transmission pathways. Dead accounts (X% of nodes, with systematically lower degree and views than active accounts) were excluded; findings generalize only to active users. Furthermore, account age (life_time) is used as an external proxy variable — while exogenous to IC labels, it may capture platform tenure rather than influence potential directly. All quantitative findings should be treated as structural properties of the weighted-cascade operationalization, not as measurements of real Twitch influence."*
+> _"A fundamental limitation is that Twitch's follower network may not correspond to actual information transmission pathways. Dead accounts (X% of nodes, with systematically lower degree and views than active accounts) were excluded; findings generalize only to active users. Furthermore, account age (life_time) is used as an external proxy variable — while exogenous to IC labels, it may capture platform tenure rather than influence potential directly. All quantitative findings should be treated as structural properties of the weighted-cascade operationalization, not as measurements of real Twitch influence."_
 
 ---
 
@@ -104,24 +107,27 @@ def benchmark_ic_runtime(G_ig, n_test=100, n_runs=50):
     elapsed = time.time() - t0
 
     per_sim_ms = elapsed / (n_test * n_runs) * 1000
-    projected = per_sim_ms / 1000 * N_SEEDS * N_RUNS / 3600
+    projected = per_sim_ms / 1000 * N_SAMPLE * N_RUNS / 3600
 
-    print(f"Per-sim: {per_sim_ms:.1f} ms | Projected {N_SEEDS}×{N_RUNS} runs: {projected:.1f}h")
+    print(f"Per-sim: {per_sim_ms:.1f} ms | Projected {N_SAMPLE}×{N_RUNS} runs: {projected:.1f}h")
     return per_sim_ms, projected
 
 # DECISION TABLE:
-# < 4h  → 5,000 seeds, 200 runs
-# 4–8h  → 3,000 seeds, 150 runs
-# > 8h  → 2,000 seeds, 100 runs; ghi limitation
+# < 4h  → n_sample=5,000, N_runs=200
+# 4–8h  → n_sample=3,000, N_runs=150
+# > 8h  → n_sample=2,000, N_runs=100; ghi limitation
 ```
 
 ### 2.2 Task #2 (Buổi chiều): One-Hop Baseline Reality Check
 
 **Đây là quyết định sống còn cho toàn bộ GNN narrative.**
 
-Dưới weighted cascade với p nhỏ, cascade thường chết trong 1–3 hops. Do đó one-hop expected spread `Σ 1/degree(v)` có thể là predictor cực mạnh cho full IC reach (ρ > 0.9). Nếu đúng, GNN không thể beat O(E) analytical formula.
+Dưới weighted cascade với p nhỏ, cascade thường chết trong 1–3 hops. Do đó one-hop expected spread `Σ 1/degree(v)` có thể là predictor cực mạnh cho full IC reach (ρ > 0.9). Tuy nhiên gate Day-1 không được dựa vào Spearman một mình: phải kiểm tra thêm top-k alignment qua Jaccard@10% và NDCG@10%.
 
 ```python
+from sklearn.metrics import ndcg_score
+import numpy as np
+
 # Chạy IC pilot trên 200 nodes × 50 runs
 pilot_nodes = random.sample(all_active_nodes, 200)
 ic_pilot = {n: run_ic_csr(n, indptr, indices, degrees, n_runs=50).mean()
@@ -131,22 +137,33 @@ ic_pilot = {n: run_ic_csr(n, indptr, indices, degrees, n_runs=50).mean()
 one_hop = {n: sum(1.0/max(degrees[v], 1) for v in G.neighbors(n))
            for n in pilot_nodes}
 
-# Critical correlation
-rho, p = spearmanr(
-    [ic_pilot[n] for n in pilot_nodes],
-    [one_hop[n] for n in pilot_nodes]
-)
-print(f"One-hop vs IC pilot: ρ = {rho:.3f}")
+# Gate metrics: Spearman + Jaccard@10% + NDCG@10%
+ic_vals = np.array([ic_pilot[n] for n in pilot_nodes], dtype=float)
+onehop_vals = np.array([one_hop[n] for n in pilot_nodes], dtype=float)
+
+rho, p = spearmanr(ic_vals, onehop_vals)
+k = max(1, int(np.ceil(0.10 * len(pilot_nodes))))
+
+top_ic = set(np.argsort(-ic_vals)[:k])
+top_onehop = set(np.argsort(-onehop_vals)[:k])
+jaccard_10 = len(top_ic & top_onehop) / len(top_ic | top_onehop)
+
+ndcg_10 = float(ndcg_score(ic_vals.reshape(1, -1), onehop_vals.reshape(1, -1), k=k))
+
+print(f"One-hop vs IC pilot: ρ={rho:.3f}, Jaccard@10%={jaccard_10:.3f}, NDCG@10%={ndcg_10:.3f}")
 
 # DECISION:
 # ρ < 0.8  → GNN story viable; proceed as planned
 # 0.8–0.9  → Add 2-hop proxy as stronger baseline; GNN may still win
-# ρ > 0.9  → RESTRUCTURE: paper centers on divergence analysis + analytical proxies
-#             GNN becomes secondary; title changes
+# ρ > 0.9 and Jaccard@10% > 0.8 and NDCG@10% > 0.9
+#          → RESTRUCTURE: proxies primary, GNN secondary; title changes
+# ρ > 0.9 but top-k alignment chưa cao
+#          → giữ GNN + 2-hop head-to-head, nhấn mạnh top-k divergence
 ```
 
-**Prepared narrative nếu ρ > 0.9:**
-> *"We find that one-hop analytical expected spread under weighted cascade achieves ρ > 0.9 with full MC IC scores, suggesting cascade dynamics are largely confined to the local neighborhood of each seed. This finding itself is a contribution: expensive MC simulation can be approximated by an O(E) analytical proxy. GNN surrogate learning provides further gains in the divergence analysis and handles the views-IC typology classification task."*
+**Prepared narrative nếu ρ > 0.9 và top-k alignment cao:**
+
+> _"We find that one-hop analytical expected spread under weighted cascade achieves ρ > 0.9 with full MC IC scores, suggesting cascade dynamics are largely confined to the local neighborhood of each seed. This finding itself is a contribution: expensive MC simulation can be approximated by an O(E) analytical proxy. GNN surrogate learning provides further gains in the divergence analysis and handles the views-IC typology classification task."_
 
 ---
 
@@ -164,6 +181,7 @@ Data:                    pandas + pyarrow (parquet format)
 ```
 
 **Yêu cầu phần cứng tối thiểu:**
+
 ```
 RAM:    ≥ 32 GB
 CPU:    ≥ 8 cores
@@ -184,28 +202,29 @@ Weighted cascade `p(u,v) = 1/degree(v)` là **parameter-free** — không có λ
 # experiment.yaml — KHÔNG có calibration_target_reach_pct nữa
 
 # Primary: Weighted Cascade — parameter-free, no calibration needed
-p_primary: weighted_cascade      # p(u,v) = 1/degree(v)
-calibration_mode: variance_check  # NOT target_reach
+p_primary: weighted_cascade # p(u,v) = 1/degree(v)
+calibration_mode: variance_check # NOT target_reach
 
 # Pilot diagnostics để verify non-degenerate distribution
 pilot_diagnostics:
-  - mean_reach            # mean single-seed reach across pilot nodes
+  - mean_reach # mean single-seed reach across pilot nodes
   - median_reach
-  - iqr_reach             # interquartile range
+  - iqr_reach # interquartile range
   - top10_to_median_ratio # should be >> 1 để ranking có ý nghĩa
-  - rank_stability        # Spearman ρ giữa MC seeds
-  - cv_score              # coefficient of variation, target > 0.3
+  - rank_stability # Spearman ρ giữa MC seeds
+  - cv_score # coefficient of variation, target > 0.3
 
 # If CV < 0.3: cascade dies too fast → consider subgraph restriction
 # If median reach > 5% LCC: cascade too explosive → report as unexpected finding
 
 # Uniform baseline only (sensitivity)
 p_sensitivity: uniform
-kappa_target: 2           # p = kappa/mean_degree ≈ 0.025
+kappa_target: 2 # p = kappa/mean_degree ≈ 0.025
 ```
 
 **Cite DeepIM đúng cách:**
-> *"Following the weighted-cascade experimental setup widely used in influence maximization, including the configuration adopted in DeepIM (Ling et al., 2023) and originally formalized by Kempe et al. (2003), we set p(u,v) = 1/degree(v). This models a limited attention budget where each neighbor's influence is inversely proportional to the number of connections competing for attention."*
+
+> _"Following the weighted-cascade experimental setup widely used in influence maximization, including the configuration adopted in DeepIM (Ling et al., 2023) and originally formalized by Kempe et al. (2003), we set p(u,v) = 1/degree(v). This models a limited attention budget where each neighbor's influence is inversely proportional to the number of connections competing for attention."_
 
 ### 4.2 IC Implementation — CSR + loky (không phải igraph threads)
 
@@ -337,8 +356,8 @@ def stratified_sample_with_ks_check(df, n_sample=5000, seed=42):
 ```python
 def check_and_expand_typology_sample(df_sampled, df_full, G,
                                       ic_col='ic_score_mean',
-                                      views_col='views_log',
-                                      threshold=0.80, min_size=150):
+                                      views_col='views',
+                                      threshold=0.90, min_size=150):
     """
     Two-sample strategy:
     - Sample A (representative): dùng cho surrogate GNN training/eval
@@ -362,7 +381,7 @@ def check_and_expand_typology_sample(df_sampled, df_full, G,
         # Thêm high-betweenness / low-views / mid-degree nodes từ full graph
         candidates = df_full[
             (df_full['betweenness'] > df_full['betweenness'].quantile(0.7)) &
-            (df_full['views_log'] < df_full['views_log'].quantile(0.3)) &
+            (df_full['views'] < df_full['views'].quantile(0.3)) &
             (~df_full['node_id'].isin(df_sampled['node_id']))
         ].sample(min(500, min_size * 2), random_state=42)
         # NOTE: Sample B chỉ dùng cho typology analysis, KHÔNG dùng để train GNN
@@ -464,9 +483,11 @@ def compute_community_features(G_nx, resolution=1.0, seed=42):
 
     return community_ids, cross_comm
 
-# Add to node_attributes.parquet:
+# Save to data/processed/community_features.parquet (file riêng):
+# - node_id
 # - community_id
-# - cross_community_edge_fraction  (fraction neighbors in different community)
+# - cross_community_edge_fraction
+# Consumers join với node_attributes.parquet theo node_id (KHÔNG ghi đè node_attributes.parquet)
 ```
 
 ---
@@ -474,20 +495,22 @@ def compute_community_features(G_nx, resolution=1.0, seed=42):
 ## 7. Baseline Hierarchy — Đầy đủ và Không Redundant
 
 ### Group 1: Raw Feature Baselines (O(1))
-| Baseline | Formula |
-|---|---|
-| Views rank | rank(views) |
+
+| Baseline       | Formula               |
+| -------------- | --------------------- |
+| Views rank     | rank(views)           |
 | Views/day rank | rank(views/life_time) |
-| Degree rank | rank(degree) |
+| Degree rank    | rank(degree)          |
 
 ### Group 2: Structural Centrality (O(N log N) đến O(NE))
-| Baseline | Implementation |
-|---|---|
-| PageRank | nx.pagerank(G, alpha=0.85) |
-| k-shell | nx.core_number(G) |
+
+| Baseline             | Implementation                       |
+| -------------------- | ------------------------------------ |
+| PageRank             | nx.pagerank(G, alpha=0.85)           |
+| k-shell              | nx.core_number(G)                    |
 | Betweenness (approx) | NetworKit ApproxBetweenness2, ε=0.10 |
 
-### Group 3: Cheap Diffusion Proxies — O(E) — KHÔNG Redundant
+### Group 3: Cheap Diffusion Proxies — one-hop O(E), two-hop naive O(Σ d(v)^2) — KHÔNG Redundant
 
 > **Đây là group critical nhất.** v2 có `one-hop spread` và `weighted degree` — thực chất **cùng formula** với weighted cascade undirected. v3 fix bằng cách thay `weighted degree` bằng **2-hop proxy**.
 
@@ -500,7 +523,7 @@ def two_hop_expected_spread(node, G, degrees):
     """
     E[cascade size through 2 hops] under weighted cascade.
     Mạnh hơn one-hop và genuinely different.
-    O(deg²) per node nhưng vẫn O(E) overall.
+    O(deg²) per node; full-graph naive complexity gần O(Σ d(v)^2).
     """
     total = 0.0
     for v in G.neighbors(node):
@@ -511,29 +534,31 @@ def two_hop_expected_spread(node, G, degrees):
     return total
 ```
 
-| Baseline | Formula | Complexity |
-|---|---|---|
-| One-hop spread | `Σ 1/deg(v)` for v in N(u) | O(deg(u)) |
+| Baseline           | Formula                     | Complexity       |
+| ------------------ | --------------------------- | ---------------- |
+| One-hop spread     | `Σ 1/deg(v)` for v in N(u)  | O(deg(u))        |
 | **Two-hop spread** | `Σ p(u,v) × (1 + Σ p(v,w))` | O(deg²) per node |
 
 ### Group 4: Shallow Embedding Baselines
-| Baseline | Config |
-|---|---|
-| Node2Vec + LR | dim=64, walks=**20** (không phải 200), walk_len=20 → LR regression |
-| MLP on raw attributes | 2-layer MLP, features = [views_log, views/day, life_time] |
+
+| Baseline              | Config                                                             |
+| --------------------- | ------------------------------------------------------------------ |
+| Node2Vec + LR         | dim=64, walks=**20** (không phải 200), walk_len=20 → LR regression |
+| MLP on raw attributes | 2-layer MLP, features = [views_log, views/day, life_time]          |
 
 ### Group 5: GNN — Restructured Ablation
 
 > **Thay đổi quan trọng từ v2:** Primary GNN dùng raw attributes (không phải centrality features) để story "GNN learns beyond hand-crafted features" defensible hơn.
 
-| Variant | Features | Role |
-|---|---|---|
-| GNN-raw-attr | views_log, views/day, life_time | **Primary proposed** |
+| Variant        | Features                          | Role                                  |
+| -------------- | --------------------------------- | ------------------------------------- |
+| GNN-raw-attr   | views_log, views/day, life_time   | **Primary proposed**                  |
 | GNN-graph-only | degree_norm only (or random init) | Ablation: topology without attributes |
-| GNN-centrality | degree, PR, kshell | Ablation: centrality features |
-| GNN-full | all 6 features | Supplementary upper bound |
+| GNN-centrality | degree, PR, kshell                | Ablation: centrality features         |
+| GNN-full       | all 6 features                    | Supplementary upper bound             |
 
 **Tại sao cấu trúc này:**
+
 - GNN-raw-attr vs MLP-raw-attr: giá trị của **message passing**
 - GNN-raw-attr vs GNN-graph-only: giá trị của **attributes**
 - GNN-raw-attr vs centrality baselines: giá trị của **learned representations**
@@ -553,6 +578,7 @@ def two_hop_expected_spread(node, G, degrees):
 ```
 
 ### 8.2 Primary Metrics (ranking task)
+
 ```
 Spearman ρ     — primary: rank correlation với IC scores
 NDCG@10%       — secondary: ranking quality
@@ -560,11 +586,13 @@ Precision@10%  — supplementary
 ```
 
 ### 8.3 TRÁNH
+
 ```
 Accuracy, F1-macro  — misleading với 95/5 class imbalance
 ```
 
 ### 8.4 Multiple Testing Correction
+
 ```python
 from statsmodels.stats.multitest import multipletests
 
@@ -575,6 +603,7 @@ rejected, p_corrected, _, _ = multipletests(p_values_raw, alpha=0.05, method='fd
 ```
 
 ### 8.5 Repeated Training Seeds
+
 ```python
 # 5 training seeds để report mean ± std
 training_seeds = [42, 123, 456, 789, 1024]
@@ -646,7 +675,7 @@ train_idx, test_idx = train_test_split(
 | Component                          | Time   | Notes                    |
 |------------------------------------|--------|--------------------------|
 | Feature precompute (degree, PR, kshell) | X min | Centrality baselines only |
-| MC IC labeling (N seeds × 200 runs)     | X h   | One-time cost            |
+| MC IC labeling (n_sample × N_runs)      | X h   | One-time cost            |
 | GNN training (5 seeds)                  | X min | With GPU                 |
 | GNN inference (168,114 nodes)           | X sec | All active nodes         |
 | Node2Vec training                        | X min |                          |
@@ -662,6 +691,7 @@ train_idx, test_idx = train_test_split(
 ### 10.1 Quy tắc quan trọng
 
 > **life_time xuất hiện ở 2 vai trò — phải tách rõ:**
+>
 > - **Validate IC-based typology** (IC labels KHÔNG dùng life_time → genuinely independent) ✅
 > - **KHÔNG validate GNN-full predictions** nếu GNN-full đã thấy life_time trong features ❌
 
@@ -715,7 +745,8 @@ def validate_typology_with_lifetime(df_typology):
 ```
 
 **Framing nếu validation không significant:**
-> *"The life_time correlation, while not statistically significant at the chosen effect size threshold, provides suggestive evidence. This may reflect that account tenure captures platform experience rather than influence potential."*
+
+> _"The life_time correlation, while not statistically significant at the chosen effect size threshold, provides suggestive evidence. This may reflect that account tenure captures platform experience rather than influence potential."_
 
 ---
 
@@ -752,6 +783,7 @@ def structural_profile_comparison(df_typed, G_nx):
 ## 12. Research Questions (Final)
 
 ### RQ1 — IC Operationalization Quality
+
 **Câu hỏi:** Does weighted-cascade IC simulation produce a sufficiently discriminative and stable influence ranking for use as a surrogate target?
 
 **Method:** Pilot diagnostics (CV, top-decile/median ratio, rank stability). Label Jaccard across 3 MC seeds.
@@ -759,29 +791,35 @@ def structural_profile_comparison(df_typed, G_nx):
 **Success criterion:** CV > 0.3, label Jaccard > 0.85.
 
 ### RQ2 — Divergence Analysis
+
 **Câu hỏi:** To what extent do popularity metrics (views) agree with diffusion-based influence rankings?
 
 **Method:** 2×2 typology (IC high/low × views high/low). Structural profiling (Hidden vs Overrated). life_time external corroboration (validates typology only). Null model: compare typology quadrant profiles real vs configuration model.
 
 **RQ2 Fallback nếu ρ(views, IC) cao (> 0.8):**
-> *"We find high agreement between popularity and diffusion rankings (ρ > 0.8), suggesting that on Twitch's dense social graph, structural influence and popularity are largely aligned. The small divergent subset (Hidden influencers) shows systematically higher betweenness and cross-community connectivity."*
+
+> _"We find high agreement between popularity and diffusion rankings (ρ > 0.8), suggesting that on Twitch's dense social graph, structural influence and popularity are largely aligned. The small divergent subset (Hidden influencers) shows systematically higher betweenness and cross-community connectivity."_
 
 ### RQ3 — GNN Surrogate Quality
+
 **Câu hỏi:** Can GNN approximate simulation-defined influence rankings more accurately than analytical proxies, and what is the computational gain?
 
 **Method:** Compare Spearman ρ, NDCG@10% của all baselines. Report runtime: MC IC (hours) vs GNN inference (seconds).
 
 **Prepared narratives:**
 
-*Nếu GNN-raw-attr > two-hop proxy:*
-> *"GNN captures higher-order neighborhood patterns beyond 2-hop analytical approximations, demonstrating the value of learned representations for influence estimation."*
+_Nếu GNN-raw-attr > two-hop proxy:_
 
-*Nếu GNN-raw-attr ≤ two-hop proxy:*
-> *"We find that 2-hop analytical spread approximation O(E²) achieves ρ ≈ [X] with MC IC scores, closely matching GNN surrogate performance while requiring no training. This suggests weighted-cascade dynamics are well-approximated by local structural summaries. GNN's value lies primarily in efficient inference as network evolves."*
+> _"GNN captures higher-order neighborhood patterns beyond 2-hop analytical approximations, demonstrating the value of learned representations for influence estimation."_
 
-*Cả hai outcomes đều publishable tại MAPR với framing đúng.*
+_Nếu GNN-raw-attr ≤ two-hop proxy:_
+
+> _"We find that 2-hop analytical spread approximation (naive full-graph complexity gần O(Σ d(v)^2)) achieves ρ ≈ [X] with MC IC scores, closely matching GNN surrogate performance while requiring no training. This suggests weighted-cascade dynamics are well-approximated by local structural summaries. GNN's value lies primarily in efficient inference as network evolves."_
+
+_Cả hai outcomes đều publishable tại MAPR với framing đúng._
 
 ### RQ4 — User Profile Analysis
+
 **Câu hỏi:** What structural characteristics distinguish users whose popularity rank disagrees with diffusion rank?
 
 **Method:** Structural profiles of Hidden vs Overrated. Community bridging positions (cross_community_edge_fraction). life_time comparison với degree control.
@@ -828,23 +866,26 @@ Optional (cắt nếu thiếu trang):
 ```
 
 ### Section 1 — Introduction (0.5 trang)
+
 - Hook: Defining power users in static networks without behavioral data
 - Twitch context + use case (game publishers, platform recommendation)
 - "Why Twitch not Twitter?": No public retweet data; gaming communities have tight-knit structure; MUSAE is standard benchmark
 - 3 specific contributions
 
 ### Section 2 — Related Work (0.5 trang)
-| Reference | Role trong paper |
-|---|---|
-| Kempe et al. (2003) | IC model foundation |
-| Kitsak et al. (2010) | k-shell spreaders |
-| Hamilton et al. (2017) | GraphSAGE |
-| Ling et al., ICML 2023 (DeepIM) | Weighted cascade setup |
-| Guille et al. (2013) §4 | Evaluation without ground truth |
-| Aral & Walker (2012) | Social ties and influence |
-| Rozemberczki et al. (2021) | Twitch MUSAE dataset |
+
+| Reference                       | Role trong paper                |
+| ------------------------------- | ------------------------------- |
+| Kempe et al. (2003)             | IC model foundation             |
+| Kitsak et al. (2010)            | k-shell spreaders               |
+| Hamilton et al. (2017)          | GraphSAGE                       |
+| Ling et al., ICML 2023 (DeepIM) | Weighted cascade setup          |
+| Guille et al. (2013) §4         | Evaluation without ground truth |
+| Aral & Walker (2012)            | Social ties and influence       |
+| Rozemberczki et al. (2021)      | Twitch MUSAE dataset            |
 
 ### Section 3 — Methodology (1.5 trang)
+
 **Figure 1 (bắt buộc):** Pipeline — raw data → IC operationalization → divergence typology → GNN surrogate
 
 **Table 1 — Independence Matrix:**
@@ -852,14 +893,16 @@ Optional (cắt nếu thiếu trang):
 |---|---|---|
 | Weighted cascade p | ✅ Yes (structure-only) | N/A |
 | IC labels | ✅ Yes | N/A |
-| GNN-raw-attr features | ✅ Yes (no views) | ✅ Yes |
+| GNN-raw-attr features | ❌ No (uses `views_log_norm`, `views_per_day_norm`) | ✅ Yes |
 | life_time validation (of typology) | ✅ Yes (with degree control) | ✅ Yes |
 | Null model | ✅ Yes | ✅ Yes |
 
 **Evaluation statement (bắt buộc):**
-> *"We evaluate in a transductive node-level regression setting. IC labels are available for N_sample stratified nodes. All accuracy metrics are computed on held-out labeled nodes only. Full-graph inference is reported for runtime assessment."*
+
+> _"We evaluate in a transductive node-level regression setting. IC labels are available for N_sample stratified nodes. All accuracy metrics are computed on held-out labeled nodes only. Full-graph inference is reported for runtime assessment."_
 
 ### Section 4 — Experiments (2.5 trang)
+
 - 4.1 Setup: hardware, runtime benchmark, pilot diagnostics
 - 4.2 RQ1: IC operationalization quality (pilot diagnostics table)
 - 4.3 RQ2: Divergence analysis + null model (Figure 2: scatter plot IC vs views)
@@ -872,12 +915,14 @@ Optional (cắt nếu thiếu trang):
 
 Bốn limitations bắt buộc (từ Section 1.3 trên). Thêm:
 
-> *"Why not learn p from data? Learning p requires supervised diffusion logs unavailable in this dataset. Weighted cascade provides a principled zero-shot alternative with theoretical backing (Kempe et al., 2003; Ling et al., 2023)."*
+> _"Why not learn p from data? Learning p requires supervised diffusion logs unavailable in this dataset. Weighted cascade provides a principled zero-shot alternative with theoretical backing (Kempe et al., 2003; Ling et al., 2023)."_
 
 Ethics:
-> *"All data are publicly available under MIT License and anonymized. This study does not involve human subjects or interaction with live users."*
+
+> _"All data are publicly available under MIT License and anonymized. This study does not involve human subjects or interaction with live users."_
 
 ### References (≤12)
+
 Kempe 2003, Kitsak 2010, Hamilton 2017, Rozemberczki 2021, Guille 2013, Aral&Walker 2012, DeepIM 2023 (full citation), Benjamini&Hochberg 1995, Cliff 1993, Blondel 2008, Grover 2016.
 
 ---
@@ -894,45 +939,52 @@ graph_directed: false
 graph_direction_note: "MUSAE Twitch: mutual-follow edges only. Undirected follows prior work."
 
 # ─── IC Simulation ────────────────────────────────────────────
-ic_backend: csr_numpy             # CSR numpy arrays — NOT igraph object, NOT NetworkX
-ic_parallel: joblib_loky          # LOKY processes — NOT threads (GIL)
+ic_backend: csr_numpy # CSR numpy arrays — NOT igraph object, NOT NetworkX
+ic_parallel: joblib_loky # LOKY processes — NOT threads (GIL)
 ic_n_jobs: -1
 
 # Weighted cascade is PARAMETER-FREE — no calibration target
-p_primary: weighted_cascade       # p(u,v) = 1/degree(v)
-calibration_mode: variance_check  # NOT target_reach
+p_primary: weighted_cascade # p(u,v) = 1/degree(v)
+calibration_mode: variance_check # NOT target_reach
 
 pilot_diagnostics:
   n_pilot_nodes: 200
   n_pilot_runs: 50
-  checks: [mean_reach, median_reach, iqr_reach, top10_to_median_ratio,
-           rank_stability, cv_score]
-  min_cv: 0.3                     # cascade must differentiate nodes
+  checks:
+    [
+      mean_reach,
+      median_reach,
+      iqr_reach,
+      top10_to_median_ratio,
+      rank_stability,
+      cv_score,
+    ]
+  min_cv: 0.3 # cascade must differentiate nodes
 
 # Sensitivity only
 p_sensitivity: uniform
-kappa_target: 2                   # p_uniform = 2/mean_degree ≈ 0.025
+kappa_target: 2 # p_uniform = 2/mean_degree ≈ 0.025
 
 # ─── Sampling ──────────────────────────────────────────────────
-sample_size_primary: 5000         # adjust based on Day 1 benchmark
-sample_size_typology_min: 8000    # expand if Hidden quadrant < 150 nodes
+sample_size_primary: 5000 # adjust based on Day 1 benchmark
+sample_size_typology_min: 8000 # expand if Hidden quadrant < 150 nodes
 sampling_strategy: degree_quintile_stratified
 ks_test_threshold: 0.10
 
 # ─── IC Runs ───────────────────────────────────────────────────
-mc_runs_primary: 200              # adjust based on benchmark
-mc_runs_label_stability: 150      # for 3-seed Jaccard check
+mc_runs_primary: 200 # adjust based on benchmark
+mc_runs_label_stability: 150 # for 3-seed Jaccard check
 mc_runs_null_model: 100
-n_label_stability_seeds: 3        # reduced from 5 for compute efficiency
-n_null_realizations: 3            # mean ± std for null model
+n_label_stability_seeds: 3 # reduced from 5 for compute efficiency
+n_null_realizations: 3 # mean ± std for null model
 label_stability_target_jaccard: 0.85
 min_quadrant_size: 150
 
 # ─── Label Generation ──────────────────────────────────────────
-label_mode_primary: regression    # log1p(ic_score_mean)
+label_mode_primary: regression # log1p(ic_score_mean)
 label_mode_secondary: classification
-classification_threshold: 0.10   # top-10% only — NOT 5% or 15%
-cv_noise_threshold: 0.50          # flag high-variance nodes
+classification_threshold: 0.10 # top-10% only — NOT 5% or 15%
+cv_noise_threshold: 0.50 # flag high-variance nodes
 
 # ─── Centrality ────────────────────────────────────────────────
 compute_betweenness: true
@@ -949,15 +1001,15 @@ compute_cross_community_fraction: true
 
 # ─── Baselines ─────────────────────────────────────────────────
 baselines:
-  group1_raw:     [views_rank, views_per_day_rank, degree_rank]
+  group1_raw: [views_rank, views_per_day_rank, degree_rank]
   group2_central: [pagerank, kshell, betweenness_approx]
-  group3_proxies: [one_hop_spread, two_hop_spread]  # NOT weighted_degree (redundant)
-  group4_embed:   [node2vec_lr, mlp_raw_attr]
-  group5_gnn:     [gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full]
+  group3_proxies: [one_hop_spread, two_hop_spread] # NOT weighted_degree (redundant)
+  group4_embed: [node2vec_lr, mlp_raw_attr]
+  group5_gnn: [gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full]
 
 # Node2Vec (reduced for speed)
 node2vec_dim: 64
-node2vec_walks: 20                # NOT 200 (too slow)
+node2vec_walks: 20 # NOT 200 (too slow)
 node2vec_walk_length: 20
 
 # ─── GNN ───────────────────────────────────────────────────────
@@ -973,17 +1025,24 @@ gnn_loss: huber
 gnn_huber_delta: 1.0
 gnn_train_test_split: 0.80
 gnn_cv_folds: 5
-gnn_training_seeds: [42, 123, 456, 789, 1024]  # 5 seeds → report mean ± std
+gnn_training_seeds: [42, 123, 456, 789, 1024] # 5 seeds → report mean ± std
 
 feature_sets:
-  gnn_raw_attr:    [views_log_norm, views_per_day_norm, life_time_norm]
-  gnn_graph_only:  [degree_norm]
-  gnn_centrality:  [degree_norm, pagerank_norm, kshell_norm]
-  gnn_full:        [degree_norm, pagerank_norm, kshell_norm,
-                    views_log_norm, views_per_day_norm, life_time_norm]
+  gnn_raw_attr: [views_log_norm, views_per_day_norm, life_time_norm]
+  gnn_graph_only: [degree_norm]
+  gnn_centrality: [degree_norm, pagerank_norm, kshell_norm]
+  gnn_full:
+    [
+      degree_norm,
+      pagerank_norm,
+      kshell_norm,
+      views_log_norm,
+      views_per_day_norm,
+      life_time_norm,
+    ]
 
 # ─── Evaluation ────────────────────────────────────────────────
-eval_setting: transductive        # accuracy on held-out labeled nodes ONLY
+eval_setting: transductive # accuracy on held-out labeled nodes ONLY
 primary_metrics: [spearman_rho, ndcg_10, precision_10]
 runtime_metrics: [mc_ic_labeling_sec, gnn_training_sec, gnn_inference_all_sec]
 avoid_metrics: [accuracy, f1_macro]
@@ -991,7 +1050,7 @@ multiple_testing_correction: benjamini_hochberg
 fdr_alpha: 0.05
 
 # ─── External Validation ───────────────────────────────────────
-lifetime_validate_target: typology    # NOT gnn_predictions (dependency issue)
+lifetime_validate_target: typology # NOT gnn_predictions (dependency issue)
 lifetime_degree_quintiles: 5
 cliffs_delta_threshold: 0.20
 lifetime_n_quintiles_significant_target: 3
@@ -1002,42 +1061,43 @@ lifetime_n_quintiles_significant_target: 3
 ## 16. Timeline 25 ngày (6/4 – 30/4)
 
 ### ⚠️ Nguyên tắc không thể phá vỡ
+
 1. **Ngày 6/4 sáng:** Benchmark IC runtime → quyết định sample size
 2. **Ngày 6/4 chiều:** One-hop baseline correlation check → quyết định GNN narrative
 3. **IC simulation chạy liên tục ở background từ Ngày 8**
 4. **Bắt đầu viết Introduction/Related Work/Methodology từ Ngày 8** (không đợi đến Ngày 15)
 
-| Ngày | Track A: Data & IC | Track B: Baselines & Community | Track C: GNN & Paper |
-|---|---|---|---|
-| **6/4** | **#1: IC benchmark** | Setup NetworKit, betweenness (bg) | Setup PyG |
-| **6/4 chiều** | **#2: One-hop ρ check** → decide GNN narrative | PageRank, k-shell | PyG smoke test |
-| **7/4** | Dead account audit, LCC, sampling | One-hop & 2-hop spread | Related work draft |
-| **8/4** | Stratified 5k sample + KS test | Community detection (Louvain) | **Bắt đầu viết Intro + Methodology** |
-| **9/4** | P model pilot diagnostics (CV check) | Community features (cross-comm fraction) | Methodology section draft |
-| **10/4** | **IC primary bắt đầu chạy background** | MLP baselines | Methodology finalize |
-| **11-12/4** | IC đang chạy; label stability check | Node2Vec (dim=64, walks=20) | Figure 1 (pipeline) |
-| **13/4** | IC DONE; bootstrap CI; quadrant sizing | Null model (3 realizations) | Internal checkpoint |
-| **14/4** | Expand to 8-10k nếu Hidden < 150 | Finalize all baselines | Related work finalize |
-| **15-16/4** | GNN training (5 seeds, all ablations) | Structural profiles (Hidden/Overrated) | Experiment section draft |
-| **17-18/4** | life_time validation (typology only) | Null model typology comparison | Results tables & figures |
-| **19-20/4** | Uniform p sensitivity (parallel với GNN) | Runtime measurement & logging | Discussion & Limitations |
-| **21/4** | All experiments locked | All results locked | Paper draft complete |
-| **22-23/4** | Internal review (tất cả thành viên đọc) | — | Revision round 1 |
-| **24-25/4** | Fix issues | — | Revision round 2 |
-| **26/4** | IEEE format check (6 trang, margins, fonts) | — | Double-blind verify |
-| **27/4** | Final read-through | — | Submit dry-run |
-| **28-30/4** | Buffer + last fixes | — | **30/4: SUBMIT** |
+| Ngày          | Track A: Data & IC                             | Track B: Baselines & Community           | Track C: GNN & Paper                 |
+| ------------- | ---------------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| **6/4**       | **#1: IC benchmark**                           | Setup NetworKit, betweenness (bg)        | Setup PyG                            |
+| **6/4 chiều** | **#2: One-hop ρ check** → decide GNN narrative | PageRank, k-shell                        | PyG smoke test                       |
+| **7/4**       | Dead account audit, LCC, sampling              | One-hop & 2-hop spread                   | Related work draft                   |
+| **8/4**       | Stratified 5k sample + KS test                 | Community detection (Louvain)            | **Bắt đầu viết Intro + Methodology** |
+| **9/4**       | P model pilot diagnostics (CV check)           | Community features (cross-comm fraction) | Methodology section draft            |
+| **10/4**      | **IC primary bắt đầu chạy background**         | MLP baselines                            | Methodology finalize                 |
+| **11-12/4**   | IC đang chạy; label stability check            | Node2Vec (dim=64, walks=20)              | Figure 1 (pipeline)                  |
+| **13/4**      | IC DONE; bootstrap CI; quadrant sizing         | Null model (3 realizations)              | Internal checkpoint                  |
+| **14/4**      | Expand to 8-10k nếu Hidden < 150               | Finalize all baselines                   | Related work finalize                |
+| **15-16/4**   | GNN training (5 seeds, all ablations)          | Structural profiles (Hidden/Overrated)   | Experiment section draft             |
+| **17-18/4**   | life_time validation (typology only)           | Null model typology comparison           | Results tables & figures             |
+| **19-20/4**   | Uniform p sensitivity (parallel với GNN)       | Runtime measurement & logging            | Discussion & Limitations             |
+| **21/4**      | All experiments locked                         | All results locked                       | Paper draft complete                 |
+| **22-23/4**   | Internal review (tất cả thành viên đọc)        | —                                        | Revision round 1                     |
+| **24-25/4**   | Fix issues                                     | —                                        | Revision round 2                     |
+| **26/4**      | IEEE format check (6 trang, margins, fonts)    | —                                        | Double-blind verify                  |
+| **27/4**      | Final read-through                             | —                                        | Submit dry-run                       |
+| **28-30/4**   | Buffer + last fixes                            | —                                        | **30/4: SUBMIT**                     |
 
 ### Scope Reduction — Phải sẵn sàng cắt nếu tight
 
-| Cắt được | Giữ bắt buộc |
-|---|---|
-| Attribute-informed p variant | Weighted cascade IC (primary) |
-| Graph perturbation test | Label stability (Jaccard) |
-| 5%/15% thresholds (chỉ giữ 10%) | Null model (3 realizations) |
-| Eigenvector redundancy check | One-hop + two-hop proxies |
-| Betweenness trong GNN features | Community detection (Louvain) |
-| GNN-full variant | GNN-raw-attr (primary) + GNN-graph-only (ablation) |
+| Cắt được                        | Giữ bắt buộc                                       |
+| ------------------------------- | -------------------------------------------------- |
+| Attribute-informed p variant    | Weighted cascade IC (primary)                      |
+| Graph perturbation test         | Label stability (Jaccard)                          |
+| 5%/15% thresholds (chỉ giữ 10%) | Null model (3 realizations)                        |
+| Eigenvector redundancy check    | One-hop + two-hop proxies                          |
+| Betweenness trong GNN features  | Community detection (Louvain)                      |
+| GNN-full variant                | GNN-raw-attr (primary) + GNN-graph-only (ablation) |
 
 ---
 
@@ -1050,11 +1110,12 @@ SNA_MAPR2026/
 │   ├── interim/                      # active_nodes.csv, active_edges.csv
 │   └── processed/
 │       ├── graph_csr.npz             # CSR format: indptr, indices, degrees
-│       ├── node_attributes.parquet   # degree, PR, kshell, bet, community_id, cross_comm
+│       ├── node_attributes.parquet   # base attrs (node_id, views, life_time, language, ...)
+│       ├── community_features.parquet# node_id, community_id, cross_community_edge_fraction
 │       ├── ic_scores_primary.parquet # weighted cascade, N runs
 │       ├── regression_targets.parquet# log1p(ic_score)
 │       ├── classification_labels.parquet # binary top-10%
-│       └── typology_labels.parquet   # 2×2 IC×views
+│       └── typology_labels_ic_views.parquet   # 2×2 IC×views
 │
 ├── src/
 │   ├── data/
@@ -1084,7 +1145,7 @@ SNA_MAPR2026/
 │       └── runtime_bar.py
 │
 ├── outputs/
-│   ├── stage0_audit/                  # dead accounts, LCC, views dist
+│   ├── stage0_data_quality/           # dead accounts, LCC, views dist
 │   ├── stage1_centrality/             # centrality + community features
 │   ├── day1_benchmark/                # IC runtime + one-hop ρ — CRITICAL
 │   ├── stage2_ic_labels/              # pilot diagnostics, stability, bootstrap CI
@@ -1113,6 +1174,7 @@ SNA_MAPR2026/
 ## 18. Pre-Submission Checklist
 
 ### Blocker (reject nếu thiếu)
+
 - [ ] **Ngày 6/4:** IC benchmark + one-hop ρ check → ghi vào `docs/day1_decisions.md`
 - [ ] Construct validity paragraph trong Section 3.1 (follower ≠ diffusion channel)
 - [ ] Directionality `graph_directed: false` + justification trong paper
@@ -1136,12 +1198,14 @@ SNA_MAPR2026/
 - [ ] Fallback narrative cho RQ2 nếu views/IC highly correlated
 
 ### Strongly Recommended
+
 - [ ] Bootstrap CI cho IC scores (30 phút implement)
 - [ ] Two-sample strategy nếu Hidden quadrant nhỏ
 - [ ] Node2Vec: dim=64, walks=20 (không phải 200)
 - [ ] Betweenness chỉ dùng cho structural profiling, không bắt buộc là GNN feature
 
 ### IEEE Format
+
 - [ ] ≤ 6 trang kể cả figures, tables, references
 - [ ] Double-blind: không tên, trường, acknowledgments trong submission PDF
 - [ ] Figures readable grayscale ở kích thước nhỏ
@@ -1152,16 +1216,16 @@ SNA_MAPR2026/
 
 ## 19. Risk Management
 
-| Rủi ro | Xác suất | Impact | Action |
-|---|---|---|---|
-| One-hop ρ > 0.9 → GNN story invalid | Trung bình | **Critical** | Ngày 6/4: check trước; restructure if needed |
-| IC runtime > 8h | Trung bình | **Critical** | Reduce: 2k seeds, 100 runs; log limitation |
-| GNN không beat cheap proxies | Trung bình | Thấp | Prepare negative-result narrative (RQ3) |
-| Hidden quadrant < 150 nodes | Trung bình | Cao | Expand to 8-10k; two-sample strategy |
-| views/IC highly correlated | Trung bình | Thấp | Prepare fallback narrative (RQ2) |
-| loky OOM với large graph | Thấp | Cao | Reduce n_jobs; monitor RAM |
-| PyG installation issues | Thấp | Trung bình | Setup Ngày 6/4 sáng; fallback DGL |
-| Paper > 6 pages | Trung bình | Blocker | Cut sensitivity variants, shorten ablation |
+| Rủi ro                                                                        | Xác suất   | Impact       | Action                                                                               |
+| ----------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------------ |
+| One-hop ρ > 0.9 + top-k alignment cao (`Jaccard@10% > 0.8`, `NDCG@10% > 0.9`) | Trung bình | **Critical** | Ngày 6/4: check trước; nếu đủ 3 điều kiện thì restructure, nếu không giữ GNN + 2-hop |
+| IC runtime > 8h                                                               | Trung bình | **Critical** | Reduce: n_sample=2k, N_runs=100; log limitation                                      |
+| GNN không beat cheap proxies                                                  | Trung bình | Thấp         | Prepare negative-result narrative (RQ3)                                              |
+| Hidden quadrant < 150 nodes                                                   | Trung bình | Cao          | Expand to 8-10k; two-sample strategy                                                 |
+| views/IC highly correlated                                                    | Trung bình | Thấp         | Prepare fallback narrative (RQ2)                                                     |
+| loky OOM với large graph                                                      | Thấp       | Cao          | Reduce n_jobs; monitor RAM                                                           |
+| PyG installation issues                                                       | Thấp       | Trung bình   | Setup Ngày 6/4 sáng; fallback DGL                                                    |
+| Paper > 6 pages                                                               | Trung bình | Blocker      | Cut sensitivity variants, shorten ablation                                           |
 
 ---
 
@@ -1171,40 +1235,44 @@ SNA_MAPR2026/
 # docs/day1_decisions.md
 
 ## [6/4/2026] IC Runtime Benchmark
-Per-simulation time: __ ms
-Projected (N seeds × M runs): __ hours
-Decision: N seeds = __, M runs = __
-Adjusted timeline: __
+
+Per-simulation time: ** ms
+Projected (n_sample × N_runs): ** hours
+Decision: n_sample = **, N_runs = **
+Adjusted timeline: \_\_
 
 ## [6/4/2026] One-Hop Baseline Reality Check
-One-hop vs IC pilot: ρ = __
-Decision: [GNN story viable / Restructure narrative]
-If restructure: new paper angle = __
+
+One-hop vs IC pilot: ρ = **
+Jaccard@10% = **
+NDCG@10% = **
+Decision: [GNN story viable / GNN+2hop head-to-head / Restructure narrative]
+If restructure: new paper angle = **
 ```
 
 ---
 
 ## 21. Phân Công Team
 
-| Người | Track | Ngày 6–12/4 | Ngày 13–21/4 | Ngày 22–30/4 |
-|---|---|---|---|---|
-| 1 | Data + IC | **Day 1 benchmarks**, preprocessing, IC (bg) | IC finalize, quadrant sizing | Writing support |
-| 2 | Data + IC | Sampling + KS, pilot diagnostics, stability | Null model (3 realizations) | Writing support |
-| 3 | Baselines | Betweenness (bg), PageRank, k-shell, **community** | Structural profiles | Results tables |
-| 4 | Baselines | One-hop, 2-hop, Node2Vec, MLP | Evaluation metrics, runtime | Figures |
-| 5 | GNN | PyG setup, GNN-raw-attr training | 5-seed ablation, GNN results | Paper Sec 3-4 |
-| 6 | Paper | **Intro + Related Work từ Ngày 8** | life_time validation, Discussion | Paper Sec 1-2, 5 |
+| Người | Track     | Ngày 6–12/4                                        | Ngày 13–21/4                     | Ngày 22–30/4     |
+| ----- | --------- | -------------------------------------------------- | -------------------------------- | ---------------- |
+| 1     | Data + IC | **Day 1 benchmarks**, preprocessing, IC (bg)       | IC finalize, quadrant sizing     | Writing support  |
+| 2     | Data + IC | Sampling + KS, pilot diagnostics, stability        | Null model (3 realizations)      | Writing support  |
+| 3     | Baselines | Betweenness (bg), PageRank, k-shell, **community** | Structural profiles              | Results tables   |
+| 4     | Baselines | One-hop, 2-hop, Node2Vec, MLP                      | Evaluation metrics, runtime      | Figures          |
+| 5     | GNN       | PyG setup, GNN-raw-attr training                   | 5-seed ablation, GNN results     | Paper Sec 3-4    |
+| 6     | Paper     | **Intro + Related Work từ Ngày 8**                 | life_time validation, Discussion | Paper Sec 1-2, 5 |
 
 **Daily standup:** 15 phút (không phải 30-45).
 **Milestone bắt buộc cuối mỗi tuần:** artifact cụ thể, không chỉ code.
 
 ---
 
-*Document version: 3.0*
-*Changes from v2: Remove 8% calibration target → variance check; Add Day 1 one-hop ρ check;*
-*Fix joblib: CSR + loky; Fix null model: typology comparison; Fix baseline Group 3: 2-hop proxy;*
-*Fix title; Clarify transductive evaluation; Fix life_time independence; Restructure GNN ablation;*
-*Fix random seed handling; Add Louvain community; Add 5-seed training; Fix runtime table;*
-*Reduce Node2Vec params; Add two-sample typology strategy; Writing starts Day 8*
-*Tổng hợp từ: Expert SNA Review rounds 1–4*
-*Bắt đầu: 6/4/2026 | Deadline: 30/4/2026*
+_Document version: 3.0_
+_Changes from v2: Remove 8% calibration target → variance check; Add Day 1 one-hop ρ check;_
+_Fix joblib: CSR + loky; Fix null model: typology comparison; Fix baseline Group 3: 2-hop proxy;_
+_Fix title; Clarify transductive evaluation; Fix life_time independence; Restructure GNN ablation;_
+_Fix random seed handling; Add Louvain community; Add 5-seed training; Fix runtime table;_
+_Reduce Node2Vec params; Add two-sample typology strategy; Writing starts Day 8_
+_Tổng hợp từ: Expert SNA Review rounds 1–4_
+_Bắt đầu: 6/4/2026 | Deadline: 30/4/2026_
