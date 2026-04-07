@@ -1,0 +1,12 @@
+[2026-04-06T17:03:09] sweep_started run_grid=[150, 300, 500, 800, 1200] nodes=5000
+[2026-04-06T17:03:09] run_started n_runs=150
+[2026-04-06T17:15:26] run_completed n_runs=150 jaccard_mean=0.306930 jaccard_min=0.302083 spearman_mean=0.685384 runtime_sec=736.95 pass=False
+[2026-04-06T17:15:26] run_started n_runs=300
+[2026-04-06T17:39:53] run_completed n_runs=300 jaccard_mean=0.438184 jaccard_min=0.430615 spearman_mean=0.717974 runtime_sec=1467.57 pass=False
+[2026-04-06T17:39:53] run_started n_runs=500
+[2026-04-06T18:20:17] run_completed n_runs=500 jaccard_mean=0.538507 jaccard_min=0.526718 spearman_mean=0.750276 runtime_sec=2423.28 pass=False
+[2026-04-06T18:20:17] run_started n_runs=800
+[2026-04-06T19:23:39] run_completed n_runs=800 jaccard_mean=0.595778 jaccard_min=0.587302 spearman_mean=0.786752 runtime_sec=3802.05 pass=False
+[2026-04-06T19:23:39] run_started n_runs=1200
+[2026-04-06T21:01:13] run_completed n_runs=1200 jaccard_mean=0.681666 jaccard_min=0.669449 spearman_mean=0.826711 runtime_sec=5854.39 pass=False
+[2026-04-06T21:01:13] sweep_completed any_pass=False summary=outputs\day1_benchmark\stability_sweep\stability_sweep_summary.csv
