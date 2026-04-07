@@ -3,7 +3,7 @@
 Date: 2026-04-06
 Owner: Person 1
 Mode: Option B (provisional, governance-locked)
-Active package baseline: person1_day1_20260406_p1_day1_v3d_optionB_lockstep
+Active package baseline: person1_day1_20260407_p1_day1_v3e_optionB_lockstep
 
 ## 1) Why this mode exists
 

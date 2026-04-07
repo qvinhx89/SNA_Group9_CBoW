@@ -174,6 +174,10 @@ Consumer guidance:
 Status:
 - Option B is activated for operational handoff.
 - Meaning: keep truthful gate status (`pass_all=false`) while allowing downstream progress under fixed governance.
+- Active lockstep package for current cycle: `person1_day1_20260407_p1_day1_v3e_optionB_lockstep`.
+
+Additional alignment:
+- `one_hop_correlation.json` now includes `jaccard_at_10pct` and `ndcg_at_10pct` for stricter top-k agreement reporting.
 
 Non-negotiable lockstep rules for Person 2 and Person 3:
 1. Use exactly one handoff package version per experiment cycle.

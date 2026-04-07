@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-04-06T11:31:24",
+  "timestamp": "2026-04-07T08:39:30",
   "dry_run": false,
-  "per_sim_ms": 0.5507069587707519,
-  "projected_total_hours": 0.15297415521409777,
+  "per_sim_ms": 0.48027505874633786,
+  "projected_total_hours": 0.13340973854064941,
   "decision": {
     "n_seeds": 5000,
     "n_runs": 200,
@@ -21,17 +21,17 @@
     {
       "n_seeds": 5000,
       "n_runs": 200,
-      "projected_hours": 0.15297415521409777
+      "projected_hours": 0.13340973854064941
     },
     {
       "n_seeds": 3000,
       "n_runs": 150,
-      "projected_hours": 0.06883836984634399
+      "projected_hours": 0.06003438234329224
     },
     {
       "n_seeds": 2000,
       "n_runs": 100,
-      "projected_hours": 0.030594831042819553
+      "projected_hours": 0.02668194770812988
     }
   ]
 }
