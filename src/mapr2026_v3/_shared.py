@@ -30,6 +30,7 @@ class MaprPaths:
     proxies: str = "data/processed/diffusion_proxies.parquet"
     typology: str = "data/processed/typology_labels_ic_views.parquet"
     proxies_status: str = "outputs/mapr2026_v3_results/diffusion_proxies_status.json"
+    runtime_csv: str = "outputs/mapr2026_v3_results/runtime_breakdown.csv"
     louvain_resolution_sensitivity: str = "outputs/mapr2026_v3_results/louvain_resolution_sensitivity.json"
 
 
