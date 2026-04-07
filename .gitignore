@@ -16,6 +16,16 @@ __pycache__/
 
 # Generated project artifacts
 logs/
+!logs/
+logs/*
+!logs/errors/
+!logs/errors/.gitkeep
+!logs/run_history/
+!logs/run_history/.gitkeep
+!logs/run_history/*.json
+!logs/timing/
+!logs/timing/.gitkeep
+!logs/timing/*.log
 
 # Keep generated outputs ignored by default, but allow baseline Stage 0-3 artifacts
 outputs/*
