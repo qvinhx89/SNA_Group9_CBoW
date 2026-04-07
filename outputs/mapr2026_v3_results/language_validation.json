@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-04-07T19:30:43",
+  "n_nodes_labeled": 5000,
+  "nmi_community_language_labeled": 0.47668295019595364,
+  "neighbor_language_diversity": {
+    "metric": "neighbor_language_entropy",
+    "comparator": "Hidden_vs_Overrated",
+    "n_hidden": 285,
+    "n_overrated": 285,
+    "hidden_mean": 0.20626646151385628,
+    "overrated_mean": 0.42207145932471174,
+    "mwu_stat": 20589.0,
+    "p_raw": 2.203505105631481e-24,
+    "p_corrected": 2.203505105631481e-24,
+    "cliffs_delta": -0.4930378578024007,
+    "significant": true
+  },
+  "trigger_condition": {
+    "partial_spearman_rho_lt_0_05": true,
+    "n_quintiles_significant_lt_3": true
+  },
+  "note": "IF PROBLEM fallback triggered: lifetime validation limited. Language corroboration is supplementary and does not replace lifetime_validation.json."
+}

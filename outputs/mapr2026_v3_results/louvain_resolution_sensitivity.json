@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-04-06T23:49:42",
+  "graph_path": "data\\processed\\graph_active.edgelist",
+  "n_nodes": 168114,
+  "n_edges": 6797557,
+  "resolutions_tested": [
+    0.5,
+    1.0,
+    2.0
+  ],
+  "n_runs_per_resolution": 10,
+  "seed_start": 0,
+  "nmi_threshold": 0.85,
+  "results": [
+    {
+      "resolution": 0.5,
+      "n_runs": 10,
+      "best_seed": 0,
+      "best_modularity": 0.3905762478997285,
+      "modularity_mean": 0.2873018379732623,
+      "modularity_std": 0.08205412162355438,
+      "n_communities": 315,
+      "pct_nodes_top3_communities": 74.5369213747814,
+      "singleton_count": 92,
+      "singleton_pct": 0.05472477009648215,
+      "mean_nmi_louvain": 0.4627865989155364,
+      "std_nmi_louvain": 0.08462779644478853,
+      "min_nmi_louvain": 0.3519235424661808,
+      "stability_warning": true,
+      "over_merge_warning": true,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.0,
+      "n_runs": 10,
+      "best_seed": 3,
+      "best_modularity": 0.4226812906026345,
+      "modularity_mean": 0.42098223235987386,
+      "modularity_std": 0.0023099443814235295,
+      "n_communities": 21,
+      "pct_nodes_top3_communities": 55.934663383180464,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.7008908172938347,
+      "std_nmi_louvain": 0.03502055423191821,
+      "min_nmi_louvain": 0.6390788405184723,
+      "stability_warning": true,
+      "over_merge_warning": true,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 2.0,
+      "n_runs": 10,
+      "best_seed": 8,
+      "best_modularity": 0.3864788137461865,
+      "modularity_mean": 0.3826934743357507,
+      "modularity_std": 0.002719962728943034,
+      "n_communities": 49,
+      "pct_nodes_top3_communities": 23.4233912702095,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6677243650848642,
+      "std_nmi_louvain": 0.021667631090446532,
+      "min_nmi_louvain": 0.626029961035829,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    }
+  ],
+  "resolution_1_0_decision": {
+    "resolution": 1.0,
+    "n_communities": 21,
+    "pct_nodes_top3_communities": 55.934663383180464,
+    "singleton_pct": 0.0,
+    "over_merge_warning": true,
+    "over_split_warning": false,
+    "target_practical_range": "30-80 communities",
+    "rule_notes": {
+      "over_merge": "n_communities < 20 or pct_nodes_top3_communities > 50%",
+      "over_split": "n_communities > 200 and singleton_pct > 5%"
+    }
+  }
+}

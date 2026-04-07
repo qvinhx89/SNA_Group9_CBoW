@@ -1,0 +1,10 @@
+{
+  "test": "1.3_community_overlap",
+  "n_communities_top10": 18,
+  "n_communities_next10": 17,
+  "community_overlap_jaccard": 0.842,
+  "frac_communities_spanning_both_groups": 0.842,
+  "threshold": 0.7,
+  "pivot_signal": true,
+  "pivot_reason": "Community-set Jaccard=0.842 > 0.7 — both groups share the same community tier. Within-community rank noise will prevent stable binary separation regardless of propagation probability."
+}
