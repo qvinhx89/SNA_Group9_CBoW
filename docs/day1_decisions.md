@@ -17,10 +17,10 @@ Artifacts:
 
 ## 2) Runtime benchmark result
 
-- per_sim_ms: 0.5507069587707519
+- per_sim_ms: 0.5507069587707519 (single run; median across stability runs = 0.6423 — dùng median cho planning)
 - projected_total_hours (5000x200): 0.15297415521409777
 - Decision gate: projected runtime < 4h
-- Locked decision: N_seeds = 5000, N_runs = 200
+- Locked decision: n_sample = 5000, N_runs = 200
 
 ## 3) One-hop correlation result
 
