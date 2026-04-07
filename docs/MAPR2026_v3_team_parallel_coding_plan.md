@@ -1717,6 +1717,42 @@ Tối thiểu cần có (tạo folder nếu chưa có):
 - `outputs/day1_benchmark/`
 - `outputs/mapr2026_v3_results/`
 
+### Code reuse vs. fork — quy tắc không sửa đè code cũ
+
+Repo đang có pipeline SIS-based (Stage 0–3). Tất cả script MAPR2026 v3 mới phải nằm trong `src/mapr2026_v3/` — **không sửa đè code cũ**.
+
+**Reuse trực tiếp (không cần sửa):**
+
+- Data loading/preprocess: Stage 0 (`src/data/`)
+- Centrality/k-shell: Stage 1–2 (`src/graph/centrality.py`, `src/graph/kshell.py`)
+- **Community detection: `src/graph/community.py`** — reuse Louvain, chỉ thêm `cross_community_edge_fraction` output
+- Stats utilities: `src/evaluation/stats_tests.py` (BH correction, Cliff's delta)
+
+**Cần fork / viết mới** (không sửa đè SIS-based):
+
+- IC labels pipeline (weighted cascade + CSR): `src/mapr2026_v3/ic_labels_primary.py`
+- Typology builder (trục IC thay SIS): `src/mapr2026_v3/typology_ic_views.py`
+- Evaluation harness (ranking metrics thay F1): `src/mapr2026_v3/eval_ranking_harness.py`
+- Diffusion proxies (one-hop + two-hop): `src/mapr2026_v3/diffusion_proxies.py`
+- Surrogate learning (GNN ablation): `src/mapr2026_v3/run_surrogates.py`
+
+### Quick Reference: Stage ↔ Script ↔ Owner
+
+| Stage v3 | Script | Owner | Ghi chú |
+|---|---|---|---|
+| **Stage 0b (dead account audit)** | `src/data/dead_account_audit.py` | **Person 1** | Phải có trước sampling; stats → limitations |
+| Stage 2 (CSR) | `src/mapr2026_v3/export_csr.py` | Person 1 | |
+| Stage 3 (Day-1) | `src/mapr2026_v3/day1_benchmark.py` | Person 1 | Gating cho M2 |
+| Stage 4 (IC labels + split mask) | `src/mapr2026_v3/ic_labels_primary.py` | Person 1 | Gating cho M3 |
+| **Stage 4b (community features)** | `src/graph/community.py` | **Person 2** | Độc lập với IC, chạy sớm |
+| Stage 5 (typology + profiling + life_time) | `src/mapr2026_v3/typology_ic_views.py` | Person 2 | Cần IC labels + community |
+| Stage 5 (null model) | `src/mapr2026_v3/null_model_typology.py` | Person 2 | 500 nodes × 3 × 100 runs |
+| Stage 6 (proxies full graph) | `src/mapr2026_v3/diffusion_proxies.py` | Person 2 | Full active graph |
+| Stage 7 (Group 1–4 baselines) | `src/mapr2026_v3/run_baselines.py` | Person 3 | Group 4 = Node2Vec+LR, MLP → baseline CSV |
+| Stage 7 (Group 5 GNN ablation) | `src/mapr2026_v3/run_surrogates.py` | Person 3 | 4 GNN variants; mean±std → surrogate CSV |
+| (shared) | `src/mapr2026_v3/eval_ranking_harness.py` | Person 3 | `load_split_mask()` + metrics |
+| (shared) | `src/mapr2026_v3/_shared.py` | All | Đọc, không sửa riêng |
+
 ---
 
 ## 6) Giảm phụ thuộc bằng test nhỏ + smoke runs
@@ -1742,6 +1778,23 @@ Tối thiểu cần có (tạo folder nếu chưa có):
 
 - Ưu tiên PR nhỏ theo milestone (M1 → M2 → M3) thay vì chờ “xong hết mới merge”.
 - Khi PR chạm vào artifact contract: phải update cùng lúc doc contract (Mục 2) + registry.
+
+---
+
+## 7b) Stop conditions — dừng và fix trước khi đi tiếp
+
+Nếu gặp bất kỳ condition nào dưới đây, **dừng pipeline và fix trước** khi chuyển stage tiếp theo:
+
+| Condition | Triệu chứng | Action |
+|---|---|---|
+| CSR không deterministic | Rerun ra mapping khác | Fix `export_csr.py`: sort `node_id` trước khi build |
+| `split_masks.parquet` thiếu | Person 3 raise `FileNotFoundError` | Person 1 chạy `ic_labels_primary.py --dry-run` ngay |
+| `split_masks.parquet` sai schema | `load_split_mask()` raise `ValueError` | Person 1 regenerate |
+| One-hop ρ > 0.9 + top-k alignment cao (`Jaccard@10% > 0.8`, `NDCG@10% > 0.9`) nhưng vẫn cố giữ GNN primary | Narrative không defensible | Restructure: xem Section 2.2 plan v3 |
+| IC pilot degenerate | CV < 0.3 hoặc top10/median ≈ 1 | ⚠ [IF PROBLEM: cv_score < 0.3] — xem Person 1 Deliverable 4 |
+| Hidden quadrant < 150 | `check_and_expand_typology_sample` cảnh báo | ⚠ [IF PROBLEM: min_quadrant_ok=false] — xem Person 2 Deliverable 3 |
+| `diffusion_proxies.parquet` chỉ có labeled subset | `n_nodes` trong file << 168k | Person 2 rebuild ở real mode (full active graph) |
+| Louvain partition quá nhạy với resolution | `n_communities`/modularity drift mạnh giữa `0.5/1.0/2.0` | ✦ [IF TIME] Chạy `louvain_resolution_sensitivity.json`; chỉ đổi resolution sau khi re-lock |
 
 ---
 
@@ -1796,3 +1849,26 @@ Tối thiểu cần có (tạo folder nếu chưa có):
 > **Tất cả bước 2–9:** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).
 > **BH-FDR:** áp dụng cho MWU của Person 2 (structural profiling + `life_time` validation). Person 3 không bắt buộc chạy MWU.
+
+---
+
+## 8b) Minimal handoff package giữa teammates
+
+Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dưới đây để không phải rerun:
+
+**Từ Person 1 → Person 2 và 3:**
+
+- `data/processed/graph_csr.npz`
+- `data/processed/ic_scores_primary.parquet`
+- `data/processed/regression_targets.parquet`
+- `data/processed/classification_labels.parquet`
+- **`data/processed/split_masks.parquet`** ← critical cho Person 3
+- `data/processed/node_attributes.parquet`
+- `outputs/day1_benchmark/ic_runtime_benchmark.json`
+- `outputs/day1_benchmark/one_hop_correlation.json`
+- `docs/day1_decisions.md` (chứa `n_sample`, `N_runs`, `narrative_branch`)
+
+**Từ Person 2 → Person 3:**
+
+- `data/processed/diffusion_proxies.parquet` (full graph)
+- `outputs/mapr2026_v3_results/runtime_breakdown.csv`
