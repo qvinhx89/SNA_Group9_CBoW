@@ -38,6 +38,7 @@ outputs/*
 outputs/handoffs/**
 !outputs/handoffs/**/
 !outputs/handoffs/**/manifest.json
+!outputs/handoffs/person1_day1_20260407_p1_day1_v3e_optionB_lockstep/**
 
 # Keep data artifacts ignored by default, but allow reproducibility bundle for Stage 0-3
 data/interim/*
