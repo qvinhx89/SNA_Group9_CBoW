@@ -29,6 +29,8 @@ class MaprPaths:
 
     proxies: str = "data/processed/diffusion_proxies.parquet"
     typology: str = "data/processed/typology_labels_ic_views.parquet"
+    proxies_status: str = "outputs/mapr2026_v3_results/diffusion_proxies_status.json"
+    louvain_resolution_sensitivity: str = "outputs/mapr2026_v3_results/louvain_resolution_sensitivity.json"
 
 
 PATHS = MaprPaths()
@@ -120,6 +122,55 @@ def load_csr_npz(npz_path: str | Path) -> dict[str, Any]:
         "degrees": degrees,
         "node_ids": node_ids,
     }
+
+
+def assert_diffusion_proxies_ready_for_eval_runtime(
+    proxies_path: str | Path,
+    expected_n_nodes: int | None = None,
+) -> pd.DataFrame:
+    """Guard against accidentally using dry-run diffusion proxies in eval/runtime.
+
+    Conditions enforced:
+    - file exists
+    - required columns exist
+    - non-empty
+    - no NaN in one_hop_spread/two_hop_spread
+    - unique node_id rows
+    - optional full-graph row count check
+    """
+    p = Path(proxies_path)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"Missing diffusion proxies artifact: {p}. "
+            "Run diffusion_proxies.py real mode before eval/runtime."
+        )
+
+    df = pd.read_parquet(p)
+    require_columns(df, ["node_id", "one_hop_spread", "two_hop_spread"], "diffusion_proxies")
+
+    if len(df) == 0:
+        raise ValueError(
+            "diffusion_proxies.parquet is header-only (dry-run placeholder). "
+            "Do not use this for evaluation/runtime."
+        )
+
+    if df[["one_hop_spread", "two_hop_spread"]].isna().any().any():
+        raise ValueError(
+            "diffusion_proxies.parquet contains NaN proxy values (likely placeholder). "
+            "Run diffusion_proxies.py real mode before evaluation/runtime."
+        )
+
+    node_ids = df["node_id"].astype(str)
+    if node_ids.nunique() != len(df):
+        raise ValueError("diffusion_proxies.parquet has duplicate node_id rows.")
+
+    if expected_n_nodes is not None and node_ids.nunique() != expected_n_nodes:
+        raise ValueError(
+            "diffusion_proxies.parquet does not cover full active graph: "
+            f"got {node_ids.nunique()}, expected {expected_n_nodes}."
+        )
+
+    return df
 
 
 def save_csr_npz(

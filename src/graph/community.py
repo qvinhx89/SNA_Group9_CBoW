@@ -5,27 +5,23 @@ Performs community detection using Louvain algorithm with stability check.
 
 CHANGE-4: Run Louvain 10 times with different seeds, compute NMI stability,
 and select the partition with highest modularity Q.
+
+CHANGE-5: Export contract-ready community features:
+- community_id
+- cross_community_edge_fraction
 """
 
 import networkx as nx
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import importlib
 import json
 import logging
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import yaml
-
-try:
-    import community as community_louvain
-except ImportError:
-    community_louvain = None
-
-try:
-    from community import community_louvain as community_louvain_submodule
-except ImportError:
-    community_louvain_submodule = None
 
 try:
     from sklearn.metrics import normalized_mutual_info_score
@@ -38,6 +34,47 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _import_python_louvain() -> Optional[object]:
+    """Import python-louvain robustly even when this file name shadows `community`.
+
+    Running this script directly (src/graph/community.py) can shadow the
+    third-party package `community`. To avoid that, temporarily remove this
+    script directory from sys.path while importing.
+    """
+    script_file = Path(__file__).resolve()
+    script_dir = script_file.parent
+
+    original_sys_path = list(sys.path)
+    existing_community = sys.modules.pop("community", None)
+    mod: Optional[object] = None
+
+    try:
+        filtered_path: list[str] = []
+        for p in original_sys_path:
+            resolved = Path(p if p else ".").resolve()
+            if resolved == script_dir:
+                continue
+            filtered_path.append(p)
+
+        sys.path = filtered_path
+        mod = importlib.import_module("community")
+    except Exception:
+        mod = None
+    finally:
+        sys.path = original_sys_path
+        if mod is None and existing_community is not None:
+            sys.modules["community"] = existing_community
+
+    if mod is None:
+        return None
+
+    mod_file = getattr(mod, "__file__", None)
+    if mod_file is not None and Path(mod_file).resolve() == script_file:
+        return None
+
+    return mod
+
+
 def _resolve_louvain_backend() -> Tuple[str, Optional[object]]:
     """
     Resolve a Louvain backend from available libraries.
@@ -46,28 +83,18 @@ def _resolve_louvain_backend() -> Tuple[str, Optional[object]]:
     -------
     Tuple[str, Optional[object]]
         (backend_name, backend_module)
-        backend_name in {"python-louvain", "networkx"}
+        backend_name is always "python-louvain"
     """
-    if (
-        community_louvain is not None
-        and hasattr(community_louvain, "best_partition")
-        and hasattr(community_louvain, "modularity")
+    community_louvain = _import_python_louvain()
+    if community_louvain is not None and hasattr(community_louvain, "best_partition") and hasattr(
+        community_louvain, "modularity"
     ):
         return "python-louvain", community_louvain
 
-    if (
-        community_louvain_submodule is not None
-        and hasattr(community_louvain_submodule, "best_partition")
-        and hasattr(community_louvain_submodule, "modularity")
-    ):
-        return "python-louvain", community_louvain_submodule
-
-    if hasattr(nx.community, "louvain_communities"):
-        return "networkx", None
-
     raise ImportError(
-        "No compatible Louvain backend found. Install python-louvain "
-        "(pip install python-louvain) or use networkx>=2.8."
+        "python-louvain is required for this pipeline. "
+        "Install with: pip install python-louvain. "
+        "If already installed, run from project root with the configured interpreter."
     )
 
 
@@ -99,20 +126,14 @@ def run_louvain_single(G: nx.Graph, seed: int, resolution: float = 1.0) -> Tuple
     Tuple[Dict, float]
         (partition dict, modularity Q)
     """
-    backend_name, backend_module = _resolve_louvain_backend()
+    _, backend_module = _resolve_louvain_backend()
+    if backend_module is None:
+        raise ImportError("python-louvain backend selected but module is unavailable")
 
-    if backend_name == "python-louvain":
-        partition = backend_module.best_partition(G, random_state=seed, resolution=resolution)
-        modularity = backend_module.modularity(partition, G)
-        return partition, modularity
-
-    # Fallback: NetworkX Louvain communities
-    communities = nx.community.louvain_communities(G, resolution=resolution, seed=seed)
-    partition = {}
-    for community_idx, members in enumerate(communities):
-        for node in members:
-            partition[node] = int(community_idx)
-    modularity = nx.community.modularity(G, communities)
+    best_partition_fn = getattr(backend_module, "best_partition")
+    modularity_fn = getattr(backend_module, "modularity")
+    partition = best_partition_fn(G, random_state=seed, resolution=resolution)
+    modularity = modularity_fn(partition, G)
     return partition, float(modularity)
 
 
@@ -140,7 +161,38 @@ def compute_nmi_between_partitions(partition1: Dict, partition2: Dict, nodes: Li
     labels1 = [partition1.get(n, -1) for n in nodes]
     labels2 = [partition2.get(n, -1) for n in nodes]
 
-    return normalized_mutual_info_score(labels1, labels2)
+    return float(normalized_mutual_info_score(labels1, labels2))
+
+
+def compute_cross_community_edge_fraction(
+    G: nx.Graph,
+    partition: Dict,
+    nodes: List,
+) -> np.ndarray:
+    """Compute cross-community edge fraction for every node.
+
+    For each node u:
+        cross_community_edge_fraction(u) =
+            (# neighbors v where community(v) != community(u)) / degree(u)
+
+    Isolated nodes get 0.0 by definition.
+    """
+    fractions = np.zeros(len(nodes), dtype=np.float64)
+    for i, node in enumerate(nodes):
+        deg_u = G.degree(node)
+        if deg_u == 0:
+            fractions[i] = 0.0
+            continue
+
+        comm_u = partition[node]
+        cross_count = 0
+        for nbr in G.neighbors(node):
+            if partition[nbr] != comm_u:
+                cross_count += 1
+
+        fractions[i] = cross_count / deg_u
+
+    return fractions
 
 
 def detect_communities(
@@ -170,10 +222,10 @@ def detect_communities(
     pd.DataFrame
         DataFrame with community labels
     """
-    output_dir = Path(output_dir)
-    output_data_dir = Path(output_data_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_data_dir.mkdir(parents=True, exist_ok=True)
+    output_dir_path = Path(output_dir)
+    output_data_dir_path = Path(output_data_dir)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+    output_data_dir_path.mkdir(parents=True, exist_ok=True)
 
     # Load config
     config = load_config(config_path)
@@ -235,16 +287,36 @@ def detect_communities(
     if mean_nmi < nmi_threshold:
         logger.warning(f"Louvain instability detected: mean_NMI={mean_nmi:.4f} < threshold={nmi_threshold}")
 
-    # Create community labels DataFrame
-    community_df = pd.DataFrame({
-        'node_id': nodes,
-        'community': [best_partition[n] for n in nodes]
-    })
+    # CHANGE-5: Build contract-ready community features.
+    community_ids = np.array([int(best_partition[n]) for n in nodes], dtype=np.int64)
+    cross_comm_fraction = compute_cross_community_edge_fraction(G, best_partition, nodes)
+
+    # Keep legacy column name `community` for backward compatibility,
+    # and add contract columns used by MAPR2026 v3.
+    community_df = pd.DataFrame(
+        {
+            'node_id': nodes,
+            'community': community_ids,
+            'community_id': community_ids,
+            'cross_community_edge_fraction': cross_comm_fraction,
+        }
+    )
 
     # Save community labels (from best-Q run)
-    output_path = output_data_dir / "community_labels.parquet"
+    output_path = output_data_dir_path / "community_labels.parquet"
     community_df.to_parquet(output_path, index=False)
     logger.info(f"Saved community labels (best-Q run) to {output_path}")
+
+    # Save explicit contract artifact for Person 2 Track B.
+    community_features_path = output_data_dir_path / "community_features.parquet"
+    community_df[["node_id", "community_id", "cross_community_edge_fraction"]].to_parquet(
+        community_features_path,
+        index=False,
+    )
+    logger.info(
+        "Saved community features (community_id + cross_community_edge_fraction) "
+        f"to {community_features_path}"
+    )
 
     # CHANGE-4: Save metrics including mean_nmi_louvain
     metrics = {
@@ -260,11 +332,13 @@ def detect_communities(
         "mean_nmi_louvain": float(mean_nmi),  # CHANGE-4: key metric for stability
         "std_nmi_louvain": float(std_nmi),
         "min_nmi_louvain": float(min_nmi),
+        "cross_community_edge_fraction_mean": float(np.mean(cross_comm_fraction)),
+        "cross_community_edge_fraction_std": float(np.std(cross_comm_fraction)),
         "nmi_threshold": nmi_threshold,
         "stability_warning": bool(mean_nmi < nmi_threshold),
     }
 
-    metrics_path = output_dir / "metrics.json"
+    metrics_path = output_dir_path / "metrics.json"
     with open(metrics_path, 'w') as f:
         json.dump(metrics, f, indent=2)
     logger.info(f"Saved metrics (including mean_nmi_louvain) to {metrics_path}")
@@ -299,7 +373,7 @@ def detect_communities(
         }
     }
 
-    stability_path = output_dir / "louvain_stability_report.json"
+    stability_path = output_dir_path / "louvain_stability_report.json"
     with open(stability_path, 'w') as f:
         json.dump(stability_report, f, indent=2)
     logger.info(f"Saved stability report to {stability_path}")
