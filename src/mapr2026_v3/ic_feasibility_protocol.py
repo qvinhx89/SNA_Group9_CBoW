@@ -768,7 +768,8 @@ def test_31_kappa_sweep(art: dict[str, Any], n_jobs: int = -1) -> dict[str, Any]
         "rerun_recommendation": (
             f"kappa={viable_kappa} achieved both gates on pilot. "
             f"Estimated full rerun cost: ~"
-            f"{5000 * PROTO['pilot_n_runs'] * 0.5 / 1000 / 3600 * viable_kappa:.1f}h. "
+            f"{5000 * PROTO['pilot_n_runs'] * 0.5 / 1000 / 3600:.1f}h "
+            f"(kappa={viable_kappa}; actual may be higher due to larger cascades at kappa>1). "
             "Requires re-justifying IC model interpretation in paper "
             f"(kappa={viable_kappa} ≠ standard weighted cascade)."
         ) if any_viable else None,
@@ -784,7 +785,7 @@ def test_31_kappa_sweep(art: dict[str, Any], n_jobs: int = -1) -> dict[str, Any]
 _EVIDENCE_TEMPLATE = (
     "Empirical analysis of the Twitch EN graph (168,114 nodes; mean degree ≈ 81) "
     "under the weighted-cascade IC model (p(u,v) = kappa/degree(v), kappa=1) yields "
-    "the following evidence against stable binary top-k labeling:\n"
+    "the following diagnostic evidence on binary top-k labeling stability:\n"
     "{evidence_bullets}\n"
     "These are intrinsic properties of the graph topology and propagation regime, "
     "not simulation artifacts. Accordingly, we adopt continuous regression on "
@@ -818,11 +819,24 @@ def build_decision_report(
         )
     if "1.2" in results:
         r = results["1.2"]
-        evidence_bullets.append(
-            f"• Degree separation (KS) top-10% vs top-11–20%: "
-            f"KS={r['ks_stat']:.4f} (verdict: {r['verdict']}; "
-            f"pivot threshold: KS < {PROTO['degree_ks_not_separable']})."
-        )
+        if r.get("pivot_signal"):
+            # not_separable → groups structurally identical → evidence AGAINST binary
+            evidence_bullets.append(
+                f"• Degree separation (KS) top-10% vs top-11–20%: "
+                f"KS={r['ks_stat']:.4f} (verdict: {r['verdict']}; "
+                f"pivot threshold: KS < {PROTO['degree_ks_not_separable']}) — "
+                "groups are structurally indistinguishable; no IC formula can create "
+                "a stable binary boundary on this topology."
+            )
+        else:
+            # separable → this rules OUT signal absence; label instability has a different cause
+            evidence_bullets.append(
+                f"• Degree separation (KS) top-10% vs top-11–20%: "
+                f"KS={r['ks_stat']:.4f} (verdict: {r['verdict']}; "
+                f"pivot threshold: KS < {PROTO['degree_ks_not_separable']}) — "
+                "groups are structurally separable, ruling out signal absence as "
+                "the cause of label instability."
+            )
     if "1.3" in results and not results["1.3"].get("skipped"):
         r = results["1.3"]
         evidence_bullets.append(
@@ -1005,17 +1019,24 @@ def main() -> None:
         pivot_confirmed = True
 
     if pivot_confirmed:
-        print("\n  ⚠  Phase 1 produced pivot signal(s). Skipping Phase 2+3.\n")
+        print(
+            "\n  ⚠  Phase 1 produced pivot signal(s). "
+            "Phase 2 still runs (zero marginal cost — adds quantitative "
+            "Jaccard ceiling evidence for the paper).\n"
+        )
 
     # ── Phase 2 ───────────────────────────────────────────────────────────
-    if not pivot_confirmed:
-        print("\n── Phase 2: Natural-threshold sweep (zero new compute) ──")
+    # Phase 2 ALWAYS runs: uses existing IC artifacts only (zero new compute).
+    # Running after a Phase 1 pivot provides additional quantitative evidence
+    # (maximum estimated Jaccard across all percentile thresholds) that
+    # strengthens the paper's Option B justification.
+    print("\n── Phase 2: Natural-threshold sweep (zero new compute) ──")
 
-        r21 = test_21_threshold_analysis(art)
-        _write_json_safe(out_dir / "phase2_threshold_analysis.json", r21)
-        all_results["2.1"] = r21
-        if r21["pivot_signal"]:
-            pivot_confirmed = True
+    r21 = test_21_threshold_analysis(art)
+    _write_json_safe(out_dir / "phase2_threshold_analysis.json", r21)
+    all_results["2.1"] = r21
+    if r21["pivot_signal"]:
+        pivot_confirmed = True
 
     # ── Phase 3 (conditional) ─────────────────────────────────────────────
     if args.force_kappa_sweep:
