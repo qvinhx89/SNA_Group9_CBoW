@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-04-08T05:36:18Z",
+  "phase": 1,
+  "config": {
+    "ic_scores_path": "data/processed/ic_scores_primary.parquet",
+    "community_labels_path": "data/processed/community_labels.parquet",
+    "top_k_pct": 0.1,
+    "boundary_band_pct": [
+      0.1,
+      0.2
+    ],
+    "community_scope": "communities touching top-k or boundary band"
+  },
+  "counts": {
+    "n_labeled_nodes": 5000,
+    "n_top_k": 500,
+    "n_boundary_band": 500,
+    "n_communities_touched": 19,
+    "n_communities_spanning_boundary": 16
+  },
+  "pct_communities_spanning_boundary": 0.8421052631578947
+}

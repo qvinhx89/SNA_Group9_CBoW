@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-04-08T05:36:18Z",
+  "phase": 2,
+  "config": {
+    "reconstruction_mode": "locked_summary_from_stability_explanation",
+    "source": "outputs/day1_benchmark/stability_explanation.json",
+    "threshold_percentiles_tested": [
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99
+    ]
+  },
+  "summary": {
+    "mean_gap_to_noise": 0.0023928571428571436,
+    "n_thresholds_tested": 28
+  }
+}
