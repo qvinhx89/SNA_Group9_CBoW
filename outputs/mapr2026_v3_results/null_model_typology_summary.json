@@ -1,6 +1,19 @@
 {
-  "timestamp": "2026-04-06T11:08:24",
-  "dry_run": true,
-  "n_nodes": 168114,
-  "note": "Scaffold placeholder. Implement configuration-model comparisons per MAPR2026 v3."
+  "timestamp": "2026-04-08T12:20:56",
+  "n_nodes": 500,
+  "n_realizations": 3,
+  "n_runs_per_node": 100,
+  "rho_mean": 0.4412250485654581,
+  "rho_std": 0.001879079216173765,
+  "hidden_betweenness_real_subgraph_mean": 1.6767135341633737e-05,
+  "hidden_betweenness_null_mean": 7.928456795773959e-05,
+  "hidden_betweenness_null_std": 3.225169114097876e-05,
+  "interpretation": "Hidden-node betweenness on real subgraph is comparable to configuration null; report potential degree-distribution artifact as limitation.",
+  "top_pct": 0.1,
+  "sample_seed": 42,
+  "realization_seeds": [
+    0,
+    100,
+    200
+  ]
 }

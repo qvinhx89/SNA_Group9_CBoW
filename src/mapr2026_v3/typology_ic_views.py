@@ -41,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="MAPR2026 v3 typology (IC×views) scaffold")
     p.add_argument("--ic", default=PATHS.ic_scores)
     p.add_argument("--node-attrs", default=PATHS.node_attributes)
+    p.add_argument("--proxies", default=PATHS.proxies)
     p.add_argument("--community-features", default="data/processed/community_features.parquet")
     p.add_argument("--centrality-table", default="data/processed/centrality_table.parquet")
     p.add_argument("--kshell-table", default="data/processed/kshell_table.parquet")
@@ -49,7 +50,27 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--structural-csv", default="outputs/mapr2026_v3_results/structural_profiling.csv")
     p.add_argument("--lifetime-json", default="outputs/mapr2026_v3_results/lifetime_validation.json")
     p.add_argument("--language-json", default="outputs/mapr2026_v3_results/language_validation.json")
+    p.add_argument(
+        "--metric-corr-json",
+        default="outputs/mapr2026_v3_results/metric_correlation_matrix.json",
+    )
+    p.add_argument(
+        "--views-permutation-json",
+        default="outputs/mapr2026_v3_results/views_permutation_null_summary.json",
+    )
+    p.add_argument(
+        "--ic-permutation-json",
+        default="outputs/mapr2026_v3_results/ic_permutation_null_summary.json",
+    )
     p.add_argument("--pct", type=float, default=0.10, help="Top-pct threshold (default 10%)")
+    p.add_argument("--n-permutations", type=int, default=200)
+    p.add_argument("--perm-seed", type=int, default=42)
+    p.add_argument(
+        "--include-rho-by-degree-quintile",
+        action="store_true",
+        help="[IF TIME] Add rho_by_degree_quintile to metric correlation JSON.",
+    )
+    p.add_argument("--min-quintile-n", type=int, default=30)
     p.add_argument("--min-quadrant-size", type=int, default=150)
     p.add_argument("--delta-threshold", type=float, default=0.20)
     p.add_argument("--lifetime-min-group-size", type=int, default=10)
@@ -173,6 +194,467 @@ def _assign_typology_labels(df: pd.DataFrame) -> pd.Series:
         lambda row: _assign_typology_label(bool(row["ic_high"]), bool(row["views_high"])),
         axis=1,
     )
+
+
+def _compute_views_permutation_null(
+    df: pd.DataFrame,
+    pct: float,
+    n_permutations: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Task 8 (B5 core): views-permutation null summary.
+
+    Keeps IC scores fixed, permutes views across labeled nodes, rebuilds typology,
+    and compares divergence statistics against observed real typology.
+    """
+    if not (0.0 < float(pct) < 1.0):
+        raise ValueError("pct must be in (0,1)")
+    if int(n_permutations) < 1:
+        raise ValueError("n_permutations must be >= 1")
+
+    work = df[["node_id", "ic_score_mean", "views"]].copy()
+    work["ic_score_mean"] = pd.to_numeric(work["ic_score_mean"], errors="coerce")
+    work["views"] = pd.to_numeric(work["views"], errors="coerce")
+    if work[["ic_score_mean", "views"]].isna().any().any():
+        na_counts = work[["ic_score_mean", "views"]].isna().sum().to_dict()
+        raise ValueError(f"views permutation null requires numeric non-missing inputs: {na_counts}")
+
+    ic_vals = work["ic_score_mean"].to_numpy(dtype=float)
+    views_vals = work["views"].to_numpy(dtype=float)
+
+    ic_threshold = float(np.quantile(ic_vals, 1.0 - float(pct)))
+    views_threshold = float(np.quantile(views_vals, 1.0 - float(pct)))
+
+    ic_high = ic_vals >= ic_threshold
+    views_high_real = views_vals >= views_threshold
+
+    real_hidden = int(np.logical_and(ic_high, np.logical_not(views_high_real)).sum())
+    real_overrated = int(np.logical_and(np.logical_not(ic_high), views_high_real).sum())
+    real_agreement_rate = float(np.mean(ic_high == views_high_real))
+    real_divergence_rate = float(1.0 - real_agreement_rate)
+
+    rng = np.random.default_rng(int(seed))
+    hidden_perm = np.empty(int(n_permutations), dtype=np.int32)
+    overrated_perm = np.empty(int(n_permutations), dtype=np.int32)
+    agreement_perm = np.empty(int(n_permutations), dtype=float)
+    divergence_perm = np.empty(int(n_permutations), dtype=float)
+
+    for i in range(int(n_permutations)):
+        perm_views = rng.permutation(views_vals)
+        # Quantile threshold remains distribution-consistent under permutation, recompute for robustness to ties.
+        perm_views_threshold = float(np.quantile(perm_views, 1.0 - float(pct)))
+        views_high_perm = perm_views >= perm_views_threshold
+
+        hidden_perm[i] = int(np.logical_and(ic_high, np.logical_not(views_high_perm)).sum())
+        overrated_perm[i] = int(np.logical_and(np.logical_not(ic_high), views_high_perm).sum())
+        agreement_perm[i] = float(np.mean(ic_high == views_high_perm))
+        divergence_perm[i] = float(1.0 - agreement_perm[i])
+
+    p_hidden_le_real = float((1.0 + float((hidden_perm <= real_hidden).sum())) / (float(n_permutations) + 1.0))
+    p_hidden_ge_real = float((1.0 + float((hidden_perm >= real_hidden).sum())) / (float(n_permutations) + 1.0))
+    p_agreement_le_real = float(
+        (1.0 + float((agreement_perm <= real_agreement_rate).sum())) / (float(n_permutations) + 1.0)
+    )
+    p_agreement_ge_real = float(
+        (1.0 + float((agreement_perm >= real_agreement_rate).sum())) / (float(n_permutations) + 1.0)
+    )
+
+    if real_agreement_rate > float(np.mean(agreement_perm)) and p_agreement_ge_real <= 0.05:
+        interpretation = (
+            "Observed views-IC agreement is significantly higher than permutation null; "
+            "divergence pattern is non-random."
+        )
+    elif real_agreement_rate < float(np.mean(agreement_perm)) and p_agreement_le_real <= 0.05:
+        interpretation = (
+            "Observed views-IC agreement is significantly lower than permutation null; "
+            "strong divergence beyond random expectation."
+        )
+    else:
+        interpretation = (
+            "Observed views-IC alignment is within permutation-null range; "
+            "report divergence as limited/inconclusive under this test."
+        )
+
+    return {
+        "timestamp": now_iso(),
+        "n_nodes_labeled": int(len(work)),
+        "n_permutations": int(n_permutations),
+        "top_pct": float(pct),
+        "thresholds": {
+            "ic_threshold": ic_threshold,
+            "views_threshold": views_threshold,
+        },
+        "real": {
+            "hidden_count": real_hidden,
+            "overrated_count": real_overrated,
+            "agreement_rate": real_agreement_rate,
+            "divergence_rate": real_divergence_rate,
+        },
+        "null_distribution": {
+            "hidden_count_mean": float(np.mean(hidden_perm)),
+            "hidden_count_std": float(np.std(hidden_perm, ddof=0)),
+            "overrated_count_mean": float(np.mean(overrated_perm)),
+            "overrated_count_std": float(np.std(overrated_perm, ddof=0)),
+            "agreement_rate_mean": float(np.mean(agreement_perm)),
+            "agreement_rate_std": float(np.std(agreement_perm, ddof=0)),
+            "divergence_rate_mean": float(np.mean(divergence_perm)),
+            "divergence_rate_std": float(np.std(divergence_perm, ddof=0)),
+        },
+        "empirical_p_values": {
+            "hidden_count_le_real": p_hidden_le_real,
+            "hidden_count_ge_real": p_hidden_ge_real,
+            "agreement_rate_le_real": p_agreement_le_real,
+            "agreement_rate_ge_real": p_agreement_ge_real,
+        },
+        "interpretation": interpretation,
+    }
+
+
+def _compute_ic_permutation_null(
+    df: pd.DataFrame,
+    pct: float,
+    n_permutations: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Task 9 (B5 core): IC-score permutation null summary.
+
+    Keeps views fixed, permutes ic_score_mean across labeled nodes, rebuilds typology,
+    and compares divergence statistics against observed real typology.
+    """
+    if not (0.0 < float(pct) < 1.0):
+        raise ValueError("pct must be in (0,1)")
+    if int(n_permutations) < 1:
+        raise ValueError("n_permutations must be >= 1")
+
+    work = df[["node_id", "ic_score_mean", "views"]].copy()
+    work["ic_score_mean"] = pd.to_numeric(work["ic_score_mean"], errors="coerce")
+    work["views"] = pd.to_numeric(work["views"], errors="coerce")
+    if work[["ic_score_mean", "views"]].isna().any().any():
+        na_counts = work[["ic_score_mean", "views"]].isna().sum().to_dict()
+        raise ValueError(f"ic permutation null requires numeric non-missing inputs: {na_counts}")
+
+    ic_vals = work["ic_score_mean"].to_numpy(dtype=float)
+    views_vals = work["views"].to_numpy(dtype=float)
+
+    ic_threshold = float(np.quantile(ic_vals, 1.0 - float(pct)))
+    views_threshold = float(np.quantile(views_vals, 1.0 - float(pct)))
+
+    ic_high_real = ic_vals >= ic_threshold
+    views_high = views_vals >= views_threshold
+
+    real_hidden = int(np.logical_and(ic_high_real, np.logical_not(views_high)).sum())
+    real_overrated = int(np.logical_and(np.logical_not(ic_high_real), views_high).sum())
+    real_agreement_rate = float(np.mean(ic_high_real == views_high))
+    real_divergence_rate = float(1.0 - real_agreement_rate)
+
+    rng = np.random.default_rng(int(seed) + 100000)
+    hidden_perm = np.empty(int(n_permutations), dtype=np.int32)
+    overrated_perm = np.empty(int(n_permutations), dtype=np.int32)
+    agreement_perm = np.empty(int(n_permutations), dtype=float)
+    divergence_perm = np.empty(int(n_permutations), dtype=float)
+
+    for i in range(int(n_permutations)):
+        perm_ic = rng.permutation(ic_vals)
+        # Recompute threshold each permutation for robustness under ties.
+        perm_ic_threshold = float(np.quantile(perm_ic, 1.0 - float(pct)))
+        ic_high_perm = perm_ic >= perm_ic_threshold
+
+        hidden_perm[i] = int(np.logical_and(ic_high_perm, np.logical_not(views_high)).sum())
+        overrated_perm[i] = int(np.logical_and(np.logical_not(ic_high_perm), views_high).sum())
+        agreement_perm[i] = float(np.mean(ic_high_perm == views_high))
+        divergence_perm[i] = float(1.0 - agreement_perm[i])
+
+    p_hidden_le_real = float((1.0 + float((hidden_perm <= real_hidden).sum())) / (float(n_permutations) + 1.0))
+    p_hidden_ge_real = float((1.0 + float((hidden_perm >= real_hidden).sum())) / (float(n_permutations) + 1.0))
+    p_agreement_le_real = float(
+        (1.0 + float((agreement_perm <= real_agreement_rate).sum())) / (float(n_permutations) + 1.0)
+    )
+    p_agreement_ge_real = float(
+        (1.0 + float((agreement_perm >= real_agreement_rate).sum())) / (float(n_permutations) + 1.0)
+    )
+
+    if real_agreement_rate > float(np.mean(agreement_perm)) and p_agreement_ge_real <= 0.05:
+        interpretation = (
+            "Observed views-IC agreement is significantly higher than IC-permutation null; "
+            "divergence pattern is non-random."
+        )
+    elif real_agreement_rate < float(np.mean(agreement_perm)) and p_agreement_le_real <= 0.05:
+        interpretation = (
+            "Observed views-IC agreement is significantly lower than IC-permutation null; "
+            "strong divergence beyond random expectation."
+        )
+    else:
+        interpretation = (
+            "Observed views-IC alignment is within IC-permutation null range; "
+            "report divergence as limited/inconclusive under this test."
+        )
+
+    return {
+        "timestamp": now_iso(),
+        "n_nodes_labeled": int(len(work)),
+        "n_permutations": int(n_permutations),
+        "top_pct": float(pct),
+        "thresholds": {
+            "ic_threshold": ic_threshold,
+            "views_threshold": views_threshold,
+        },
+        "real": {
+            "hidden_count": real_hidden,
+            "overrated_count": real_overrated,
+            "agreement_rate": real_agreement_rate,
+            "divergence_rate": real_divergence_rate,
+        },
+        "null_distribution": {
+            "hidden_count_mean": float(np.mean(hidden_perm)),
+            "hidden_count_std": float(np.std(hidden_perm, ddof=0)),
+            "overrated_count_mean": float(np.mean(overrated_perm)),
+            "overrated_count_std": float(np.std(overrated_perm, ddof=0)),
+            "agreement_rate_mean": float(np.mean(agreement_perm)),
+            "agreement_rate_std": float(np.std(agreement_perm, ddof=0)),
+            "divergence_rate_mean": float(np.mean(divergence_perm)),
+            "divergence_rate_std": float(np.std(divergence_perm, ddof=0)),
+        },
+        "empirical_p_values": {
+            "hidden_count_le_real": p_hidden_le_real,
+            "hidden_count_ge_real": p_hidden_ge_real,
+            "agreement_rate_le_real": p_agreement_le_real,
+            "agreement_rate_ge_real": p_agreement_ge_real,
+        },
+        "interpretation": interpretation,
+    }
+
+
+def _build_metric_correlation_frame(
+    df_ic: pd.DataFrame,
+    node_attrs_path: Path,
+    proxies_path: Path,
+    centrality_path: Path,
+    kshell_path: Path,
+) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Build labeled metric frame for Task 11 with canonical metric names."""
+    if not node_attrs_path.exists():
+        raise FileNotFoundError(f"Missing node attributes for metric correlation: {node_attrs_path}")
+    if not proxies_path.exists():
+        raise FileNotFoundError(f"Missing diffusion proxies for metric correlation: {proxies_path}")
+    if not centrality_path.exists():
+        raise FileNotFoundError(f"Missing centrality table for metric correlation: {centrality_path}")
+
+    require_columns(df_ic, ["node_id", "ic_score_mean"], "ic_scores")
+    ic = df_ic[["node_id", "ic_score_mean"]].copy()
+    ic["node_id"] = ic["node_id"].astype(str)
+    if ic["node_id"].nunique() != len(ic):
+        raise ValueError("ic_scores contains duplicate node_id rows for Task 11")
+
+    attrs = pd.read_parquet(node_attrs_path)
+    require_columns(attrs, ["node_id", "views", "degree"], "node_attributes")
+    attrs = attrs[["node_id", "views", "degree"]].copy()
+    attrs["node_id"] = attrs["node_id"].astype(str)
+    if attrs["node_id"].nunique() != len(attrs):
+        raise ValueError("node_attributes contains duplicate node_id rows for Task 11")
+
+    proxies = pd.read_parquet(proxies_path)
+    require_columns(proxies, ["node_id", "one_hop_spread", "two_hop_spread"], "diffusion_proxies")
+    proxies = proxies[["node_id", "one_hop_spread", "two_hop_spread"]].copy()
+    proxies["node_id"] = proxies["node_id"].astype(str)
+    if proxies["node_id"].nunique() != len(proxies):
+        raise ValueError("diffusion_proxies contains duplicate node_id rows for Task 11")
+
+    cent = pd.read_parquet(centrality_path)
+    require_columns(cent, ["node_id", "pagerank"], "centrality_table")
+    cent = cent.copy()
+    cent["node_id"] = cent["node_id"].astype(str)
+    if cent["node_id"].nunique() != len(cent):
+        raise ValueError("centrality_table contains duplicate node_id rows for Task 11")
+
+    if "betweenness_approx" in cent.columns:
+        bet_source_col = "betweenness_approx"
+    elif "betweenness" in cent.columns:
+        bet_source_col = "betweenness"
+    else:
+        raise ValueError("centrality_table requires either 'betweenness_approx' or 'betweenness'")
+
+    if "kshell" not in cent.columns:
+        if not kshell_path.exists():
+            raise FileNotFoundError(
+                f"Missing kshell source: centrality has no 'kshell' and file not found {kshell_path}"
+            )
+        kshell_df = pd.read_parquet(kshell_path)
+        require_columns(kshell_df, ["node_id", "kshell"], "kshell_table")
+        kshell_df = kshell_df[["node_id", "kshell"]].copy()
+        kshell_df["node_id"] = kshell_df["node_id"].astype(str)
+        cent = cent.merge(kshell_df, on="node_id", how="left")
+
+    cent = cent[["node_id", "pagerank", "kshell", bet_source_col]].copy()
+    cent = cent.rename(columns={bet_source_col: "betweenness_approx"})
+
+    ic_node_ids = set(ic["node_id"].tolist())
+    missing_in_attrs = ic_node_ids - set(attrs["node_id"].tolist())
+    missing_in_proxies = ic_node_ids - set(proxies["node_id"].tolist())
+    missing_in_cent = ic_node_ids - set(cent["node_id"].tolist())
+    if missing_in_attrs or missing_in_proxies or missing_in_cent:
+        raise ValueError(
+            "Metric correlation coverage failed for IC-labeled nodes: "
+            f"missing_in_node_attributes={len(missing_in_attrs)}, "
+            f"missing_in_diffusion_proxies={len(missing_in_proxies)}, "
+            f"missing_in_centrality_table={len(missing_in_cent)}"
+        )
+
+    frame = (
+        ic.merge(attrs, on="node_id", how="left", validate="one_to_one")
+        .merge(proxies, on="node_id", how="left", validate="one_to_one")
+        .merge(cent, on="node_id", how="left", validate="one_to_one")
+    )
+    if len(frame) != len(ic):
+        raise ValueError(
+            "Metric correlation frame row coverage mismatch: "
+            f"expected={len(ic)}, got={len(frame)}"
+        )
+
+    required_metrics = [
+        "ic_score_mean",
+        "views",
+        "degree",
+        "pagerank",
+        "kshell",
+        "betweenness_approx",
+        "one_hop_spread",
+        "two_hop_spread",
+    ]
+
+    for col in required_metrics:
+        frame[col] = pd.to_numeric(frame[col], errors="coerce")
+
+    if frame["node_id"].nunique() != len(frame):
+        raise ValueError("Metric correlation frame contains duplicate node_id rows")
+
+    na_counts = frame[required_metrics].isna().sum().to_dict()
+    if any(v > 0 for v in na_counts.values()):
+        raise ValueError(f"Metric correlation frame has missing values in required metrics: {na_counts}")
+
+    column_mapping = {
+        "ic_score_mean": "ic_score_mean",
+        "views": "views",
+        "degree": "degree",
+        "pagerank": "pagerank",
+        "kshell": "kshell",
+        "betweenness_approx": bet_source_col,
+        "one_hop_spread": "one_hop_spread",
+        "two_hop_spread": "two_hop_spread",
+    }
+
+    return frame[["node_id"] + required_metrics].copy(), column_mapping
+
+
+def _compute_metric_correlation_payload(
+    frame: pd.DataFrame,
+    column_mapping: dict[str, str],
+    include_rho_by_degree_quintile: bool,
+    min_quintile_n: int,
+    n_rows_expected: int,
+) -> dict[str, Any]:
+    """Compute Task 11 global 8x8 Spearman matrix + BH-FDR corrected p-matrix."""
+    metrics = [
+        "ic_score_mean",
+        "views",
+        "degree",
+        "pagerank",
+        "kshell",
+        "betweenness_approx",
+        "one_hop_spread",
+        "two_hop_spread",
+    ]
+    n = len(metrics)
+
+    rho_matrix = np.zeros((n, n), dtype=float)
+    p_raw_matrix = np.ones((n, n), dtype=float)
+
+    for i in range(n):
+        for j in range(i, n):
+            m1, m2 = metrics[i], metrics[j]
+            rho_result: Any = stats.spearmanr(frame[m1].to_numpy(dtype=float), frame[m2].to_numpy(dtype=float))
+            rho = float(rho_result.correlation) if hasattr(rho_result, "correlation") else float(rho_result[0])
+            p_raw = float(rho_result.pvalue) if hasattr(rho_result, "pvalue") else float(rho_result[1])
+
+            if np.isnan(rho):
+                rho = 0.0
+            if np.isnan(p_raw):
+                p_raw = 1.0
+
+            rho_matrix[i, j] = rho
+            rho_matrix[j, i] = rho
+            p_raw_matrix[i, j] = p_raw
+            p_raw_matrix[j, i] = p_raw
+
+    upper_idx = np.triu_indices(n, k=1)
+    p_upper = p_raw_matrix[upper_idx]
+    p_corr_upper = np.ones_like(p_upper)
+    if len(p_upper) > 0:
+        _, p_corr_upper, _, _ = multipletests(p_upper, method="fdr_bh")
+
+    p_corr_matrix = np.ones((n, n), dtype=float)  # diagonal = 1.0 (self-correlation: no test)
+    for idx, p_corr in enumerate(p_corr_upper):
+        i = int(upper_idx[0][idx])
+        j = int(upper_idx[1][idx])
+        p_corr_matrix[i, j] = float(p_corr)
+        p_corr_matrix[j, i] = float(p_corr)
+
+    n_rows_actual = int(len(frame))
+    n_rows_expected_int = int(n_rows_expected)
+    if n_rows_expected_int < 1:
+        raise ValueError("n_rows_expected must be >= 1")
+    if n_rows_actual != n_rows_expected_int:
+        raise ValueError(
+            "Metric correlation payload coverage mismatch: "
+            f"expected={n_rows_expected_int}, got={n_rows_actual}"
+        )
+
+    payload: dict[str, Any] = {
+        "timestamp": now_iso(),
+        "n_rows": n_rows_actual,
+        "n_rows_expected": n_rows_expected_int,
+        "coverage_ok": bool(n_rows_actual == n_rows_expected_int),
+        "metrics": metrics,
+        "rho_matrix": rho_matrix.tolist(),
+        "p_matrix_corrected": p_corr_matrix.tolist(),
+        "column_mapping": column_mapping,
+        "mapping_note": (
+            "Canonical metric name follows plan. If source has 'betweenness' only, "
+            "it is exported as canonical 'betweenness_approx'."
+        ),
+    }
+
+    if include_rho_by_degree_quintile:
+        if int(min_quintile_n) < 1:
+            raise ValueError("min_quintile_n must be >= 1")
+        work = frame[["degree", "ic_score_mean", "views"]].copy()
+        work["deg_q"] = pd.qcut(work["degree"], q=5, labels=False, duplicates="drop")
+        out_q: dict[str, Any] = {}
+        for q in sorted(work["deg_q"].dropna().astype(int).unique().tolist()):
+            sub = work[work["deg_q"].astype(float) == float(q)]
+            if len(sub) < int(min_quintile_n):
+                continue
+            rho_iv_res: Any = stats.spearmanr(
+                sub["ic_score_mean"].to_numpy(dtype=float),
+                sub["views"].to_numpy(dtype=float),
+            )
+            rho_id_res: Any = stats.spearmanr(
+                sub["ic_score_mean"].to_numpy(dtype=float),
+                sub["degree"].to_numpy(dtype=float),
+            )
+            rho_ic_views = (
+                float(rho_iv_res.correlation) if hasattr(rho_iv_res, "correlation") else float(rho_iv_res[0])
+            )
+            rho_ic_degree = (
+                float(rho_id_res.correlation) if hasattr(rho_id_res, "correlation") else float(rho_id_res[0])
+            )
+            out_q[f"Q{q}"] = {
+                "n": int(len(sub)),
+                "rho_ic_views": 0.0 if np.isnan(rho_ic_views) else float(rho_ic_views),
+                "rho_ic_degree": 0.0 if np.isnan(rho_ic_degree) else float(rho_ic_degree),
+            }
+        payload["rho_by_degree_quintile"] = out_q
+
+    return payload
 
 
 def _cliffs_delta_from_u(u_stat: float, n1: int, n2: int) -> float:
@@ -427,8 +909,17 @@ def _build_structural_frame(
     df_attrs["node_id"] = df_attrs["node_id"].astype(str)
 
     df_cent = pd.read_parquet(centrality_path)
-    require_columns(df_cent, ["node_id", "pagerank", "betweenness"], "centrality_table")
-    df_cent = df_cent[["node_id", "pagerank", "betweenness"] + (["kshell"] if "kshell" in df_cent.columns else [])].copy()
+    require_columns(df_cent, ["node_id", "pagerank"], "centrality_table")
+    if "betweenness_approx" in df_cent.columns:
+        _bet_src = "betweenness_approx"
+    elif "betweenness" in df_cent.columns:
+        _bet_src = "betweenness"
+    else:
+        raise ValueError(
+            "centrality_table requires either 'betweenness_approx' or 'betweenness' for structural profiling"
+        )
+    df_cent = df_cent[["node_id", "pagerank", _bet_src] + (["kshell"] if "kshell" in df_cent.columns else [])].copy()
+    df_cent = df_cent.rename(columns={_bet_src: "betweenness"})
     df_cent["node_id"] = df_cent["node_id"].astype(str)
 
     if "kshell" not in df_cent.columns:
@@ -559,6 +1050,7 @@ def main() -> None:
 
     ic_path = Path(args.ic)
     attrs_path = Path(args.node_attrs)
+    proxies_path = Path(args.proxies)
     community_path = Path(args.community_features)
     centrality_path = Path(args.centrality_table)
     kshell_path = Path(args.kshell_table)
@@ -566,11 +1058,18 @@ def main() -> None:
     structural_csv_path = Path(args.structural_csv)
     lifetime_json_path = Path(args.lifetime_json)
     language_json_path = Path(args.language_json)
+    metric_corr_json_path = Path(args.metric_corr_json)
+    views_permutation_json_path = Path(args.views_permutation_json)
+    ic_permutation_json_path = Path(args.ic_permutation_json)
     if not attrs_path.exists():
         raise FileNotFoundError(f"Missing node attributes: {attrs_path}")
 
     if not (0.0 < float(args.pct) < 1.0):
         raise ValueError("--pct must be in (0, 1)")
+    if int(args.n_permutations) < 1:
+        raise ValueError("--n-permutations must be >= 1")
+    if int(args.min_quintile_n) < 1:
+        raise ValueError("--min-quintile-n must be >= 1")
     if int(args.min_quadrant_size) < 1:
         raise ValueError("--min-quadrant-size must be >= 1")
     if float(args.delta_threshold) < 0.0:
@@ -627,6 +1126,41 @@ def main() -> None:
     ensure_parent(quadrant_json_path)
     write_json(quadrant_json_path, report)
 
+    views_perm_summary = _compute_views_permutation_null(
+        df=out,
+        pct=float(args.pct),
+        n_permutations=int(args.n_permutations),
+        seed=int(args.perm_seed),
+    )
+    ensure_parent(views_permutation_json_path)
+    write_json(views_permutation_json_path, views_perm_summary)
+
+    ic_perm_summary = _compute_ic_permutation_null(
+        df=out,
+        pct=float(args.pct),
+        n_permutations=int(args.n_permutations),
+        seed=int(args.perm_seed),
+    )
+    ensure_parent(ic_permutation_json_path)
+    write_json(ic_permutation_json_path, ic_perm_summary)
+
+    metric_corr_frame, metric_column_mapping = _build_metric_correlation_frame(
+        df_ic=df_ic,
+        node_attrs_path=attrs_path,
+        proxies_path=proxies_path,
+        centrality_path=centrality_path,
+        kshell_path=kshell_path,
+    )
+    metric_corr_payload = _compute_metric_correlation_payload(
+        frame=metric_corr_frame,
+        column_mapping=metric_column_mapping,
+        include_rho_by_degree_quintile=bool(args.include_rho_by_degree_quintile),
+        min_quintile_n=int(args.min_quintile_n),
+        n_rows_expected=int(len(df_ic)),
+    )
+    ensure_parent(metric_corr_json_path)
+    write_json(metric_corr_json_path, metric_corr_payload)
+
     lifetime_frame = out[["node_id", "typology_label", "ic_score_mean"]].merge(
         df_attrs[["node_id", "degree", "life_time"]],
         on="node_id",
@@ -672,6 +1206,9 @@ def main() -> None:
     if args.dry_run:
         print(f"[OK] Wrote typology (dry-run OK): {args.out} (timestamp={now_iso()})")
         print(f"[OK] Wrote quadrant report: {quadrant_json_path}")
+        print(f"[OK] Wrote views-permutation null summary: {views_permutation_json_path}")
+        print(f"[OK] Wrote IC-score permutation null summary: {ic_permutation_json_path}")
+        print(f"[OK] Wrote metric correlation matrix: {metric_corr_json_path}")
         print(f"[OK] Wrote life_time validation: {lifetime_json_path}")
         return
 
@@ -698,6 +1235,26 @@ def main() -> None:
 
     print(f"[OK] Wrote typology labels: {args.out} rows={len(out)}")
     print(f"[OK] Wrote quadrant report: {quadrant_json_path}")
+    print(
+        "[OK] Wrote views-permutation null summary: "
+        f"{views_permutation_json_path} "
+        f"(n_permutations={args.n_permutations}, "
+        f"agreement_real={views_perm_summary['real']['agreement_rate']:.4f}, "
+        f"agreement_null_mean={views_perm_summary['null_distribution']['agreement_rate_mean']:.4f})"
+    )
+    print(
+        "[OK] Wrote IC-score permutation null summary: "
+        f"{ic_permutation_json_path} "
+        f"(n_permutations={args.n_permutations}, "
+        f"agreement_real={ic_perm_summary['real']['agreement_rate']:.4f}, "
+        f"agreement_null_mean={ic_perm_summary['null_distribution']['agreement_rate_mean']:.4f})"
+    )
+    print(
+        "[OK] Wrote metric correlation matrix: "
+        f"{metric_corr_json_path} "
+        f"(n_rows={metric_corr_payload['n_rows']}, metrics={len(metric_corr_payload['metrics'])}, "
+        f"betweenness_source={metric_corr_payload['column_mapping']['betweenness_approx']})"
+    )
     print(
         "[OK] Wrote life_time validation: "
         f"{lifetime_json_path} "
