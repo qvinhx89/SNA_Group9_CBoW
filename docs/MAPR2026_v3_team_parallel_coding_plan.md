@@ -671,6 +671,7 @@ IC scores + split_masks ──────► typology thật ──────
     "interpretation": "structural"
   }
   ```
+- **Cycle lock note (current run):** giá trị đã lock trong `docs/day1_decisions.md` dùng `n_thresholds_tested = 28` (legacy sweep summary). Tập ngưỡng `{85,87,89,91,93,95}` ở block trên là reference implementation tối giản; không tự ý ghi đè lock values của cycle đang chạy nếu chưa re-freeze version mới.
 - **Interpretation rule:** `"structural"` nếu `pct_communities_spanning_boundary > 0.70` VÀ `mean_gap_to_noise < 0.10`; `"sampling"` nếu không. `"structural"` → paper claim instability là irreducible.
 - **Lưu ý scope:** Chỉ tạo artifact này nếu `jaccard_stability < 0.85`. Nếu Jaccard pass, không cần chạy.
 
