@@ -80,9 +80,11 @@ def collect_required_paths() -> list[Path]:
         Path("data/processed/ic_scores_primary_with_ci_consensus.parquet"),
         Path(f"{PATHS.day1_dir}/ic_label_uncertainty_consensus.json"),
         Path(f"{PATHS.day1_dir}/ic_regression_stability.json"),
+        Path(f"{PATHS.day1_dir}/stability_explanation.json"),
         Path("outputs/day1_benchmark/policy_compare/policy_comparison_summary.csv"),
         Path("outputs/day1_benchmark/policy_compare/policy_comparison_summary.json"),
         Path("outputs/day1_benchmark/policy_compare/classification_labels_consensus_report.json"),
+        Path("outputs/mapr2026_v3_results/runtime_breakdown.csv"),
     ]
     required.extend([p for p in optional_if_exists if p.exists()])
 

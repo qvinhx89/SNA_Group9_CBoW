@@ -2059,37 +2059,3 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 > **Các bước có tính metrics (2–8, 10, 11):** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).
 > **BH-FDR:** áp dụng cho MWU của Person 2 (structural profiling + `life_time` validation). Person 3 không bắt buộc chạy MWU.
-
----
-
-## 8b) Minimal handoff package giữa teammates
-
-Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dưới đây để không phải rerun:
-
-**Từ Person 1 → Person 2 và 3:**
-
-- `data/processed/graph_csr.npz`
-- `data/processed/ic_scores_primary.parquet`
-- `data/processed/regression_targets.parquet`
-- `data/processed/classification_labels.parquet`
-- **`data/processed/split_masks.parquet`** ← critical cho Person 3
-- `data/processed/node_attributes.parquet`
-- `outputs/day1_benchmark/ic_runtime_benchmark.json`
-- `outputs/day1_benchmark/one_hop_correlation.json`
-- `docs/day1_decisions.md` (chứa `n_sample`, `N_runs`, `narrative_branch`)
-
-**Từ Person 2 → Person 3:**
-
-- `data/processed/diffusion_proxies.parquet` (full graph)
-- `outputs/mapr2026_v3_results/runtime_breakdown.csv`
-
-**Option B lockstep rules — áp dụng khi `quality_gate_pass_all=false`:**
-
-Active handoff version: `person1_day1_20260407_p1_day1_v3e_optionB_lockstep`
-
-1. Dùng đúng 1 version tag handoff cho toàn bộ experiment cycle — không mix artifacts từ các version khác nhau.
-2. Không tự re-split data local — chỉ load `data/processed/split_masks.parquet` từ handoff (SHA256: `005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104`).
-3. Giữ canonical branch (`classification_labels.parquet`) và consensus branch (`classification_labels_consensus.parquet`) tách biệt — không ghi đè canonical.
-4. Binary metrics phải khai báo uncertainty: loại `is_uncertain=1` hoặc `vote_count=1` khi claim strict binary performance; ghi rõ evaluation scope (all nodes vs non-uncertain subset).
-5. Regression là PRIMARY objective — dùng `regression_targets.parquet` (`y = log1p(ic_score_mean)`) cho toàn bộ surrogate ranking pipeline.
-6. Nếu cần thay đổi artifacts: tạo version tag mới (`freeze_day1_handoff.py --version-tag <new_tag>`) — không overwrite handoff directory đã có.
