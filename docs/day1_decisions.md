@@ -174,7 +174,7 @@ Consumer guidance:
 Status:
 - Option B is activated for operational handoff.
 - Meaning: keep truthful gate status (`pass_all=false`) while allowing downstream progress under fixed governance.
-- Active lockstep package for current cycle: `person1_day1_20260407_p1_day1_v3e_optionB_lockstep`.
+- Active lockstep package for current cycle: `person1_day1_20260408_p1_day1_v3g_optionB_lockstep`.
 
 Additional alignment:
 - `one_hop_correlation.json` now includes `jaccard_at_10pct` and `ndcg_at_10pct` for stricter top-k agreement reporting.
@@ -197,3 +197,25 @@ Mandatory consume protocol:
 Operational note:
 - If any team member needs changes, create a new version tag and freeze a new package.
 - Never overwrite an existing handoff directory.
+
+## 12) Stability Explanation + Narrative Lock (Plan Update Sync)
+
+New required artifact (triggered because `jaccard_stability < 0.85`):
+- `outputs/day1_benchmark/stability_explanation.json`
+- Sources used:
+	- `outputs/ic_feasibility/phase1_community_overlap.json`
+	- `outputs/ic_feasibility/phase2_threshold_analysis.json`
+- Current extracted result:
+	- `pct_communities_spanning_boundary = 0.842`
+	- `mean_gap_to_noise = 0.0023928571428571436`
+	- `n_thresholds_tested = 28`
+	- `interpretation = structural`
+
+Runtime table alignment for downstream speedup analysis:
+- Added `mc_ic_labeling` row into `outputs/mapr2026_v3_results/runtime_breakdown.csv`
+- Rule used: `inference_sec_full_graph = projected_total_hours * 3600` from `ic_runtime_benchmark.json`
+
+Narrative lock (paper/report wording):
+- Regression target (`y = log1p(ic_score_mean)`) is PRIMARY by formulation for simulation-derived continuous IC signal.
+- Binary top-10 remains supplementary/provisional due to threshold sensitivity and uncertainty around boundary nodes.
+- Option B is an operational governance mode, not a claim that regression is only a fallback.

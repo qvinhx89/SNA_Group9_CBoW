@@ -1,0 +1,10 @@
+{
+  "pct_communities_spanning_boundary": 0.842,
+  "mean_gap_to_noise": 0.0023928571428571436,
+  "n_thresholds_tested": 28,
+  "interpretation": "structural",
+  "sources": {
+    "phase1_community_overlap": "outputs/ic_feasibility/phase1_community_overlap.json",
+    "phase2_threshold_analysis": "outputs/ic_feasibility/phase2_threshold_analysis.json"
+  }
+}

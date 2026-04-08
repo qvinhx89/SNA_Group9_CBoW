@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-04-06T12:55:45",
+  "config": {
+    "n_labeled_nodes": 5000,
+    "n_runs_per_seed": 150,
+    "mc_seeds": [
+      0,
+      1,
+      2
+    ],
+    "seed_multiplier": 10000,
+    "worker_seed_rule": "mc_seed * seed_multiplier + node_row",
+    "top_pct": 0.1,
+    "jaccard_threshold": 0.85,
+    "p_model": "weighted_cascade"
+  },
+  "top_decile_counts": {
+    "0": 500,
+    "1": 500,
+    "2": 501
+  },
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.3020833333333333,
+      "spearman_rank": 0.6823998811753503
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.3084967320261438,
+      "spearman_rank": 0.6882216548444381
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.3102094240837696,
+      "spearman_rank": 0.6855295358269698
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.3069298298144156,
+    "jaccard_min": 0.3020833333333333,
+    "jaccard_pass_threshold": false,
+    "spearman_mean": 0.685383690615586,
+    "spearman_min": 0.6823998811753503
+  }
+}
