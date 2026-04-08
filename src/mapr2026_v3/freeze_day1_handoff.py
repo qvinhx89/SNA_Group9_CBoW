@@ -81,6 +81,8 @@ def collect_required_paths() -> list[Path]:
         Path(f"{PATHS.day1_dir}/ic_label_uncertainty_consensus.json"),
         Path(f"{PATHS.day1_dir}/ic_regression_stability.json"),
         Path(f"{PATHS.day1_dir}/stability_explanation.json"),
+        Path("outputs/ic_feasibility/phase1_community_overlap.json"),
+        Path("outputs/ic_feasibility/phase2_threshold_analysis.json"),
         Path("outputs/day1_benchmark/policy_compare/policy_comparison_summary.csv"),
         Path("outputs/day1_benchmark/policy_compare/policy_comparison_summary.json"),
         Path("outputs/day1_benchmark/policy_compare/classification_labels_consensus_report.json"),

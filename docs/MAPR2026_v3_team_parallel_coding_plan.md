@@ -2085,7 +2085,7 @@ Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dư�
 
 **Option B lockstep rules — áp dụng khi `quality_gate_pass_all=false`:**
 
-Active handoff version: `person1_day1_20260408_p1_day1_v3g_optionB_lockstep`
+Active handoff version: `person1_day1_20260408_p1_day1_v3h_optionB_lockstep`
 
 1. Dùng đúng 1 version tag handoff cho toàn bộ experiment cycle — không mix artifacts từ các version khác nhau.
 2. Không tự re-split data local — chỉ load `data/processed/split_masks.parquet` từ handoff (SHA256: `005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104`).
