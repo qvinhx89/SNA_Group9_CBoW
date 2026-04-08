@@ -1,1 +1,1 @@
-model_name,spearman_rho,ndcg_at_10pct,precision_at_10pct,runtime_sec
+model_name,spearman_rho,spearman_rho_std,ndcg_at_10pct,ndcg_at_10pct_std,precision_at_10pct,precision_at_10pct_std,runtime_sec
