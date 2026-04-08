@@ -219,3 +219,20 @@ Narrative lock (paper/report wording):
 - Regression target (`y = log1p(ic_score_mean)`) is PRIMARY by formulation for simulation-derived continuous IC signal.
 - Binary top-10 remains supplementary/provisional due to threshold sensitivity and uncertainty around boundary nodes.
 - Option B is an operational governance mode, not a claim that regression is only a fallback.
+
+## 13) M3 Views/IC Alignment Check (RQ2 Narrative Lookup)
+
+Scope:
+- Source join: `data/processed/ic_scores_primary.parquet` x `data/processed/node_attributes.parquet`
+- Overlap nodes used: 5000
+
+Measured result:
+- `spearmanr(views, ic_score_mean) = 0.46886009249660393`
+- `p_value = 9.170499016140683e-272`
+
+Narrative tier (from M3 lookup table):
+- `strong_divergence` (rho < 0.70)
+
+Locked RQ2 narrative for this cycle:
+- Popularity (`views`) does not reliably represent diffusion potential (`ic_score_mean`) on this graph.
+- Hidden influencers are expected and should be interpreted through structural signals (betweenness / cross-community connectivity), not raw popularity alone.
