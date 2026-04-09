@@ -112,6 +112,41 @@ def _ks_results(
     return out
 
 
+def _per_quintile_cv_table(
+    sampled_degrees: np.ndarray,
+    per_node_cv: np.ndarray,
+    cv_noise_threshold: float,
+) -> list[dict[str, float | int]]:
+    """Compute per-degree-quintile CV diagnostics on pilot nodes.
+
+    The table is based on the sampled pilot set and is intended for
+    reporting/diagnostics (not for gate computation, which keeps `cv_score`).
+    """
+    df = pd.DataFrame(
+        {
+            "degree": sampled_degrees.astype(float),
+            "per_node_cv": per_node_cv.astype(float),
+        }
+    )
+
+    # If qcut collapses bins on low-variance slices, keep whatever bins remain.
+    df["deg_q"] = pd.qcut(df["degree"], q=5, labels=False, duplicates="drop")
+
+    rows: list[dict[str, float | int]] = []
+    for q in sorted(df["deg_q"].dropna().astype(int).unique().tolist()):
+        sub = df[df["deg_q"] == q]
+        rows.append(
+            {
+                "quintile": int(q),
+                "n_nodes": int(len(sub)),
+                "cv_mean": float(sub["per_node_cv"].mean()),
+                "cv_median": float(sub["per_node_cv"].median()),
+                "cv_noise_count": int((sub["per_node_cv"] > float(cv_noise_threshold)).sum()),
+            }
+        )
+    return rows
+
+
 def main() -> None:
     args = parse_args()
 
@@ -182,6 +217,12 @@ def main() -> None:
         ks_threshold=float(args.ks_threshold),
     )
 
+    per_quintile_cv = _per_quintile_cv_table(
+        sampled_degrees=degrees[rows],
+        per_node_cv=per_node_cv,
+        cv_noise_threshold=float(args.cv_noise_threshold),
+    )
+
     payload = {
         "timestamp": now_iso(),
         "config": {
@@ -204,6 +245,7 @@ def main() -> None:
             "rank_stability": rank_stability,
             "cv_score": cv_score,
             "cv_noise_count": cv_noise_count,
+            "per_quintile_cv": per_quintile_cv,
             "jaccard_stability": float(jaccard_stability),
             "n_pilot_nodes": int(len(rows)),
             "n_pilot_runs": int(args.n_pilot_runs),

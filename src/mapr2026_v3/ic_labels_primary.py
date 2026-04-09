@@ -39,6 +39,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from scipy.stats import spearmanr
 from sklearn.model_selection import train_test_split
 
 from _shared import PATHS, ensure_parent, load_csr_npz, now_iso, require_columns
@@ -63,6 +64,21 @@ def parse_args() -> argparse.Namespace:
                    help="Number of labeled nodes to sample for IC (real mode only)")
     p.add_argument("--test-frac", type=float, default=0.20,
                    help="Held-out fraction for evaluation (M0-locked: 0.20)")
+    p.add_argument(
+        "--day1-decisions-path",
+        default="docs/day1_decisions.md",
+        help="Path to day1 decisions markdown for automated M3 alignment update",
+    )
+    p.add_argument(
+        "--skip-day1-decisions-update",
+        action="store_true",
+        help="Disable automated M3 views/IC alignment section update",
+    )
+    p.add_argument(
+        "--update-m3-only",
+        action="store_true",
+        help="Only recompute and refresh M3 views/IC alignment section from existing IC artifact",
+    )
     return p.parse_args()
 
 
@@ -288,10 +304,113 @@ def _create_split_mask(
     )
 
 
+def _rq2_narrative_tier(rho: float) -> str:
+    if rho < 0.70:
+        return "strong_divergence"
+    if rho <= 0.85:
+        return "moderate"
+    return "high_agreement"
+
+
+def _compute_views_ic_alignment(
+    df_ic: pd.DataFrame,
+    node_attrs_path: str | Path,
+) -> tuple[float, float, int]:
+    """Compute Spearman correlation between views and IC score over overlap nodes."""
+    attrs = pd.read_parquet(node_attrs_path)
+    require_columns(attrs, ["node_id", "views"], "node_attributes")
+
+    df = df_ic[["node_id", "ic_score_mean"]].copy()
+    df["node_id"] = df["node_id"].astype(str)
+
+    attrs = attrs[["node_id", "views"]].copy()
+    attrs["node_id"] = attrs["node_id"].astype(str)
+    attrs["views"] = pd.to_numeric(attrs["views"], errors="coerce")
+
+    merged = df.merge(attrs, on="node_id", how="inner").dropna(subset=["views", "ic_score_mean"])
+    if len(merged) < 3:
+        raise ValueError("Not enough overlap nodes to compute views/IC Spearman.")
+
+    rho, pval = spearmanr(
+        merged["views"].astype(float).to_numpy(),
+        merged["ic_score_mean"].astype(float).to_numpy(),
+    )
+    if not np.isfinite(rho) or not np.isfinite(pval):
+        raise ValueError("Views/IC Spearman produced non-finite values.")
+    return float(rho), float(pval), int(len(merged))
+
+
+def _render_m3_section(rho: float, pval: float, n_overlap: int) -> str:
+    tier = _rq2_narrative_tier(rho)
+    return "\n".join(
+        [
+            "## 13) M3 Views/IC Alignment Check (RQ2 Narrative Lookup)",
+            "",
+            "Scope:",
+            "- Source join: `data/processed/ic_scores_primary.parquet` x `data/processed/node_attributes.parquet`",
+            f"- Overlap nodes used: {n_overlap}",
+            "",
+            "Measured result:",
+            f"- `spearmanr(views, ic_score_mean) = {rho}`",
+            f"- `p_value = {pval}`",
+            "",
+            "Narrative tier (from M3 lookup table):",
+            f"- `{tier}`",
+            "",
+            "Locked RQ2 narrative for this cycle:",
+            "- Popularity (`views`) does not reliably represent diffusion potential (`ic_score_mean`) on this graph.",
+            "- Hidden influencers are expected and should be interpreted through structural signals (betweenness / cross-community connectivity), not raw popularity alone.",
+        ]
+    )
+
+
+def _update_day1_decisions_m3(
+    day1_path: str | Path,
+    rho: float,
+    pval: float,
+    n_overlap: int,
+) -> None:
+    p = Path(day1_path)
+    if not p.exists():
+        return
+
+    text = p.read_text(encoding="utf-8")
+    marker = "## 13) M3 Views/IC Alignment Check (RQ2 Narrative Lookup)"
+    new_section = _render_m3_section(rho=rho, pval=pval, n_overlap=n_overlap)
+
+    if marker in text:
+        prefix = text.split(marker)[0].rstrip()
+        updated = prefix + "\n\n" + new_section + "\n"
+    else:
+        updated = text.rstrip() + "\n\n" + new_section + "\n"
+
+    p.write_text(updated, encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     csr_path = Path(args.csr)
     node_ids: np.ndarray
+
+    if args.update_m3_only:
+        df_existing = pd.read_parquet(args.out_ic)
+        require_columns(df_existing, ["node_id", "ic_score_mean"], "ic_scores_existing")
+        rho, pval, n_overlap = _compute_views_ic_alignment(
+            df_ic=df_existing,
+            node_attrs_path=PATHS.node_attributes,
+        )
+        if not args.skip_day1_decisions_update:
+            _update_day1_decisions_m3(
+                day1_path=args.day1_decisions_path,
+                rho=rho,
+                pval=pval,
+                n_overlap=n_overlap,
+            )
+            print(
+                f"[OK] Updated M3 section in {args.day1_decisions_path} "
+                f"(rho={rho:.6f}, p={pval:.3e}, n={n_overlap})"
+            )
+        return
 
     if csr_path.exists():
         csr = load_csr_npz(csr_path)
@@ -382,6 +501,25 @@ def main() -> None:
         f"{args.out_ic}, {args.out_reg}, {args.out_cls}, {args.out_mask} "
         f"(split: {n_train} train / {n_test} test, timestamp={now_iso()})"
     )
+
+    if not args.skip_day1_decisions_update and not args.dry_run:
+        try:
+            rho, pval, n_overlap = _compute_views_ic_alignment(
+                df_ic=df_ic,
+                node_attrs_path=PATHS.node_attributes,
+            )
+            _update_day1_decisions_m3(
+                day1_path=args.day1_decisions_path,
+                rho=rho,
+                pval=pval,
+                n_overlap=n_overlap,
+            )
+            print(
+                f"[OK] Updated M3 section in {args.day1_decisions_path} "
+                f"(rho={rho:.6f}, p={pval:.3e}, n={n_overlap})"
+            )
+        except Exception as exc:
+            print(f"[WARN] Could not update M3 section automatically: {exc}")
 
 
 if __name__ == "__main__":

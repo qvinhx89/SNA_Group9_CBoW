@@ -428,6 +428,7 @@ IC scores + split_masks ──────► typology thật ──────
      - Report tối thiểu: `n_dead`, `n_live`, `pct_dead`, `mean_degree_dead`, `mean_degree_live`, `mean_views_dead`, `mean_views_live`
      - **Lý do:** stats phải có trong Section 5 (Limitations): "Dead accounts (X%) have lower degree and views."
    - **LCC check** (chạy cùng lúc, hoặc trước IC sampling):
+     - Script: `src/data/lcc_audit.py`
      - Compute connected components của `graph_active`; verify 1 dominant LCC
      - Output: ghi vào `outputs/stage0_data_quality/lcc_report.json` → fields: `n_nodes_total`, `n_nodes_lcc`, `pct_lcc`, `n_components`
      - ⚠ **[IF PROBLEM: pct_lcc < 90%]** Báo cả team ngay; IC sampling restrict to LCC (loại bỏ non-LCC nodes khỏi `n_sample`). Ghi vào `docs/day1_decisions.md`.
@@ -2012,7 +2013,7 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | --- | --------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------- |
 | 1   | CSR export                                          | `export_csr.py`                  | `graph_csr.npz`                                                                                             | M1 (6/4) |
 | 2   | **Dead account audit**                              | `src/data/dead_account_audit.py` | `outputs/stage0_data_quality/dead_account_report.json`                                                      | M0 (6/4) |
-| 3   | **LCC check**                                       | `src/data/dead_account_audit.py` | `outputs/stage0_data_quality/lcc_report.json`                                                               | M0 (6/4) |
+| 3   | **LCC check**                                       | `src/data/lcc_audit.py`          | `outputs/stage0_data_quality/lcc_report.json`                                                               | M0 (6/4) |
 | 4   | Day-1 benchmark                                     | `day1_benchmark.py`              | `ic_runtime_benchmark.json`                                                                                 | M2 (7/4) |
 | 5   | One-hop ρ check                                     | `day1_benchmark.py`              | `one_hop_correlation.json`                                                                                  | M2 (7/4) |
 | 6   | IC pilot + stability                                | `ic_labels_primary.py`           | `outputs/day1_benchmark/ic_pilot_diagnostics.json` (`jaccard_stability`, `cv_score`, per-quintile CV table) | 9/4      |
@@ -2086,7 +2087,7 @@ Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dư�
 
 **Option B lockstep rules — áp dụng khi `quality_gate_pass_all=false`:**
 
-Active handoff version: `person1_day1_20260408_p1_day1_v3h_optionB_lockstep`
+Active handoff version: `person1_day1_20260409_p1_day1_v3i_optionB_lockstep`
 
 1. Dùng đúng 1 version tag handoff cho toàn bộ experiment cycle — không mix artifacts từ các version khác nhau.
 2. Không tự re-split data local — chỉ load `data/processed/split_masks.parquet` từ handoff (SHA256: `005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104`).
