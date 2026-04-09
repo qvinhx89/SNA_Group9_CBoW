@@ -1,1 +1,2 @@
 model_name,spearman_rho_mean,spearman_rho_std,ndcg_mean,ndcg_std,precision_mean,precision_std,runtime_sec
+gnn_raw_attr,0.5037486386422844,0.009517886441963658,0.7875342968831258,0.009337915027944961,0.438,0.011661903789690611,0.06739850044250488
