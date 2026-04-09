@@ -32,8 +32,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
-from sklearn.metrics import ndcg_score
+from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import MinMaxScaler
 
 try:
@@ -42,8 +41,11 @@ except Exception:
     Node2Vec = None
 
 from _shared import PATHS, ensure_dir, now_iso, read_edgelist_pairs, require_columns
-from eval_ranking_harness import load_split_mask as load_shared_split_mask
-
+from eval_ranking_harness import (
+    apply_test_mask,
+    compute_metrics,
+    load_split_mask as load_shared_split_mask,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAX_EPOCHS = 200
@@ -67,6 +69,7 @@ class BaselineDataBundle:
     test_mask: torch.Tensor
     edge_index: torch.Tensor
     scaler: MinMaxScaler
+    split_mask_df: pd.DataFrame
 
 
 class MLPRegressor(nn.Module):
@@ -148,6 +151,12 @@ def split_sets_from_shared_mask(split_mask_path: str | Path) -> dict[str, set[st
     return out
 
 
+def load_shared_split_dataframe(split_mask_path: str | Path) -> pd.DataFrame:
+    split_df = load_shared_split_mask(resolve_project_path(split_mask_path))
+    split_df = _ensure_node_id_str(split_df)
+    return split_df
+
+
 def _build_edge_index(node_ids: pd.Series, edgelist_path: str | Path) -> torch.Tensor:
     node_to_idx: dict[str, int] = {node_id: i for i, node_id in enumerate(node_ids.tolist())}
     src_nodes, dst_nodes = read_edgelist_pairs(resolve_project_path(edgelist_path))
@@ -182,7 +191,17 @@ def load_baseline_data_bundle(
     merged = features_df.merge(targets[["node_id", "y"]], on="node_id", how="left")
     merged["y"] = pd.to_numeric(merged["y"], errors="coerce").fillna(0.0)
 
-    split = split_sets_from_shared_mask(split_mask_path)
+    split_mask_df = load_shared_split_dataframe(split_mask_path)
+    split = {
+        "train": set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].tolist()),
+        "test": set(split_mask_df.loc[split_mask_df["split"] == "test", "node_id"].tolist()),
+        "val": set(),
+    }
+    if split["train"]:
+        train_sorted = sorted(split["train"])
+        n_val = max(1, int(0.1 * len(train_sorted)))
+        split["val"] = set(train_sorted[:n_val])
+        split["train"] = set(train_sorted[n_val:])
 
     node_ids = merged["node_id"].astype(str)
     train_mask_np = node_ids.isin(split["train"]).to_numpy(dtype=bool)
@@ -211,6 +230,7 @@ def load_baseline_data_bundle(
         test_mask=torch.tensor(test_mask_np, dtype=torch.bool),
         edge_index=edge_index,
         scaler=scaler,
+        split_mask_df=split_mask_df,
     )
 
 
@@ -229,41 +249,158 @@ def build_node2vec_model(edge_index: torch.Tensor, embedding_dim: int = 64) -> A
     )
 
 
-def evaluate_on_test_mask(y_true: torch.Tensor, y_pred: torch.Tensor, test_mask: torch.Tensor) -> dict[str, float]:
-    y_true_test = y_true[test_mask].detach().cpu().numpy().astype(float)
-    y_pred_test = y_pred[test_mask].detach().cpu().numpy().astype(float)
+def evaluate_on_test_mask(
+    node_ids: pd.Series,
+    y_true: torch.Tensor,
+    y_pred: torch.Tensor,
+    split_mask_df: pd.DataFrame,
+) -> dict[str, float]:
+    eval_df = pd.DataFrame(
+        {
+            "node_id": node_ids.astype(str).tolist(),
+            "y_true": y_true.detach().cpu().numpy().astype(float),
+            "y_pred": y_pred.detach().cpu().numpy().astype(float),
+        }
+    )
+    eval_test = apply_test_mask(eval_df, split_mask_df, node_id_col="node_id")
+    if eval_test.empty:
+        raise ValueError("Shared split mask produced an empty test set.")
 
-    if y_true_test.size == 0:
-        raise ValueError("Test mask has zero nodes; cannot evaluate metrics.")
-
-    rho = spearmanr(y_true_test, y_pred_test).statistic
-    if rho is None or np.isnan(rho):
-        rho = 0.0
-
-    k = max(1, int(np.ceil(0.10 * y_true_test.size)))
-    ndcg = float(ndcg_score(y_true_test.reshape(1, -1), y_pred_test.reshape(1, -1), k=k))
-
-    pred_top = set(np.argsort(-y_pred_test)[:k].tolist())
-    true_top = set(np.argsort(-y_true_test)[:k].tolist())
-    precision = float(len(pred_top.intersection(true_top)) / k)
+    metrics = compute_metrics(
+        eval_test["y_true"].to_numpy(dtype=float),
+        eval_test["y_pred"].to_numpy(dtype=float),
+    )
 
     return {
-        "spearman_rho": float(rho),
-        "ndcg_at_10pct": ndcg,
-        "precision_at_10pct": precision,
+        "spearman_rho": metrics.spearman_rho,
+        "ndcg_at_10pct": metrics.ndcg_at_10pct,
+        "precision_at_10pct": metrics.precision_at_10pct,
+    }
+
+
+def eval_heuristic(bundle: BaselineDataBundle, metric_values: pd.Series, name: str) -> dict[str, float]:
+    df = pd.DataFrame({"node_id": bundle.node_ids, "val": metric_values.astype(float).fillna(0.0)})
+    df_sorted = df.set_index("node_id").loc[bundle.node_ids]
+    
+    t0 = time.time()
+    y_pred = torch.tensor(df_sorted["val"].values, dtype=torch.float32)
+    t1 = time.time()
+    
+    metrics = evaluate_on_test_mask(
+        node_ids=bundle.node_ids,
+        y_true=bundle.y,
+        y_pred=y_pred,
+        split_mask_df=bundle.split_mask_df,
+    )
+    
+    return {
+        "model_name": name,
+        "spearman_rho": metrics["spearman_rho"],
+        "spearman_rho_std": 0.0,
+        "ndcg_at_10pct": metrics["ndcg_at_10pct"],
+        "ndcg_at_10pct_std": 0.0,
+        "precision_at_10pct": metrics["precision_at_10pct"],
+        "precision_at_10pct_std": 0.0,
+        "runtime_sec": float(t1 - t0),
+        "train_sec": np.nan,
+    }
+
+
+def _empty_metrics_row(model_name: str) -> dict[str, float]:
+    return {
+        "model_name": model_name,
+        "spearman_rho": np.nan,
+        "spearman_rho_std": np.nan,
+        "ndcg_at_10pct": np.nan,
+        "ndcg_at_10pct_std": np.nan,
+        "precision_at_10pct": np.nan,
+        "precision_at_10pct_std": np.nan,
+        "runtime_sec": np.nan,
+        "train_sec": np.nan,
+    }
+
+
+def train_node2vec_5seeds(bundle: BaselineDataBundle, node2vec_epochs: int = 10) -> dict[str, float]:
+    if Node2Vec is None:
+        print("[WARN] Node2Vec unavailable (torch_geometric missing); writing NaN row.")
+        return _empty_metrics_row("node2vec_lr")
+
+    seed_metrics = []
+    seed_runtimes = []
+    seed_train_times = []
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    train_idx = torch.where(bundle.train_mask)[0].cpu().numpy()
+    if train_idx.size == 0:
+        print("[WARN] Empty training mask for Node2Vec+LR; writing NaN row.")
+        return _empty_metrics_row("node2vec_lr")
+
+    y_all = bundle.y.detach().cpu().numpy().astype(np.float32)
+
+    for seed in TRAINING_SEEDS:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        model = build_node2vec_model(bundle.edge_index).to(device)
+        optimizer = torch.optim.SparseAdam(list(model.parameters()), lr=0.01)
+        loader = model.loader(batch_size=128, shuffle=True)
+
+        t_train_0 = time.time()
+        for _ in range(max(1, int(node2vec_epochs))):
+            model.train()
+            for pos_rw, neg_rw in loader:
+                optimizer.zero_grad()
+                loss = model.loss(pos_rw.to(device), neg_rw.to(device))
+                loss.backward()
+                optimizer.step()
+
+        with torch.no_grad():
+            z = model().detach().cpu().numpy().astype(np.float32)
+        lr = LinearRegression()
+        lr.fit(z[train_idx], y_all[train_idx])
+        t_train_1 = time.time()
+
+        model.eval()
+        t0 = time.time()
+        with torch.no_grad():
+            z_eval = model().detach().cpu().numpy().astype(np.float32)
+            y_pred_np = lr.predict(z_eval)
+            y_pred = torch.tensor(y_pred_np, dtype=torch.float32)
+        t1 = time.time()
+
+        metrics = evaluate_on_test_mask(
+            node_ids=bundle.node_ids,
+            y_true=bundle.y,
+            y_pred=y_pred,
+            split_mask_df=bundle.split_mask_df,
+        )
+        seed_metrics.append(metrics)
+        seed_runtimes.append(t1 - t0)
+        seed_train_times.append(t_train_1 - t_train_0)
+
+    return {
+        "model_name": "node2vec_lr",
+        "spearman_rho": float(np.mean([m["spearman_rho"] for m in seed_metrics])),
+        "spearman_rho_std": float(np.std([m["spearman_rho"] for m in seed_metrics], ddof=0)),
+        "ndcg_at_10pct": float(np.mean([m["ndcg_at_10pct"] for m in seed_metrics])),
+        "ndcg_at_10pct_std": float(np.std([m["ndcg_at_10pct"] for m in seed_metrics], ddof=0)),
+        "precision_at_10pct": float(np.mean([m["precision_at_10pct"] for m in seed_metrics])),
+        "precision_at_10pct_std": float(np.std([m["precision_at_10pct"] for m in seed_metrics], ddof=0)),
+        "runtime_sec": float(np.mean(seed_runtimes)),
+        "train_sec": float(np.mean(seed_train_times)),
     }
 
 
 def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -> dict[str, float]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
+    seed_train_runtimes: list[float] = []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     x = bundle.x_mlp.to(device)
     y = bundle.y.to(device)
     train_mask = bundle.train_mask.to(device)
-    test_mask = bundle.test_mask.to(device)
+    split_mask_df = bundle.split_mask_df
 
     for seed in TRAINING_SEEDS:
         torch.manual_seed(seed)
@@ -276,6 +413,7 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_fn = get_loss_function()
 
+        t_train_0 = time.time()
         for _ in range(max_epochs):
             model.train()
             optimizer.zero_grad()
@@ -283,6 +421,7 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
             loss = loss_fn(pred[train_mask], y[train_mask])
             loss.backward()
             optimizer.step()
+        t_train_1 = time.time()
 
         model.eval()
         with torch.no_grad():
@@ -296,9 +435,15 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
 
         inference_runtime_sec = float(t1 - t0)
 
-        metrics = evaluate_on_test_mask(y_true=y, y_pred=y_pred, test_mask=test_mask)
+        metrics = evaluate_on_test_mask(
+            node_ids=bundle.node_ids,
+            y_true=y,
+            y_pred=y_pred,
+            split_mask_df=split_mask_df,
+        )
         seed_metrics.append(metrics)
         seed_inference_runtimes.append(inference_runtime_sec)
+        seed_train_runtimes.append(float(t_train_1 - t_train_0))
 
     rho_values = np.array([m["spearman_rho"] for m in seed_metrics], dtype=float)
     ndcg_values = np.array([m["ndcg_at_10pct"] for m in seed_metrics], dtype=float)
@@ -313,7 +458,102 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
         "precision_at_10pct": float(np.mean(prec_values)),
         "precision_at_10pct_std": float(np.std(prec_values, ddof=0)),
         "runtime_sec": float(np.mean(np.array(seed_inference_runtimes, dtype=float))),
+        "train_sec": float(np.mean(np.array(seed_train_runtimes, dtype=float))),
     }
+
+
+def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], key: str = "model_name") -> None:
+    new_df = pd.DataFrame(rows)
+    for col in cols:
+        if col not in new_df.columns:
+            new_df[col] = np.nan
+    new_df = new_df[cols].copy()
+
+    if csv_path.exists():
+        old_df = pd.read_csv(csv_path)
+        for col in cols:
+            if col not in old_df.columns:
+                old_df[col] = np.nan
+        old_df = old_df[cols].copy()
+        merged = pd.concat([old_df, new_df], ignore_index=True)
+    else:
+        merged = new_df
+
+    merged = merged.drop_duplicates(subset=[key], keep="last")
+    merged = merged.sort_values(key).reset_index(drop=True)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(csv_path, index=False)
+
+
+def _upsert_runtime_rows(rows: list[dict[str, float]]) -> None:
+    runtime_path = resolve_project_path(PATHS.runtime_csv)
+    cols = ["model_name", "inference_sec_full_graph", "train_sec"]
+    runtime_rows = []
+    for row in rows:
+        runtime_rows.append(
+            {
+                "model_name": row["model_name"],
+                "inference_sec_full_graph": row.get("runtime_sec", np.nan),
+                "train_sec": row.get("train_sec", np.nan),
+            }
+        )
+    _upsert_rows(runtime_path, runtime_rows, cols=cols, key="model_name")
+
+
+def _safe_read_parquet(path_like: str | Path) -> pd.DataFrame | None:
+    p = resolve_project_path(path_like)
+    if not p.exists():
+        return None
+    return pd.read_parquet(p)
+
+
+def _align_series_to_nodes(df: pd.DataFrame, node_ids: pd.Series, value_col: str) -> pd.Series:
+    aligned = _ensure_node_id_str(df).set_index("node_id")
+    out = aligned.reindex(node_ids.astype(str))[value_col]
+    return pd.to_numeric(out, errors="coerce").fillna(0.0)
+
+
+def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]:
+    rows: list[dict[str, float]] = []
+
+    node_attr = _safe_read_parquet(PATHS.node_attributes)
+    if node_attr is not None:
+        node_attr = _ensure_node_id_str(node_attr)
+        if "views" in node_attr.columns:
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "views"), "views"))
+            derived = _derive_features(node_attr)
+            rows.append(
+                eval_heuristic(
+                    bundle,
+                    _align_series_to_nodes(derived, bundle.node_ids, "views_per_day"),
+                    "views_day",
+                )
+            )
+        if "degree" in node_attr.columns:
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "degree"), "degree"))
+
+    centrality = _safe_read_parquet("data/processed/centrality_table.parquet")
+    if centrality is not None:
+        for col in ["pagerank", "betweenness", "degree"]:
+            if col in centrality.columns and col != "degree":
+                rows.append(eval_heuristic(bundle, _align_series_to_nodes(centrality, bundle.node_ids, col), col))
+
+    kshell = _safe_read_parquet("data/processed/kshell_table.parquet")
+    if kshell is not None:
+        kshell_col = "kshell" if "kshell" in kshell.columns else ("k_shell" if "k_shell" in kshell.columns else None)
+        if kshell_col is not None:
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(kshell, bundle.node_ids, kshell_col), "kshell"))
+    elif centrality is not None and "kshell" in centrality.columns:
+        rows.append(eval_heuristic(bundle, _align_series_to_nodes(centrality, bundle.node_ids, "kshell"), "kshell"))
+
+    proxies = _safe_read_parquet(PATHS.proxies)
+    if proxies is not None:
+        if "one_hop_spread" in proxies.columns:
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(proxies, bundle.node_ids, "one_hop_spread"), "one_hop"))
+        if "two_hop_spread" in proxies.columns:
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(proxies, bundle.node_ids, "two_hop_spread"), "two_hop"))
+
+    return rows
 
 
 def parse_args() -> argparse.Namespace:
@@ -322,6 +562,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out-csv", default=str(Path(PATHS.results_dir) / "baseline_ranking_metrics.csv"))
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
+    p.add_argument("--node2vec-epochs", type=int, default=10)
+    p.add_argument("--skip-node2vec", action="store_true")
     return p.parse_args()
 
 
@@ -342,6 +584,7 @@ def main() -> None:
         "precision_at_10pct",
         "precision_at_10pct_std",
         "runtime_sec",
+        "train_sec",
     ]
 
     if args.dry_run:
@@ -358,11 +601,18 @@ def main() -> None:
     else:
         _ = build_node2vec_model(bundle.edge_index)
 
-    results = train_mlp_5seeds(bundle=bundle, max_epochs=args.max_epochs)
-    result_df = pd.DataFrame([results], columns=cols)
-    result_df.to_csv(out_csv, mode="a", index=False, header=not out_csv.exists())
+    results_list = collect_heuristic_rows(bundle)
+    results_list.append(train_mlp_5seeds(bundle=bundle, max_epochs=args.max_epochs))
+    if args.skip_node2vec:
+        print("[INFO] Skipping Node2Vec+LR by flag (--skip-node2vec).")
+    else:
+        results_list.append(train_node2vec_5seeds(bundle=bundle, node2vec_epochs=args.node2vec_epochs))
 
-    print("[OK] Baseline training/evaluation completed with 5 seeds.")
+    _upsert_rows(out_csv, rows=results_list, cols=cols, key="model_name")
+    _upsert_runtime_rows(results_list)
+
+    print("[OK] Baseline training/evaluation completed.")
+    print(f" - models_written={len(results_list)}")
     print(f" - n_nodes={bundle.x_mlp.shape[0]}, n_features={bundle.x_mlp.shape[1]}")
     print(f" - train/val/test={int(bundle.train_mask.sum())}/{int(bundle.val_mask.sum())}/{int(bundle.test_mask.sum())}")
     print(f" - output={out_csv}")

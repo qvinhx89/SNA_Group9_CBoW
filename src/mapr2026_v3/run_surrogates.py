@@ -31,8 +31,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
-from sklearn.metrics import ndcg_score
 from sklearn.preprocessing import MinMaxScaler
 
 try:
@@ -43,7 +41,11 @@ except Exception:
     SAGEConv = None
 
 from _shared import PATHS, ensure_dir, now_iso, read_edgelist_pairs, require_columns
-from eval_ranking_harness import load_split_mask as load_shared_split_mask
+from eval_ranking_harness import (
+    apply_test_mask,
+    compute_metrics,
+    load_split_mask as load_shared_split_mask,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -66,6 +68,7 @@ class SurrogateDataBundle:
     val_mask: torch.Tensor
     test_mask: torch.Tensor
     scaler: MinMaxScaler
+    split_mask_df: pd.DataFrame
 
 
 class GraphSAGERegressor(nn.Module):
@@ -152,6 +155,12 @@ def split_sets_from_shared_mask(split_mask_path: str | Path) -> dict[str, set[st
     return out
 
 
+def load_shared_split_dataframe(split_mask_path: str | Path) -> pd.DataFrame:
+    split_df = load_shared_split_mask(resolve_project_path(split_mask_path))
+    split_df = _ensure_node_id_str(split_df)
+    return split_df
+
+
 def _build_edge_index(node_ids: pd.Series, edgelist_path: str | Path) -> torch.Tensor:
     node_to_idx: dict[str, int] = {node_id: i for i, node_id in enumerate(node_ids.tolist())}
     src_nodes, dst_nodes = read_edgelist_pairs(resolve_project_path(edgelist_path))
@@ -171,7 +180,9 @@ def _build_edge_index(node_ids: pd.Series, edgelist_path: str | Path) -> torch.T
 
 
 def load_surrogate_data_bundle(
+    feature_mode: str = "raw_attr",
     node_attributes_path: str | Path = PATHS.node_attributes,
+    centrality_path: str | Path = "data/processed/centrality_table.parquet",
     targets_path: str | Path = PATHS.regression_targets,
     split_mask_path: str | Path = PATHS.split_masks,
     edgelist_path: str | Path = PATHS.graph_edgelist,
@@ -180,26 +191,90 @@ def load_surrogate_data_bundle(
         raise ImportError("torch_geometric is required for surrogate data bundle construction.")
 
     node_attributes = pd.read_parquet(resolve_project_path(node_attributes_path))
+    node_attributes = _ensure_node_id_str(node_attributes)
+    require_columns(node_attributes, ["node_id"], "node_attributes")
+    base_df = node_attributes[["node_id"]].copy()
+
     targets = pd.read_parquet(resolve_project_path(targets_path))
     targets = _ensure_node_id_str(targets)
     require_columns(targets, ["node_id", "y"], "regression_targets")
+    y_df = targets[["node_id", "y"]].copy()
+    y_df["y"] = pd.to_numeric(y_df["y"], errors="coerce")
 
-    features_df = _derive_features(node_attributes)
-    merged = features_df.merge(targets[["node_id", "y"]], on="node_id", how="left")
-    merged["y"] = pd.to_numeric(merged["y"], errors="coerce").fillna(0.0)
+    raw_features_df = _derive_features(node_attributes)
+    merged = base_df.merge(y_df, on="node_id", how="left")
 
-    split = split_sets_from_shared_mask(split_mask_path)
+    if feature_mode == "raw_attr":
+        merged = merged.merge(raw_features_df, on="node_id", how="left")
+        feature_cols = ["views_log", "views_per_day", "life_time"]
+    elif feature_mode in {"centrality", "graph_only", "full"}:
+        centrality_df = pd.read_parquet(resolve_project_path(centrality_path))
+        centrality_df = _ensure_node_id_str(centrality_df)
+
+        degree_col = "degree" if "degree" in centrality_df.columns else None
+        pagerank_col = "pagerank" if "pagerank" in centrality_df.columns else None
+        kshell_col = "kshell" if "kshell" in centrality_df.columns else ("k_shell" if "k_shell" in centrality_df.columns else None)
+
+        selected = [c for c in [degree_col, pagerank_col, kshell_col] if c is not None]
+        if not selected:
+            raise ValueError("centrality_table.parquet does not contain required columns for GNN ablations.")
+
+        centrality_sel = centrality_df[["node_id", *selected]].copy()
+        if kshell_col and kshell_col != "kshell":
+            centrality_sel = centrality_sel.rename(columns={kshell_col: "kshell"})
+            selected = ["kshell" if c == kshell_col else c for c in selected]
+
+        if feature_mode == "centrality":
+            required = ["degree", "pagerank", "kshell"]
+            missing = [c for c in required if c not in centrality_sel.columns]
+            if missing:
+                raise ValueError(f"Missing required centrality features: {missing}")
+            merged = merged.merge(centrality_sel[["node_id", *required]], on="node_id", how="left")
+            feature_cols = required
+        elif feature_mode == "graph_only":
+            if "degree" not in centrality_sel.columns:
+                raise ValueError("graph_only requires 'degree' in centrality_table.parquet")
+            merged = merged.merge(centrality_sel[["node_id", "degree"]], on="node_id", how="left")
+            feature_cols = ["degree"]
+        else:
+            required = ["degree", "pagerank", "kshell"]
+            missing = [c for c in required if c not in centrality_sel.columns]
+            if missing:
+                raise ValueError(f"Missing required full-feature centrality columns: {missing}")
+            merged = merged.merge(raw_features_df, on="node_id", how="left")
+            merged = merged.merge(centrality_sel[["node_id", *required]], on="node_id", how="left")
+            feature_cols = ["views_log", "views_per_day", "life_time", "degree", "pagerank", "kshell"]
+    else:
+        raise ValueError(f"Unsupported feature_mode={feature_mode}")
+
+    split_mask_df = load_shared_split_dataframe(split_mask_path)
+    split = {
+        "train": set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].tolist()),
+        "test": set(split_mask_df.loc[split_mask_df["split"] == "test", "node_id"].tolist()),
+        "val": set(),
+    }
+    if split["train"]:
+        train_sorted = sorted(split["train"])
+        n_val = max(1, int(0.1 * len(train_sorted)))
+        split["val"] = set(train_sorted[:n_val])
+        split["train"] = set(train_sorted[n_val:])
+
     node_ids = merged["node_id"].astype(str)
 
     train_mask_np = node_ids.isin(split["train"]).to_numpy(dtype=bool)
     val_mask_np = node_ids.isin(split["val"]).to_numpy(dtype=bool)
     test_mask_np = node_ids.isin(split["test"]).to_numpy(dtype=bool)
 
-    feature_cols = ["views_log", "views_per_day", "life_time"]
+    merged["y"] = pd.to_numeric(merged["y"], errors="coerce").fillna(0.0)
+    merged[feature_cols] = merged[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     x_raw = merged[feature_cols].to_numpy(dtype=np.float32)
 
     scaler = MinMaxScaler()
-    x_scaled = scaler.fit_transform(x_raw)
+    if train_mask_np.any():
+        scaler.fit(x_raw[train_mask_np])
+    else:
+        scaler.fit(x_raw)
+    x_scaled = scaler.transform(x_raw)
 
     y_tensor = torch.tensor(merged["y"].to_numpy(dtype=np.float32), dtype=torch.float32)
     edge_index = _build_edge_index(node_ids=node_ids, edgelist_path=edgelist_path)
@@ -220,37 +295,49 @@ def load_surrogate_data_bundle(
         val_mask=graph_data.val_mask,
         test_mask=graph_data.test_mask,
         scaler=scaler,
+        split_mask_df=split_mask_df,
     )
 
 
-def evaluate_on_test_mask(y_true: torch.Tensor, y_pred: torch.Tensor, test_mask: torch.Tensor) -> dict[str, float]:
-    y_true_test = y_true[test_mask].detach().cpu().numpy().astype(float)
-    y_pred_test = y_pred[test_mask].detach().cpu().numpy().astype(float)
+def evaluate_on_test_mask(
+    node_ids: pd.Series,
+    y_true: torch.Tensor,
+    y_pred: torch.Tensor,
+    split_mask_df: pd.DataFrame,
+) -> dict[str, float]:
+    eval_df = pd.DataFrame(
+        {
+            "node_id": node_ids.astype(str).tolist(),
+            "y_true": y_true.detach().cpu().numpy().astype(float),
+            "y_pred": y_pred.detach().cpu().numpy().astype(float),
+        }
+    )
+    eval_test = apply_test_mask(eval_df, split_mask_df, node_id_col="node_id")
+    if eval_test.empty:
+        raise ValueError("Shared split mask produced an empty test set.")
 
-    if y_true_test.size == 0:
-        raise ValueError("Test mask has zero nodes; cannot evaluate metrics.")
-
-    rho = spearmanr(y_true_test, y_pred_test).statistic
-    if rho is None or np.isnan(rho):
-        rho = 0.0
-
-    k = max(1, int(np.ceil(0.10 * y_true_test.size)))
-    ndcg = float(ndcg_score(y_true_test.reshape(1, -1), y_pred_test.reshape(1, -1), k=k))
-
-    pred_top = set(np.argsort(-y_pred_test)[:k].tolist())
-    true_top = set(np.argsort(-y_true_test)[:k].tolist())
-    precision = float(len(pred_top.intersection(true_top)) / k)
+    metrics = compute_metrics(
+        eval_test["y_true"].to_numpy(dtype=float),
+        eval_test["y_pred"].to_numpy(dtype=float),
+    )
 
     return {
-        "spearman_rho": float(rho),
-        "ndcg_at_10pct": ndcg,
-        "precision_at_10pct": precision,
+        "spearman_rho": metrics.spearman_rho,
+        "ndcg_at_10pct": metrics.ndcg_at_10pct,
+        "precision_at_10pct": metrics.precision_at_10pct,
     }
 
 
-def train_surrogate_5seeds(bundle: SurrogateDataBundle, max_epochs: int = MAX_EPOCHS) -> dict[str, float]:
+def train_surrogate_5seeds(
+    bundle: SurrogateDataBundle,
+    max_epochs: int = MAX_EPOCHS,
+    model_name: str = "gnn_raw_attr",
+    randomize_train_target: bool = False,
+) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
+    seed_train_runtimes: list[float] = []
+    seed_predictions: list[np.ndarray] = []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data = bundle.graph_data.to(device)
@@ -266,13 +353,22 @@ def train_surrogate_5seeds(bundle: SurrogateDataBundle, max_epochs: int = MAX_EP
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_fn = get_loss_function()
 
+        y_train_target = data.y.clone()
+        if randomize_train_target:
+            train_idx = torch.where(data.train_mask)[0]
+            if train_idx.numel() > 1:
+                perm = train_idx[torch.randperm(train_idx.numel(), device=device)]
+                y_train_target[train_idx] = data.y[perm]
+
+        t_train_0 = time.time()
         for _ in range(max_epochs):
             model.train()
             optimizer.zero_grad()
             pred = model(data.x, data.edge_index)
-            loss = loss_fn(pred[data.train_mask], data.y[data.train_mask])
+            loss = loss_fn(pred[data.train_mask], y_train_target[data.train_mask])
             loss.backward()
             optimizer.step()
+        t_train_1 = time.time()
 
         model.eval()
         with torch.no_grad():
@@ -286,16 +382,23 @@ def train_surrogate_5seeds(bundle: SurrogateDataBundle, max_epochs: int = MAX_EP
 
         inference_runtime_sec = float(t1 - t0)
 
-        metrics = evaluate_on_test_mask(y_true=data.y, y_pred=y_pred, test_mask=data.test_mask)
+        metrics = evaluate_on_test_mask(
+            node_ids=bundle.node_ids,
+            y_true=data.y,
+            y_pred=y_pred,
+            split_mask_df=bundle.split_mask_df,
+        )
         seed_metrics.append(metrics)
         seed_inference_runtimes.append(inference_runtime_sec)
+        seed_train_runtimes.append(float(t_train_1 - t_train_0))
+        seed_predictions.append(y_pred.detach().cpu().numpy().astype(np.float32))
 
     rho_values = np.array([m["spearman_rho"] for m in seed_metrics], dtype=float)
     ndcg_values = np.array([m["ndcg_at_10pct"] for m in seed_metrics], dtype=float)
     precision_values = np.array([m["precision_at_10pct"] for m in seed_metrics], dtype=float)
 
-    return {
-        "model_name": "gnn_raw_attr",
+    row = {
+        "model_name": model_name,
         "spearman_rho_mean": float(np.mean(rho_values)),
         "spearman_rho_std": float(np.std(rho_values, ddof=0)),
         "ndcg_mean": float(np.mean(ndcg_values)),
@@ -303,15 +406,120 @@ def train_surrogate_5seeds(bundle: SurrogateDataBundle, max_epochs: int = MAX_EP
         "precision_mean": float(np.mean(precision_values)),
         "precision_std": float(np.std(precision_values, ddof=0)),
         "runtime_sec": float(np.mean(np.array(seed_inference_runtimes, dtype=float))),
+        "train_sec": float(np.mean(np.array(seed_train_runtimes, dtype=float))),
     }
+    mean_prediction = np.mean(np.stack(seed_predictions, axis=0), axis=0)
+    return row, mean_prediction
+
+
+def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], key: str = "model_name") -> None:
+    new_df = pd.DataFrame(rows)
+    for col in cols:
+        if col not in new_df.columns:
+            new_df[col] = np.nan
+    new_df = new_df[cols].copy()
+
+    if csv_path.exists():
+        old_df = pd.read_csv(csv_path)
+        for col in cols:
+            if col not in old_df.columns:
+                old_df[col] = np.nan
+        old_df = old_df[cols].copy()
+        merged = pd.concat([old_df, new_df], ignore_index=True)
+    else:
+        merged = new_df
+
+    merged = merged.drop_duplicates(subset=[key], keep="last")
+    merged = merged.sort_values(key).reset_index(drop=True)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(csv_path, index=False)
+
+
+def _upsert_runtime_rows(rows: list[dict[str, float]]) -> None:
+    runtime_path = resolve_project_path(PATHS.runtime_csv)
+    cols = ["model_name", "inference_sec_full_graph", "train_sec"]
+    runtime_rows = []
+    for row in rows:
+        runtime_rows.append(
+            {
+                "model_name": row["model_name"],
+                "inference_sec_full_graph": row.get("runtime_sec", np.nan),
+                "train_sec": row.get("train_sec", np.nan),
+            }
+        )
+    _upsert_rows(runtime_path, runtime_rows, cols=cols, key="model_name")
+
+
+def _write_per_group_prediction_error(
+    node_ids: pd.Series,
+    y_true: torch.Tensor,
+    split_mask_df: pd.DataFrame,
+    predictions: dict[str, np.ndarray],
+    out_path: Path,
+) -> None:
+    typology_path = resolve_project_path(PATHS.typology)
+    base_df = pd.DataFrame(
+        {
+            "node_id": node_ids.astype(str).tolist(),
+            "y_true": y_true.detach().cpu().numpy().astype(float),
+        }
+    )
+    test_df = apply_test_mask(base_df, split_mask_df, node_id_col="node_id")
+
+    group_df = None
+    if typology_path.exists():
+        raw_group = pd.read_parquet(typology_path)
+        raw_group = _ensure_node_id_str(raw_group)
+        for candidate in ["typology", "typology_label", "quadrant", "group", "label"]:
+            if candidate in raw_group.columns:
+                group_df = raw_group[["node_id", candidate]].rename(columns={candidate: "group_label"})
+                break
+
+    if group_df is None:
+        group_df = pd.DataFrame({"node_id": test_df["node_id"].astype(str), "group_label": "all_test"})
+
+    rows: list[dict[str, float]] = []
+    for model_name, pred in predictions.items():
+        pred_df = pd.DataFrame({"node_id": node_ids.astype(str).tolist(), "y_pred": pred.astype(float)})
+        pred_test = apply_test_mask(pred_df, split_mask_df, node_id_col="node_id")
+        merged = test_df.merge(pred_test, on="node_id", how="inner").merge(group_df, on="node_id", how="left")
+        merged["group_label"] = merged["group_label"].fillna("unknown")
+        merged["abs_err"] = (merged["y_true"] - merged["y_pred"]).abs()
+        merged["sq_err"] = (merged["y_true"] - merged["y_pred"]) ** 2
+
+        grouped = merged.groupby("group_label", dropna=False)
+        for group_label, g in grouped:
+            n_nodes = int(g.shape[0])
+            if n_nodes < 20:
+                continue
+            rho = float(compute_metrics(g["y_true"].to_numpy(dtype=float), g["y_pred"].to_numpy(dtype=float)).spearman_rho)
+            rows.append(
+                {
+                    "model_name": model_name,
+                    "typology_group": str(group_label),
+                    "n_nodes": n_nodes,
+                    "spearman_rho": rho,
+                    "mae": float(g["abs_err"].mean()),
+                }
+            )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_df = pd.DataFrame(rows, columns=["model_name", "typology_group", "n_nodes", "spearman_rho", "mae"])
+    out_df.sort_values(["model_name", "typology_group"]).to_csv(out_path, index=False)
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="MAPR2026 v3 surrogate runner scaffold")
     p.add_argument("--out-dir", default=PATHS.results_dir)
     p.add_argument("--out-csv", default=str(Path(PATHS.results_dir) / "surrogate_ranking_metrics.csv"))
+    p.add_argument(
+        "--per-group-error-csv",
+        default=str(Path(PATHS.results_dir) / "per_group_prediction_error.csv"),
+    )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
+    p.add_argument("--run-random-sanity", action="store_true")
+    p.add_argument("--skip-gnn-full", action="store_true")
     return p.parse_args()
 
 
@@ -323,7 +531,17 @@ def main() -> None:
     out_csv = resolve_project_path(args.out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    cols = ["model_name", "spearman_rho_mean", "spearman_rho_std", "ndcg_mean", "ndcg_std", "precision_mean", "precision_std", "runtime_sec"]
+    cols = [
+        "model_name",
+        "spearman_rho_mean",
+        "spearman_rho_std",
+        "ndcg_mean",
+        "ndcg_std",
+        "precision_mean",
+        "precision_std",
+        "runtime_sec",
+        "train_sec",
+    ]
 
     if args.dry_run:
         pd.DataFrame(columns=cols).to_csv(out_csv, index=False)
@@ -333,14 +551,56 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Training device: {device}")
 
-    bundle = load_surrogate_data_bundle()
-    results = train_surrogate_5seeds(bundle=bundle, max_epochs=args.max_epochs)
-    result_df = pd.DataFrame([results], columns=cols)
-    result_df.to_csv(out_csv, mode="a", index=False, header=not out_csv.exists())
+    model_specs: list[tuple[str, str, bool]] = [
+        ("gnn_raw_attr", "raw_attr", False),
+        ("gnn_graph_only", "graph_only", False),
+        ("gnn_centrality", "centrality", False),
+        ("gnn_full", "full", False),
+    ]
+    if args.skip_gnn_full:
+        model_specs = [spec for spec in model_specs if spec[0] != "gnn_full"]
+    if args.run_random_sanity:
+        model_specs.append(("gnn_random", "raw_attr", True))
+
+    results_list: list[dict[str, float]] = []
+    predictions_by_model: dict[str, np.ndarray] = {}
+    base_bundle: SurrogateDataBundle | None = None
+
+    for model_name, feature_mode, randomize_train_target in model_specs:
+        try:
+            bundle = load_surrogate_data_bundle(feature_mode=feature_mode)
+            if base_bundle is None:
+                base_bundle = bundle
+            row, pred = train_surrogate_5seeds(
+                bundle=bundle,
+                max_epochs=args.max_epochs,
+                model_name=model_name,
+                randomize_train_target=randomize_train_target,
+            )
+            results_list.append(row)
+            predictions_by_model[model_name] = pred
+        except Exception as exc:
+            print(f"[WARN] Skipping {model_name}: {exc}")
+
+    if not results_list:
+        raise RuntimeError("No surrogate models produced results.")
+
+    _upsert_rows(out_csv, rows=results_list, cols=cols, key="model_name")
+    _upsert_runtime_rows(results_list)
+
+    if base_bundle is not None and predictions_by_model:
+        per_group_path = resolve_project_path(args.per_group_error_csv)
+        _write_per_group_prediction_error(
+            node_ids=base_bundle.node_ids,
+            y_true=base_bundle.graph_data.y,
+            split_mask_df=base_bundle.split_mask_df,
+            predictions=predictions_by_model,
+            out_path=per_group_path,
+        )
 
     print("[OK] Surrogate training/evaluation completed with 5 seeds.")
-    print(f" - n_nodes={bundle.graph_data.x.shape[0]}, n_features={bundle.graph_data.x.shape[1]}, n_edges={bundle.graph_data.edge_index.shape[1]}")
-    print(f" - train/val/test={int(bundle.train_mask.sum())}/{int(bundle.val_mask.sum())}/{int(bundle.test_mask.sum())}")
+    print(f" - models_written={len(results_list)}")
+    print(f" - n_nodes={base_bundle.graph_data.x.shape[0]}, n_edges={base_bundle.graph_data.edge_index.shape[1]}")
     print(f" - output={out_csv}")
 
 
