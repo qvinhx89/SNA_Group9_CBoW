@@ -6,5 +6,22 @@
   "frac_communities_spanning_both_groups": 0.842,
   "threshold": 0.7,
   "pivot_signal": true,
-  "pivot_reason": "Community-set Jaccard=0.842 > 0.7 — both groups share the same community tier. Within-community rank noise will prevent stable binary separation regardless of propagation probability."
+  "pivot_reason": "Community-set Jaccard=0.842 > 0.7 — both groups share the same community tier. Within-community rank noise will prevent stable binary separation regardless of propagation probability.",
+  "timestamp": "2026-04-08T05:36:18Z",
+  "phase": 1,
+  "config": {
+    "ic_scores_path": "data/processed/ic_scores_primary.parquet",
+    "community_labels_path": "data/processed/community_labels.parquet",
+    "top_k_pct": 0.1,
+    "boundary_band_pct": [0.1, 0.2],
+    "community_scope": "communities touching top-k or boundary band"
+  },
+  "counts": {
+    "n_labeled_nodes": 5000,
+    "n_top_k": 500,
+    "n_boundary_band": 500,
+    "n_communities_touched": 19,
+    "n_communities_spanning_boundary": 16
+  },
+  "pct_communities_spanning_boundary": 0.8421052631578947
 }

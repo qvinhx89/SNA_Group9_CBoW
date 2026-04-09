@@ -428,6 +428,7 @@ IC scores + split_masks ──────► typology thật ──────
      - Report tối thiểu: `n_dead`, `n_live`, `pct_dead`, `mean_degree_dead`, `mean_degree_live`, `mean_views_dead`, `mean_views_live`
      - **Lý do:** stats phải có trong Section 5 (Limitations): "Dead accounts (X%) have lower degree and views."
    - **LCC check** (chạy cùng lúc, hoặc trước IC sampling):
+     - Script: `src/data/lcc_audit.py`
      - Compute connected components của `graph_active`; verify 1 dominant LCC
      - Output: ghi vào `outputs/stage0_data_quality/lcc_report.json` → fields: `n_nodes_total`, `n_nodes_lcc`, `pct_lcc`, `n_components`
      - ⚠ **[IF PROBLEM: pct_lcc < 90%]** Báo cả team ngay; IC sampling restrict to LCC (loại bỏ non-LCC nodes khỏi `n_sample`). Ghi vào `docs/day1_decisions.md`.
@@ -671,6 +672,7 @@ IC scores + split_masks ──────► typology thật ──────
     "interpretation": "structural"
   }
   ```
+- **Cycle lock note (current run):** giá trị đã lock trong `docs/day1_decisions.md` dùng `n_thresholds_tested = 28` (legacy sweep summary). Tập ngưỡng `{85,87,89,91,93,95}` ở block trên là reference implementation tối giản; không tự ý ghi đè lock values của cycle đang chạy nếu chưa re-freeze version mới.
 - **Interpretation rule:** `"structural"` nếu `pct_communities_spanning_boundary > 0.70` VÀ `mean_gap_to_noise < 0.10`; `"sampling"` nếu không. `"structural"` → paper claim instability là irreducible.
 - **Lưu ý scope:** Chỉ tạo artifact này nếu `jaccard_stability < 0.85`. Nếu Jaccard pass, không cần chạy.
 
@@ -2011,10 +2013,10 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | --- | --------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------- |
 | 1   | CSR export                                          | `export_csr.py`                  | `graph_csr.npz`                                                                                             | M1 (6/4) |
 | 2   | **Dead account audit**                              | `src/data/dead_account_audit.py` | `outputs/stage0_data_quality/dead_account_report.json`                                                      | M0 (6/4) |
-| 3   | **LCC check**                                       | `src/data/dead_account_audit.py` | `outputs/stage0_data_quality/lcc_report.json`                                                               | M0 (6/4) |
+| 3   | **LCC check**                                       | `src/data/lcc_audit.py`          | `outputs/stage0_data_quality/lcc_report.json`                                                               | M0 (6/4) |
 | 4   | Day-1 benchmark                                     | `day1_benchmark.py`              | `ic_runtime_benchmark.json`                                                                                 | M2 (7/4) |
 | 5   | One-hop ρ check                                     | `day1_benchmark.py`              | `one_hop_correlation.json`                                                                                  | M2 (7/4) |
-| 6   | **IC pilot + stability (gate fail)**                                | `ic_labels_primary.py`           | `outputs/day1_benchmark/ic_pilot_diagnostics.json` (`jaccard_stability`, `cv_score`, per-quintile CV table) | 9/4      |
+| 6   | **IC pilot + stability (gate fail)**                | `ic_labels_primary.py`           | `outputs/day1_benchmark/ic_pilot_diagnostics.json` (`jaccard_stability`, `cv_score`, per-quintile CV table) | 9/4      |
 | 7   | IC labels (full N×R)                                | `ic_labels_primary.py`           | `ic_scores_primary.parquet`, `regression_targets.parquet`, `classification_labels.parquet`                  | 10/4     |
 | 8   | **[MUST khi Jaccard < 0.85] Stability explanation** | manual/script (extract phase1/2) | `outputs/day1_benchmark/stability_explanation.json`                                                         | 10/4     |
 | 9   | **Split mask** [M0-locked]                          | `ic_labels_primary.py`           | `split_masks.parquet` (cùng lúc #7)                                                                         | 10/4     |
@@ -2030,7 +2032,7 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | 3   | **Proxies thật (full graph)**                                            | `diffusion_proxies.py`            | `data/processed/diffusion_proxies.parquet` + `outputs/mapr2026_v3_results/runtime_breakdown.csv`                                                                                | 15/4     |
 | 4   | Typology IC×views                                                        | `typology_ic_views.py --pct 0.10` | `data/processed/typology_labels_ic_views.parquet` + `outputs/mapr2026_v3_results/typology_quadrant_report.json`                                                                 | 12/4     |
 | 5   | Structural profiling (MWU + Cliff's Δ + BH-FDR)                          | `typology_ic_views.py`            | `outputs/mapr2026_v3_results/structural_profiling.csv`                                                                                                                          | 18/4     |
-| 6   | **life_time validation typology (gate fail)**                                        | `typology_ic_views.py`            | `outputs/mapr2026_v3_results/lifetime_validation.json`                                                                                                                          | 18/4     |
+| 6   | **life_time validation typology (gate fail)**                            | `typology_ic_views.py`            | `outputs/mapr2026_v3_results/lifetime_validation.json`                                                                                                                          | 18/4     |
 | 7   | Null model (500 nodes × 3 × 100 runs)                                    | `null_model_typology.py`          | `outputs/mapr2026_v3_results/null_model_typology_summary.json`                                                                                                                  | 18/4     |
 | 8   | Views-permutation null (**[MUST — B5 core]**)                            | `typology_ic_views.py`            | `views_permutation_null_summary.json`                                                                                                                                           | 18/4     |
 | 9   | IC-score permutation null (**[MUST — B5 core]**)                         | `typology_ic_views.py`            | `ic_permutation_null_summary.json`                                                                                                                                              | 18/4     |
@@ -2059,3 +2061,37 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 > **Các bước có tính metrics (2–8, 10, 11):** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).
 > **BH-FDR:** áp dụng cho MWU của Person 2 (structural profiling + `life_time` validation). Person 3 không bắt buộc chạy MWU.
+
+---
+
+## 8b) Minimal handoff package giữa teammates
+
+Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dưới đây để không phải rerun:
+
+**Từ Person 1 → Person 2 và 3:**
+
+- `data/processed/graph_csr.npz`
+- `data/processed/ic_scores_primary.parquet`
+- `data/processed/regression_targets.parquet`
+- `data/processed/classification_labels.parquet`
+- **`data/processed/split_masks.parquet`** ← critical cho Person 3
+- `data/processed/node_attributes.parquet`
+- `outputs/day1_benchmark/ic_runtime_benchmark.json`
+- `outputs/day1_benchmark/one_hop_correlation.json`
+- `docs/day1_decisions.md` (chứa `n_sample`, `N_runs`, `narrative_branch`)
+
+**Từ Person 2 → Person 3:**
+
+- `data/processed/diffusion_proxies.parquet` (full graph)
+- `outputs/mapr2026_v3_results/runtime_breakdown.csv`
+
+**Option B lockstep rules — áp dụng khi `quality_gate_pass_all=false`:**
+
+Active handoff version: `person1_day1_20260409_p1_day1_v3i_optionB_lockstep`
+
+1. Dùng đúng 1 version tag handoff cho toàn bộ experiment cycle — không mix artifacts từ các version khác nhau.
+2. Không tự re-split data local — chỉ load `data/processed/split_masks.parquet` từ handoff (SHA256: `005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104`).
+3. Giữ canonical branch (`classification_labels.parquet`) và consensus branch (`classification_labels_consensus.parquet`) tách biệt — không ghi đè canonical.
+4. Binary metrics phải khai báo uncertainty: loại `is_uncertain=1` hoặc `vote_count=1` khi claim strict binary performance; ghi rõ evaluation scope (all nodes vs non-uncertain subset).
+5. Regression là PRIMARY objective — dùng `regression_targets.parquet` (`y = log1p(ic_score_mean)`) cho toàn bộ surrogate ranking pipeline.
+6. Nếu cần thay đổi artifacts: tạo version tag mới (`freeze_day1_handoff.py --version-tag <new_tag>`) — không overwrite handoff directory đã có.

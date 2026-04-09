@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-06T16:08:22",
+  "timestamp": "2026-04-09T19:30:01",
   "config": {
     "n_pilot_nodes": 200,
     "n_pilot_runs": 50,
@@ -20,6 +20,43 @@
     "rank_stability": 0.673199023270778,
     "cv_score": 0.21087886200621908,
     "cv_noise_count": 166,
+    "per_quintile_cv": [
+      {
+        "quintile": 0,
+        "n_nodes": 40,
+        "cv_mean": 0.754952666071976,
+        "cv_median": 0.3336776091063897,
+        "cv_noise_count": 15
+      },
+      {
+        "quintile": 1,
+        "n_nodes": 41,
+        "cv_mean": 1.9550463619245257,
+        "cv_median": 1.1575836897002307,
+        "cv_noise_count": 34
+      },
+      {
+        "quintile": 2,
+        "n_nodes": 39,
+        "cv_mean": 3.172137809389996,
+        "cv_median": 2.723674498666604,
+        "cv_noise_count": 38
+      },
+      {
+        "quintile": 3,
+        "n_nodes": 40,
+        "cv_mean": 3.3661215428017677,
+        "cv_median": 3.1886363842032783,
+        "cv_noise_count": 39
+      },
+      {
+        "quintile": 4,
+        "n_nodes": 40,
+        "cv_mean": 3.5750534025887064,
+        "cv_median": 3.231818319710227,
+        "cv_noise_count": 40
+      }
+    ],
     "jaccard_stability": 0.14285714285714285,
     "n_pilot_nodes": 200,
     "n_pilot_runs": 50

@@ -174,7 +174,7 @@ Consumer guidance:
 Status:
 - Option B is activated for operational handoff.
 - Meaning: keep truthful gate status (`pass_all=false`) while allowing downstream progress under fixed governance.
-- Active lockstep package for current cycle: `person1_day1_20260408_p1_day1_v3g_optionB_lockstep`.
+- Active lockstep package for current cycle: `person1_day1_20260409_p1_day1_v3i_optionB_lockstep`.
 
 Additional alignment:
 - `one_hop_correlation.json` now includes `jaccard_at_10pct` and `ndcg_at_10pct` for stricter top-k agreement reporting.
@@ -219,3 +219,20 @@ Narrative lock (paper/report wording):
 - Regression target (`y = log1p(ic_score_mean)`) is PRIMARY by formulation for simulation-derived continuous IC signal.
 - Binary top-10 remains supplementary/provisional due to threshold sensitivity and uncertainty around boundary nodes.
 - Option B is an operational governance mode, not a claim that regression is only a fallback.
+
+## 13) M3 Views/IC Alignment Check (RQ2 Narrative Lookup)
+
+Scope:
+- Source join: `data/processed/ic_scores_primary.parquet` x `data/processed/node_attributes.parquet`
+- Overlap nodes used: 5000
+
+Measured result:
+- `spearmanr(views, ic_score_mean) = 0.46886009249660393`
+- `p_value = 9.170499016140683e-272`
+
+Narrative tier (from M3 lookup table):
+- `strong_divergence`
+
+Locked RQ2 narrative for this cycle:
+- Popularity (`views`) does not reliably represent diffusion potential (`ic_score_mean`) on this graph.
+- Hidden influencers are expected and should be interpreted through structural signals (betweenness / cross-community connectivity), not raw popularity alone.
