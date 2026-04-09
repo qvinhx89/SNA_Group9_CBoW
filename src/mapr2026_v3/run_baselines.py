@@ -99,7 +99,8 @@ def get_loss_function() -> nn.Module:
 
 def _ensure_node_id_str(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["node_id"] = df["node_id"].astype(str)
+    # Normalize potential float representations like "123.0" to "123"
+    df["node_id"] = df["node_id"].astype(str).str.replace(r"\.0$", "", regex=True)
     return df
 
 
@@ -246,6 +247,7 @@ def build_node2vec_model(edge_index: torch.Tensor, embedding_dim: int = 64) -> A
         num_negative_samples=1,
         p=1.0,
         q=1.0,
+        sparse=True,
     )
 
 
@@ -509,8 +511,10 @@ def _safe_read_parquet(path_like: str | Path) -> pd.DataFrame | None:
 
 def _align_series_to_nodes(df: pd.DataFrame, node_ids: pd.Series, value_col: str) -> pd.Series:
     aligned = _ensure_node_id_str(df).set_index("node_id")
-    out = aligned.reindex(node_ids.astype(str))[value_col]
-    return pd.to_numeric(out, errors="coerce").fillna(0.0)
+    clean_node_ids = node_ids.astype(str).str.replace(r"\.0$", "", regex=True)
+    out = aligned.reindex(clean_node_ids)[value_col]
+    out_np = pd.to_numeric(out, errors="coerce").fillna(0.0).to_numpy()
+    return pd.Series(out_np, index=node_ids.index)
 
 
 def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]:
