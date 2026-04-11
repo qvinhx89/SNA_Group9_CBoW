@@ -207,6 +207,13 @@ def load_surrogate_data_bundle(
     if feature_mode == "raw_attr":
         merged = merged.merge(raw_features_df, on="node_id", how="left")
         feature_cols = ["views_log", "views_per_day", "life_time"]
+    elif feature_mode == "random":
+        rng = np.random.default_rng(42)
+        random_features = rng.standard_normal((len(merged), 3), dtype=np.float32)
+        merged["rand_feat_0"] = random_features[:, 0]
+        merged["rand_feat_1"] = random_features[:, 1]
+        merged["rand_feat_2"] = random_features[:, 2]
+        feature_cols = ["rand_feat_0", "rand_feat_1", "rand_feat_2"]
     elif feature_mode in {"centrality", "graph_only", "full"}:
         centrality_df = pd.read_parquet(resolve_project_path(centrality_path))
         centrality_df = _ensure_node_id_str(centrality_df)
@@ -519,6 +526,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
     p.add_argument("--run-random-sanity", action="store_true")
+    p.add_argument("--only-random", action="store_true")
     p.add_argument("--skip-gnn-full", action="store_true")
     return p.parse_args()
 
@@ -560,7 +568,9 @@ def main() -> None:
     if args.skip_gnn_full:
         model_specs = [spec for spec in model_specs if spec[0] != "gnn_full"]
     if args.run_random_sanity:
-        model_specs.append(("gnn_random", "raw_attr", True))
+        model_specs.append(("gnn_random", "random", False))
+    if args.only_random:
+        model_specs = [("gnn_random", "random", False)]
 
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
