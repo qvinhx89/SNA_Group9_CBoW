@@ -133,13 +133,15 @@ def _compute_two_hop(
     inv_deg: np.ndarray,
     one_hop: np.ndarray,
 ) -> np.ndarray:
-    """Compute two-hop proxy with O(E) aggregation under undirected CSR contract.
+    """Compute plan-conformant weighted-cascade two-hop proxy in O(E).
 
-    For each node u:
-      two_hop(u) = sum_{v in N(u)} sum_{w in N(v), w != u} 1/deg(w)
+    Required formula from MAPR2026 v3 docs:
+      two_hop(u) = sum_{v in N(u)} p(u,v) * (1 + sum_{w in N(v), w != u} p(v,w))
+      where p(x,y) = 1 / deg(y)
 
-    The CSR contract for this pipeline stores undirected edges in both directions,
-    so each neighbor v contributes one back-edge term to subtract.
+    Using one_hop(v) = sum_{w in N(v)} 1/deg(w), each neighbor v contributes:
+      inv_deg[v] * (1 + one_hop[v] - inv_deg[u])
+    because u is always one of v's neighbors under the bidirectional CSR contract.
     """
     n_nodes = inv_deg.shape[0]
     two_hop = np.zeros(n_nodes, dtype=np.float64)
@@ -148,7 +150,7 @@ def _compute_two_hop(
         nbrs = indices[start:end]
         if not nbrs.size:
             continue
-        two_hop[u] = float(one_hop[nbrs].sum() - (nbrs.size * inv_deg[u]))
+        two_hop[u] = float((inv_deg[nbrs] * (1.0 + one_hop[nbrs] - inv_deg[u])).sum())
     return two_hop
 
 

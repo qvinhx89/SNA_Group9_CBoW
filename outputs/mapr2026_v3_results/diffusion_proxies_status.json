@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-07T12:51:44",
+  "timestamp": "2026-04-11T11:33:41",
   "mode": "real_full_graph",
   "proxies_path": "data\\processed\\diffusion_proxies.parquet",
   "rows": 168114,
   "ready_for_eval_runtime": true,
   "runtime_csv_path": "outputs\\mapr2026_v3_results\\runtime_breakdown.csv",
-  "inference_sec_full_graph": 0.8275513648986816,
+  "inference_sec_full_graph": 1.089245080947876,
   "csr_detected": true,
   "n_nodes": 168114
 }

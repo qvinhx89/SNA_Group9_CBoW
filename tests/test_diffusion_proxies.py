@@ -31,7 +31,7 @@ def test_one_hop_two_hop_on_toy_path_graph() -> None:
     two_hop = _compute_two_hop(indptr, indices, inv_deg, one_hop)
 
     np.testing.assert_allclose(one_hop, np.array([0.5, 2.0, 0.5]), atol=1e-12, rtol=0.0)
-    np.testing.assert_allclose(two_hop, np.array([1.0, 0.0, 1.0]), atol=1e-12, rtol=0.0)
+    np.testing.assert_allclose(two_hop, np.array([1.0, 2.0, 1.0]), atol=1e-12, rtol=0.0)
 
 
 def test_csr_symmetry_check_passes_for_bidirectional_csr() -> None:

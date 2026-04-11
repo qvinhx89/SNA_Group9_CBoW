@@ -163,6 +163,50 @@ def _hidden_betweenness_mean(g: nx.Graph, labels: np.ndarray) -> float:
     return float(np.mean(vals))
 
 
+def _build_null_interpretation(
+    hidden_bet_real: float,
+    hidden_bet_null_mean: float,
+    hidden_bet_null_std: float,
+    rho_mean: float,
+) -> tuple[str, float, float]:
+    """Interpret null-model result using scale-aware Hidden-betweenness gap.
+
+    We avoid fixed absolute thresholds (e.g., 0.05), because Hidden betweenness is
+    typically on a much smaller scale in this 500-node normalized-centrality setup.
+    """
+    gap = float(hidden_bet_real - hidden_bet_null_mean)
+    adaptive_floor = max(1e-12, 0.1 * max(abs(hidden_bet_real), abs(hidden_bet_null_mean), 1e-6))
+    sigma = float(max(hidden_bet_null_std, adaptive_floor))
+    gap_sigma = float(gap / sigma)
+
+    if gap_sigma >= 1.0:
+        if rho_mean >= 0.4:
+            interpretation = (
+                "Hidden-node betweenness exceeds configuration null on a scale-aware margin "
+                f"(gap={gap:.3e}, z={gap_sigma:.2f}); structural signal is likely not only a degree artifact "
+                f"(rho_mean={rho_mean:.3f})."
+            )
+        else:
+            interpretation = (
+                "Hidden-node betweenness exceeds configuration null on a scale-aware margin "
+                f"(gap={gap:.3e}, z={gap_sigma:.2f}), but IC rank agreement is weak (rho_mean={rho_mean:.3f}); "
+                "treat as suggestive rather than conclusive."
+            )
+    elif rho_mean >= 0.4:
+        interpretation = (
+            "Hidden-node betweenness is comparable to configuration null on this scale "
+            f"(gap={gap:.3e}, z={gap_sigma:.2f}); report potential degree-distribution artifact "
+            f"(rho_mean={rho_mean:.3f})."
+        )
+    else:
+        interpretation = (
+            "Null-model comparison is inconclusive: Hidden-betweenness gap is within one adaptive sigma "
+            f"(gap={gap:.3e}, z={gap_sigma:.2f}) and rank agreement is weak (rho_mean={rho_mean:.3f})."
+        )
+
+    return interpretation, gap, gap_sigma
+
+
 def main() -> None:
     args = parse_args()
     out_dir = ensure_dir(args.out_dir)
@@ -267,16 +311,12 @@ def main() -> None:
     hidden_bet_null_mean = float(np.mean(hidden_bet_null_values)) if hidden_bet_null_values else 0.0
     hidden_bet_null_std = float(np.std(hidden_bet_null_values, ddof=1)) if len(hidden_bet_null_values) > 1 else 0.0
 
-    if hidden_bet_real > (hidden_bet_null_mean + max(0.05, hidden_bet_null_std)):
-        interpretation = (
-            "Null graph Hidden nodes do NOT show elevated betweenness — typology reflects true structural "
-            "position, not degree-distribution artifact."
-        )
-    else:
-        interpretation = (
-            "Hidden-node betweenness on real subgraph is comparable to configuration null; "
-            "report potential degree-distribution artifact as limitation."
-        )
+    interpretation, hidden_bet_gap, hidden_bet_gap_sigma = _build_null_interpretation(
+        hidden_bet_real=hidden_bet_real,
+        hidden_bet_null_mean=hidden_bet_null_mean,
+        hidden_bet_null_std=hidden_bet_null_std,
+        rho_mean=rho_mean,
+    )
 
     payload: dict[str, Any] = {
         "timestamp": now_iso(),
@@ -288,6 +328,8 @@ def main() -> None:
         "hidden_betweenness_real_subgraph_mean": float(hidden_bet_real),
         "hidden_betweenness_null_mean": hidden_bet_null_mean,
         "hidden_betweenness_null_std": hidden_bet_null_std,
+        "hidden_betweenness_gap": float(hidden_bet_gap),
+        "hidden_betweenness_gap_sigma": float(hidden_bet_gap_sigma),
         "interpretation": interpretation,
         "top_pct": float(args.top_pct),
         "sample_seed": int(args.sample_seed),
