@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-04-11T11:36:39",
+  "timestamp": "2026-04-12T21:42:12",
   "n_nodes_labeled": 5000,
-  "nmi_community_language_labeled": 0.47668295019595364,
+  "nmi_community_language_labeled": 0.48318175879946035,
   "neighbor_language_diversity": {
     "metric": "neighbor_language_entropy",
     "comparator": "Hidden_vs_Overrated",

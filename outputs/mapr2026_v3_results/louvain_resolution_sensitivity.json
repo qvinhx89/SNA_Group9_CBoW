@@ -1,16 +1,40 @@
 {
-  "timestamp": "2026-04-06T23:49:42",
+  "timestamp": "2026-04-12T14:12:12",
   "graph_path": "data\\processed\\graph_active.edgelist",
   "n_nodes": 168114,
   "n_edges": 6797557,
   "resolutions_tested": [
     0.5,
     1.0,
+    1.1,
+    1.3,
+    1.4,
+    1.5,
+    1.55,
+    1.6,
     2.0
   ],
+  "resolutions_requested_this_run": [
+    1.4,
+    1.55,
+    1.6
+  ],
+  "resolutions_auto_added_this_run": [],
   "n_runs_per_resolution": 10,
+  "n_runs_by_resolution": {
+    "0.5": 10,
+    "1.0": 10,
+    "1.1": 10,
+    "1.3": 10,
+    "1.4": 10,
+    "1.5": 10,
+    "1.55": 10,
+    "1.6": 10,
+    "2.0": 10
+  },
   "seed_start": 0,
-  "nmi_threshold": 0.85,
+  "nmi_threshold": 0.7,
+  "merge_existing": true,
   "results": [
     {
       "resolution": 0.5,
@@ -44,8 +68,116 @@
       "mean_nmi_louvain": 0.7008908172938347,
       "std_nmi_louvain": 0.03502055423191821,
       "min_nmi_louvain": 0.6390788405184723,
-      "stability_warning": true,
+      "stability_warning": false,
       "over_merge_warning": true,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.1,
+      "n_runs": 10,
+      "best_seed": 6,
+      "best_modularity": 0.4231252972487002,
+      "modularity_mean": 0.42113369388119304,
+      "modularity_std": 0.0016762410721012527,
+      "n_communities": 24,
+      "pct_nodes_top3_communities": 49.23147388081897,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6996795635692487,
+      "std_nmi_louvain": 0.02463446032655797,
+      "min_nmi_louvain": 0.6514597671958564,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.3,
+      "n_runs": 10,
+      "best_seed": 0,
+      "best_modularity": 0.41974862300122606,
+      "modularity_mean": 0.4161022989374753,
+      "modularity_std": 0.0015293774533351066,
+      "n_communities": 26,
+      "pct_nodes_top3_communities": 40.07756641326719,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6876114974957428,
+      "std_nmi_louvain": 0.03328589239047627,
+      "min_nmi_louvain": 0.6149552098605141,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.4,
+      "n_runs": 10,
+      "best_seed": 5,
+      "best_modularity": 0.4144542707526734,
+      "modularity_mean": 0.4116311466608001,
+      "modularity_std": 0.002131149197156365,
+      "n_communities": 29,
+      "pct_nodes_top3_communities": 37.197377969711034,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6799809659242503,
+      "std_nmi_louvain": 0.02597233387656326,
+      "min_nmi_louvain": 0.6262966475975121,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.5,
+      "n_runs": 10,
+      "best_seed": 9,
+      "best_modularity": 0.4093889756900554,
+      "modularity_mean": 0.40630656013122024,
+      "modularity_std": 0.0029785434624476706,
+      "n_communities": 26,
+      "pct_nodes_top3_communities": 33.032347097802685,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6853922839211385,
+      "std_nmi_louvain": 0.026815502819901322,
+      "min_nmi_louvain": 0.6399661829726797,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.55,
+      "n_runs": 10,
+      "best_seed": 2,
+      "best_modularity": 0.40786215588369157,
+      "modularity_mean": 0.40334100005143786,
+      "modularity_std": 0.0034665304609215204,
+      "n_communities": 32,
+      "pct_nodes_top3_communities": 32.614178474130654,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.677882721118967,
+      "std_nmi_louvain": 0.020923712104758716,
+      "min_nmi_louvain": 0.6371957426383072,
+      "stability_warning": true,
+      "over_merge_warning": false,
+      "over_split_warning": false
+    },
+    {
+      "resolution": 1.6,
+      "n_runs": 10,
+      "best_seed": 2,
+      "best_modularity": 0.4052396602806919,
+      "modularity_mean": 0.4017758580961258,
+      "modularity_std": 0.0030224512526040178,
+      "n_communities": 34,
+      "pct_nodes_top3_communities": 31.98781779030896,
+      "singleton_count": 0,
+      "singleton_pct": 0.0,
+      "mean_nmi_louvain": 0.6905434308988654,
+      "std_nmi_louvain": 0.015754080992916013,
+      "min_nmi_louvain": 0.6534177107259617,
+      "stability_warning": true,
+      "over_merge_warning": false,
       "over_split_warning": false
     },
     {
@@ -67,6 +199,258 @@
       "over_split_warning": false
     }
   ],
+  "evaluation_framework": {
+    "criteria": {
+      "hard_gate": {
+        "mean_nmi_min": 0.67,
+        "min_nmi_min": 0.6,
+        "modularity_mean_min": 0.40007700918713335,
+        "modularity_retain_ratio": 0.95
+      },
+      "structure_targets": {
+        "n_communities_low": 30,
+        "n_communities_high": 80,
+        "pct_top3_nodes_max": 50.0,
+        "singleton_pct_max": 5.0
+      },
+      "weights_requested": {
+        "stability": 0.35,
+        "modularity": 0.25,
+        "structure": 0.2,
+        "downstream": 0.2
+      },
+      "weights_applied": {
+        "stability": 0.35,
+        "modularity": 0.25,
+        "structure": 0.2,
+        "downstream": 0.0
+      }
+    },
+    "ranked_resolutions": [
+      {
+        "resolution": 1.1,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.9571736416130558,
+          "modularity": 1.0,
+          "structure": 0.91,
+          "downstream": 0.5
+        },
+        "composite_score": 0.9587634682057119,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6996795635692487,
+          "min_nmi_louvain": 0.6514597671958564,
+          "modularity_mean": 0.42113369388119304,
+          "n_communities": 24,
+          "pct_nodes_top3_communities": 49.23147388081897,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.0,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.8819422117629565,
+          "modularity": 0.9928069625622545,
+          "structure": 0.8175226929345564,
+          "downstream": 0.5
+        },
+        "composite_score": 0.9004825666806371,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.7008908172938347,
+          "min_nmi_louvain": 0.6390788405184723,
+          "modularity_mean": 0.42098223235987386,
+          "n_communities": 21,
+          "pct_nodes_top3_communities": 55.934663383180464,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.3,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.5126798746659885,
+          "modularity": 0.7610547426235078,
+          "structure": 0.9400000000000001,
+          "downstream": 0.5
+        },
+        "composite_score": 0.6971270522362162,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6876114974957428,
+          "min_nmi_louvain": 0.6149552098605141,
+          "modularity_mean": 0.4161022989374753,
+          "n_communities": 26,
+          "pct_nodes_top3_communities": 40.07756641326719,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.6,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.802998444989825,
+          "modularity": 0.08067979046443766,
+          "structure": 1.0,
+          "downstream": 0.5
+        },
+        "composite_score": 0.6265242542031851,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6905434308988654,
+          "min_nmi_louvain": 0.6534177107259617,
+          "modularity_mean": 0.4017758580961258,
+          "n_communities": 34,
+          "pct_nodes_top3_communities": 31.98781779030896,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.4,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.4518057600481495,
+          "modularity": 0.5487158895876082,
+          "structure": 0.985,
+          "downstream": 0.5
+        },
+        "composite_score": 0.615388735517193,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6799809659242503,
+          "min_nmi_louvain": 0.6262966475975121,
+          "modularity_mean": 0.4116311466608001,
+          "n_communities": 29,
+          "pct_nodes_top3_communities": 37.197377969711034,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.5,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.6317657154937653,
+          "modularity": 0.29584671255700157,
+          "structure": 0.9400000000000001,
+          "downstream": 0.5
+        },
+        "composite_score": 0.6038495982025852,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6853922839211385,
+          "min_nmi_louvain": 0.6399661829726797,
+          "modularity_mean": 0.40630656013122024,
+          "n_communities": 26,
+          "pct_nodes_top3_communities": 33.032347097802685,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 1.55,
+        "hard_gate_pass": true,
+        "gate_checks": {
+          "mean_nmi_accept": true,
+          "min_nmi_accept": true,
+          "modularity_accept": true
+        },
+        "component_scores": {
+          "stability": 0.48630544152043276,
+          "modularity": 0.1550097231225254,
+          "structure": 1.0,
+          "downstream": 0.5
+        },
+        "composite_score": 0.5111991691409785,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.677882721118967,
+          "min_nmi_louvain": 0.6371957426383072,
+          "modularity_mean": 0.40334100005143786,
+          "n_communities": 32,
+          "pct_nodes_top3_communities": 32.614178474130654,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 2.0,
+        "hard_gate_pass": false,
+        "gate_checks": {
+          "mean_nmi_accept": false,
+          "min_nmi_accept": true,
+          "modularity_accept": false
+        },
+        "component_scores": {
+          "stability": 0.273678319579304,
+          "modularity": 0.0,
+          "structure": 1.0,
+          "downstream": 0.5
+        },
+        "composite_score": 0.3697342648159455,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.6677243650848642,
+          "min_nmi_louvain": 0.626029961035829,
+          "modularity_mean": 0.3826934743357507,
+          "n_communities": 49,
+          "pct_nodes_top3_communities": 23.4233912702095,
+          "singleton_pct": 0.0
+        }
+      },
+      {
+        "resolution": 0.5,
+        "hard_gate_pass": false,
+        "gate_checks": {
+          "mean_nmi_accept": false,
+          "min_nmi_accept": false,
+          "modularity_accept": false
+        },
+        "component_scores": {
+          "stability": 0.02305830533281721,
+          "modularity": 0.0,
+          "structure": 0.3537046290017488,
+          "downstream": 0.5
+        },
+        "composite_score": 0.09851416583354473,
+        "summary_metrics": {
+          "mean_nmi_louvain": 0.4627865989155364,
+          "min_nmi_louvain": 0.3519235424661808,
+          "modularity_mean": 0.2873018379732623,
+          "n_communities": 315,
+          "pct_nodes_top3_communities": 74.5369213747814,
+          "singleton_pct": 0.05472477009648215
+        }
+      }
+    ],
+    "recommended_resolution": 1.1,
+    "notes": [
+      "Downstream seed-level robustness is not computed in this script; downstream weight is excluded from applied score.",
+      "Use this ranking jointly with Task 5 seed-level reruns before changing primary resolution.",
+      "All compared resolutions use the same n_runs."
+    ]
+  },
   "resolution_1_0_decision": {
     "resolution": 1.0,
     "n_communities": 21,

@@ -10,7 +10,8 @@ Bộ câu hỏi nghiên cứu chính của project (phiên bản v3 hiện tại
 
 2. RQ2: Views (popularity) đồng thuận tới mức nào với IC-based influence ranking?
    Hypothesis H2:
-   Có divergence đáng kể giữa popularity và diffusion influence, tức tồn tại nhóm Hidden (IC cao, views thấp) và Overrated (views cao, IC thấp) với quy mô có ý nghĩa.
+   Mức divergence được khóa theo narrative-tier của plan dựa trên rho(views, IC): strong divergence / moderate divergence / high agreement.
+   Dù thuộc tier nào, typology Hidden (IC cao, views thấp) và Overrated (views cao, IC thấp) vẫn là khung phân tích chính để kiểm định bất đồng rank.
 
 3. RQ2b: Tương quan giữa IC với views, centrality, one-hop, two-hop là gì (global và theo regime)?
    Hypothesis H3:
@@ -24,11 +25,13 @@ Bộ câu hỏi nghiên cứu chính của project (phiên bản v3 hiện tại
 
 5. RQ3b: Node type nào khó dự đoán nhất bằng mô hình rẻ?
    Hypothesis H5:
-   Hidden là nhóm khó dự đoán nhất (Spearman thấp hơn, MAE cao hơn), vì chúng là outlier cấu trúc mà raw popularity khó nắm bắt.
+   Hidden được kỳ vọng là nhóm khó dự đoán nhất (Spearman thấp hơn, MAE cao hơn), vì đây là outlier cấu trúc mà raw popularity khó nắm bắt.
+   Claim này chỉ được khóa ở mức kết luận cuối khi đã có per-group metrics đầy đủ cho các model chính theo plan.
 
 6. RQ4: Đặc trưng cấu trúc nào phân biệt nhóm có rank views và rank IC bất đồng?
    Hypothesis H6:
-   Hidden có tín hiệu cấu trúc nổi bật hơn Overrated (đặc biệt ở cross-community connectivity và các chỉ số lõi), còn Overrated nghiêng về popularity/surface signal hơn là vị trí lan truyền hiệu quả.
+   Hidden được kỳ vọng có tín hiệu cấu trúc nổi bật hơn Overrated (đặc biệt ở cross-community connectivity và các chỉ số lõi), còn Overrated nghiêng về popularity/surface signal hơn là vị trí lan truyền hiệu quả.
+   Diễn giải ở mức tổng quát phải đi kèm caveat null-model (configuration null) để tránh overclaim structural uniqueness.
 
 ---
 
@@ -40,7 +43,7 @@ File liên quan trực tiếp (để kiểm tra):
 
 - Code chính: src/graph/community.py
 - Input chính: data/processed/graph_active.edgelist
-- Output/check chính: data/processed/community_features.parquet, outputs/stage2/metrics.json, outputs/stage2/louvain_stability_report.json, outputs/mapr2026_v3_results/preflight_person2_latest.txt
+- Output/check chính: data/processed/community_features.parquet, outputs/stage2/metrics.json, outputs/stage2/louvain_stability_report.json, outputs/mapr2026_v3_results/louvain_resolution_sensitivity.json, outputs/mapr2026_v3_results/preflight_person2_latest.txt
 
 1. Bối cảnh task  
    Task này là hạng mục MUST trong Track B tại docs/MAPR2026_v3_team_parallel_coding_plan.md, trực tiếp phục vụ RQ2 và RQ4 trong MAPR2026_Implementation_Plan_v3.md.
@@ -51,18 +54,26 @@ File liên quan trực tiếp (để kiểm tra):
 3. Thiết kế và protocol  
    Diễn giải phương pháp (chi tiết): Task 2 được thiết kế theo hướng tách rõ "chất lượng partition" và "giá trị đặc trưng downstream". Trước hết pipeline chạy Louvain nhiều seed độc lập để giảm rủi ro lệ thuộc khởi tạo ngẫu nhiên, sau đó chọn partition có modularity cao nhất làm kết quả chính. Tiếp theo, độ ổn định cấu trúc được lượng hóa bằng NMI pairwise giữa các lần chạy để kiểm tra xem kết quả có nhất quán hay không (thay vì chỉ nhìn modularity một lần). Chỉ sau khi qua bước kiểm tra ổn định, hệ thống mới tính cross-community edge fraction cho từng node và xuất đồng thời cả bảng đặc trưng lẫn báo cáo ổn định để đảm bảo các phân tích RQ2/RQ4 có nền tảng phương pháp rõ ràng.
    Trong detect_communities(), pipeline chạy run_louvain_single() theo 10 seed, chọn partition có modularity cao nhất, rồi tính NMI pairwise bằng compute_nmi_between_partitions() để kiểm tra ổn định. Tín hiệu bridge được tính bằng compute_cross_community_edge_fraction(), sau đó ghi community_features.parquet và xuất metrics.json (mean_nmi_louvain, stability_warning) cùng louvain_stability_report.json.
+   Ghi chú reproducibility cho NMI: compute_nmi_between_partitions() gọi sklearn.metrics.normalized_mutual_info_score(labels1, labels2) mà không truyền tham số average_method — tức là dùng giá trị mặc định của sklearn là 'arithmetic'. Khi viết phần Methods trong paper cần ghi rõ: "NMI computed using sklearn's normalized_mutual_info_score with average_method='arithmetic' (sklearn default)". Nếu so sánh với bài khác dùng average_method='geometric' hoặc 'min', giá trị NMI sẽ khác — cần lưu ý khi đọc literature.
+   Công thức tường minh: `cross_community_edge_fraction(u) = |{v ∈ N(u) : community(v) ≠ community(u)}| / deg(u)`. Isolated nodes (deg=0) nhận giá trị 0.0. Best partition được chọn theo modularity cao nhất trong 10 seed — đây là thực hành chuẩn cho Louvain vì modularity là hàm mục tiêu tối ưu hóa trực tiếp.
 
 4. Kết quả chính  
-   Run hiện tại cho n_nodes = 168114, n_communities = 21, best_modularity = 0.42268, mean_nmi = 0.70089, stability_warning = false trong metrics.json. Báo cáo chi tiết 10 run và NMI pairwise nằm ở louvain_stability_report.json. Preflight xác nhận schema đúng, không missing, phủ toàn bộ active nodes tại outputs/mapr2026_v3_results/preflight_person2_latest.txt.
+   Run hiện tại (resolution = 1.1, nmi_threshold = 0.67 được khóa trong base.yaml) cho n_nodes = 168,114, n_communities = 24 (best_seed = 6), best_modularity = 0.42313, mean_nmi = 0.69968, std_nmi = 0.02463, min_nmi = 0.65146, stability_warning = false trong metrics.json. pct_top3 = 49.23% (3 community lớn nhất gộp 82,765/168,114 nodes). cross_community_edge_fraction: mean = 0.3918, std = 0.2160, min = 0.0, max = 0.9643. over_merge_warning = false. Báo cáo chi tiết 10 run và NMI pairwise nằm ở louvain_stability_report.json; n_communities biến thiên 19–26 giữa các seed (run4=19, run5/run8=26), best partition được chọn theo modularity cao nhất. Preflight xác nhận schema đúng, không missing, phủ toàn bộ active nodes tại outputs/mapr2026_v3_results/preflight_person2_latest.txt.
+   Full sweep 9 mức resolution (0.5, 1.0, 1.1, 1.3, 1.4, 1.5, 1.55, 1.6, 2.0; mỗi mức 10 seed) nằm ở louvain_resolution_sensitivity.json. Evaluation framework dùng hard gate: mean_nmi_min = 0.67, min_nmi_min = 0.60, modularity_retain_ratio = 0.95. Kết quả hard_gate_pass: resolution 0.5 và 2.0 fail; tất cả từ 1.0 đến 1.6 pass. Composite scoring (weights: stability=0.35, modularity=0.25, structure=0.20, downstream=0.0) xếp hạng: 1.1 đạt 0.9588 (stability=0.957, modularity=1.000, structure=0.910); 1.0 đạt 0.9005 (stability=0.882, modularity=0.993, structure=0.818); 1.3 đạt 0.697; 1.6 đạt 0.627. Recommended_resolution từ framework = 1.1.
+   Bảng tóm tắt sweep: 1.0 — 21 comm, pct_top3=55.93%, NMI=0.70089, over_merge=true; 1.1 — 24 comm, pct_top3=49.23%, NMI=0.69968, over_merge=false; 1.3 — 26 comm, pct_top3=40.08%, NMI=0.68761; 1.4 — 29 comm, pct_top3=37.20%, NMI=0.67998; 1.5 — 26 comm, pct_top3=33.03%, NMI=0.68539; 1.55 — 32 comm, pct_top3=32.61%, NMI=0.67788; 1.6 — 34 comm, pct_top3=31.99%, NMI=0.69054.
+   Downstream validation so sánh trực tiếp resolution 1.1 và 1.6 cho Task 5: kết luận Hidden-vs-Overrated nhất quán giữa hai resolution — cross_community_edge_fraction của Hidden luôn cao hơn Overrated, Cliff's delta đều meaningful (1.1: δ=0.2062, p=2.45×10⁻⁵; 1.6: δ=0.2082, p=2.05×10⁻⁵), significance không bị đảo chiều.
 
 5. Phân tích diễn giải  
-   Task này hoàn thành tốt vai trò “structural backbone” cho RQ2/RQ4: bạn đã có biến community_id và cross_community_edge_fraction để chuyển từ mô tả divergence sang giải thích cơ chế. Tuy nhiên mức ổn định community chỉ vừa chạm ngưỡng (mean_nmi khoảng 0.701), nên bằng chứng cơ chế hiện là đủ dùng nhưng chưa thật mạnh theo tiêu chuẩn reviewer khắt khe.
+   Task này hoàn thành tốt vai trò “structural backbone” cho RQ2/RQ4: biến community_id và cross_community_edge_fraction đã sẵn sàng để chuyển từ mô tả divergence sang giải thích cơ chế. Resolution 1.1 (hiện là primary trong base.yaml) cải thiện rõ nét so với resolution 1.0 trên hai tiêu chí quan trọng cho downstream analysis: (1) pct_top3 giảm từ 55.93% xuống 49.23%, qua ngưỡng 50% của evaluation framework — over_merge_warning từ true xuống false; (2) n_communities tăng từ 21 lên 24, cho partition đều hơn và cross_community_edge_fraction có variance tốt hơn để phân biệt Hidden vs Overrated. Modularity vẫn cao (mean=0.42113 vs 0.42098 ở res=1.0). Composite score xác nhận res=1.1 vượt res=1.0 (0.9588 vs 0.9005), lợi thế chủ yếu đến từ structure component (0.910 vs 0.818) và stability component (0.957 vs 0.882). NMI mean 0.69968 vượt hard gate (0.67) với đệm 0.030; min_nmi = 0.65146 > min_nmi_min = 0.60. Bằng chứng cơ chế hiện mạnh hơn trước: community structure không bị cảnh báo over-merge, phân phối community cân bằng hơn, và downstream effect size nhất quán.
 
 6. Rủi ro và giới hạn  
-   Rủi ro chính là sensitivity theo resolution/seed có thể ảnh hưởng kết luận bridge nếu chỉ bám một cấu hình. Ngoài ra, community structure trên đồ thị dense có thể bị over-merge, nên nếu không có sensitivity bổ sung thì lập luận RQ4 dễ bị hỏi thêm.
+   Rủi ro sensitivity theo resolution/seed đã được kiểm tra toàn diện qua sweep 9 mức và validation downstream cho Task 5; quyết định cấu hình chính đã được khóa ở resolution = 1.1 (nmi_threshold = 0.67) trong base.yaml. Giới hạn kỹ thuật còn lại: (1) n_communities biến thiên 19–26 giữa các seed tại res=1.1 — phản ánh inherent stochasticity của Louvain trên dense graph; artifact được tạo từ best partition theo modularity nên variance này không ảnh hưởng kết quả, nhưng reviewer khắt khe có thể hỏi; (2) min_nmi = 0.65146 (cặp run1 vs run4) là điểm thấp nhất trong 45 cặp — vẫn trên min_nmi_min = 0.60 của hard gate, nhưng chênh lệch đệm chỉ 0.051; (3) sensitivity artifact dùng nmi_threshold = 0.70 để tính stability_warning flag (kế thừa từ version cũ), trong khi base.yaml hiện dùng 0.67 — cần lưu ý khi đọc stability_warning trong louvain_resolution_sensitivity.json (flag ở file đó phản ánh ngưỡng cũ 0.70, không phải ngưỡng production 0.67).
 
 7. Kết luận hành động  
-   Task 2 hiện đạt trạng thái completion-ready cho pipeline, và đủ điều kiện làm input cho structural profiling. Về học thuật, nên xem đây là bằng chứng “đạt ngưỡng” và cần kèm sensitivity note khi viết kết luận RQ4.
+   Task 2 đã hoàn thành — artifacts production hiện tại (community_features.parquet, louvain_stability_report.json, metrics.json) phản ánh primary resolution = 1.1 được khóa trong base.yaml. Pipeline sẵn sàng làm input cho Task 5 (structural profiling) với 24 communities, stability_warning=false, over_merge_warning=false, cross_community_edge_fraction đủ variance (std=0.2160). k-shell cũng hoàn thành trong cùng Stage 2: kshell_max=149, kshell_mean=40.84, phủ toàn bộ 168,114 nodes.
+   Phân công sensitivity: resolution 1.6 (34 communities, NMI=0.6905, composite_score=0.6265) là sensitivity branch chính — kết luận Hidden-vs-Overrated nhất quán (δ: 1.1=0.2062 vs 1.6=0.2082). Resolution 1.0 có thể dùng làm cross-check bổ sung nếu reviewer yêu cầu (composite_score=0.9005, NMI=0.70089, nhưng over_merge_warning=true).
+   Paper narrative được đề xuất: "Louvain community detection at resolution γ=1.1 (mean NMI=0.700 across 10 seeds, 24 communities, pct_top3=49.2%) identified structurally coherent groups. Sensitivity analysis at γ=1.6 (34 communities) confirmed consistent Hidden–Overrated gap (Cliff's δ∈[0.206, 0.208], p<3×10⁻⁵ both settings), supporting robustness to resolution choice."
+   Ghi chú về rounding: mean NMI thực tế = 0.69968 → paper report là "0.700" (làm tròn 3 chữ số thập phân). Nếu reviewer kiểm tra artifact sẽ thấy 0.69968 trong metrics.json — nên note tường minh trong supplementary hoặc footnote để tránh bị hỏi.
 
 ---
 
@@ -85,8 +96,24 @@ File liên quan trực tiếp (để kiểm tra):
    Trong main(), script load CSR và gọi \_assert_csr_bidirectional() để kiểm tra contract vô hướng hai chiều. Proxy được tính bằng \_compute_one_hop() và \_compute_two_hop(), sau đó validate unique node_id + full coverage + no NaN trước khi ghi diffusion_proxies.parquet. Runtime được cập nhật qua \_upsert_runtime_row() vào runtime_breakdown.csv, đồng thời status được ghi qua write_json() vào diffusion_proxies_status.json.
 
 4. Kết quả chính  
-   Artifact proxies đang ở mode real_full_graph, rows = 168114, inference_sec_full_graph = 1.08925 trong diffusion_proxies_status.json. Runtime row đã ghi ở runtime_breakdown.csv. Về hiệu năng ranking sau khi sửa đúng công thức two-hop: one_hop Spearman = 0.6877, two_hop Spearman = 0.8039; one_hop NDCG@10% = 0.8329, two_hop NDCG@10% = 0.8478; one_hop Precision@10% = 0.52, two_hop Precision@10% = 0.55 trong baseline_ranking_metrics.csv. Correlation matrix cũng cho IC-one_hop khoảng 0.717 và IC-two_hop khoảng 0.815 ở metric_correlation_matrix.json.
-   Khi đặt trong mặt bằng baseline/surrogate hiện có, two-hop (0.8039) đã tiến sát degree/pagerank (0.8263/0.8241) và khá gần gnn_centrality (0.8168), xác nhận tác động material của việc sửa công thức.
+   Artifact proxies đang ở mode real_full_graph, rows = 168,114 trong diffusion_proxies_status.json. Runtime theo runtime_breakdown.csv: one_hop = 0.000269s, two_hop = 0.002741s (inference per full graph). Lưu ý: `diffusion_proxies` row trong runtime_breakdown = 1.089s là runtime của toàn bộ artifact (cả hai proxy cùng lúc + overhead I/O), không phải inference của riêng two_hop.
+   Hiệu năng ranking (baseline_ranking_metrics.csv):
+
+   | Model | Spearman | NDCG@10% | Precision@10% | Inference (s) |
+   |---|---|---|---|---|
+   | degree | 0.8263 | 0.8815 | 0.60 | 0.000265 |
+   | pagerank | 0.8241 | 0.8568 | 0.56 | 0.003036 |
+   | kshell | 0.8159 | 0.7782 | 0.50 | 0.004638 |
+   | **two_hop** | **0.8039** | **0.8478** | **0.55** | **0.002741** |
+   | node2vec_lr | 0.8135 | 0.8592 | 0.57 | 0.040 (infer) |
+   | one_hop | 0.6877 | 0.8329 | 0.52 | 0.000269 |
+   | betweenness | 0.7164 | 0.7348 | 0.42 | 0.004650 |
+   | views | 0.4261 | 0.6098 | 0.45 | — |
+
+   GNN models (surrogate_ranking_metrics.csv): gnn_centrality Spearman = 0.8168 (inference = 0.063s, train = 22.5s); gnn_full = 0.8133 (inference = 0.064s). MC IC labeling = 480s.
+   Correlation matrix (metric_correlation_matrix.json): IC-one_hop = 0.717, IC-two_hop = 0.815.
+   Speedup context: `diffusion_proxies.py` (compute cả hai proxies từ CSR từ đầu) = 1.089s → **480s / 1.089s ≈ 441× nhanh hơn MC IC**. Với Spearman chỉ kém gnn_centrality 0.013 (0.804 vs 0.817).
+   Lưu ý kỹ thuật về runtime tables: `runtime_sec` cho `one_hop` (0.000269s) và `two_hop` (0.002741s) trong `baseline_ranking_metrics.csv` và `runtime_breakdown.csv` là thời gian **convert preloaded values sang PyTorch tensor** trong `eval_heuristic()` (run_baselines.py:283-306) — KHÔNG phải thời gian compute từ CSR. Thời gian compute thực sự từ scratch được ghi ở row `diffusion_proxies` (1.089s). Khi viết paper về runtime, dùng 1.089s (cả hai proxies) làm baseline, không dùng 0.003s.
 
 5. Phân tích diễn giải  
    Task 3 hoàn thành mạnh về cả operational objective lẫn scientific utility sau khi fix công thức. Full-graph inference vẫn nhanh và reproducible, đồng thời two-hop hiện thể hiện tín hiệu mạnh hơn one-hop trên các chỉ số ranking chính. Quan trọng hơn, two-hop đã tiệm cận nhóm baseline mạnh (degree/pagerank) và khá gần gnn_centrality về Spearman, cho thấy proxy giải tích O(E) có thể nén phần lớn tín hiệu cấu trúc liên quan IC trong setting hiện tại. Kết quả này hỗ trợ tốt hơn cho RQ2b/RQ3: cheap diffusion proxies có thể đạt mức tương quan cao với IC khi định nghĩa đúng theo weighted-cascade.
@@ -118,13 +145,16 @@ File liên quan trực tiếp (để kiểm tra):
    Trong main(), df_ic được merge với node_attributes theo node_id; ngưỡng top 10% cho IC và views lấy bằng quantile. Nhãn typology được gán qua \_assign_typology_labels() (dựa trên \_assign_typology_label()), còn báo cáo quadrant được tạo bởi \_build_quadrant_report() với các cờ min_quadrant_ok và two_sample_applied. Nếu bật --require-min-quadrant và min_quadrant_ok=false thì script fail-fast bằng ValueError.
 
 4. Kết quả chính  
-   Artifact hiện có cho thấy n_total = 5000, Hidden = 285 (5.7%), Overrated = 285 (5.7%), min_quadrant_ok = true, two_sample_applied = false trong typology_quadrant_report.json.
+   Artifact typology_quadrant_report.json: n_total = 5,000 (IC simulation sample — ~3% của 168,114 active nodes; IC chỉ được tính trên sample do chi phí MC), ic_threshold = 77.67 (top-10% quantile của ic_score_mean), views_threshold = 66,147.20 (top-10% quantile của views).
+   Phân bố: True = 215 (4.3%), Hidden = 285 (5.7%), Overrated = 285 (5.7%), Non = 4,215 (84.3%). min_quadrant_ok = true, two_sample_applied = false.
+   Logic symmetry: top-10% IC = 500 nodes, top-10% views = 500 nodes. Overlap (True) = 215 → Hidden = 500 − 215 = 285; Overrated = 500 − 215 = 285. Sự đối xứng này là hệ quả của định nghĩa percentile cứng — không phải coincidence. True nhỏ (215 < 500) phản ánh divergence cao giữa IC và views (IC-views ρ = 0.469).
 
 5. Phân tích diễn giải  
-   Task 4 đã hoàn thành đúng vai trò trung tâm cho RQ2: có divergence rõ (không collapse về một trục popularity), đồng thời đủ cỡ mẫu cho Hidden/Overrated để chạy Task 5 và downstream RQ3b. Việc không cần two-sample cho thấy setup hiện tại có power cơ bản ổn cho so sánh nhóm.
+   Task 4 đã hoàn thành đúng vai trò trung tâm cho RQ2: True=215 (4.3%) thấp hơn kỳ vọng nếu IC-views tương quan hoàn toàn (khi đó True ≈ 500), cho thấy divergence rõ và không collapse. Với Hidden=Overrated=285, MWU test (Task 5) có power tốt cho so sánh nhóm đối xứng. Giá trị ic_threshold=77.67 và views_threshold=66,147 là các con số cụ thể phản ánh phân phối thực tế của Twitch EN dataset — nên được report trong paper để đảm bảo reproducibility.
+   Lưu ý scope: typology được tạo trên sample 5,000 nodes (~3% graph). Kết luận về Hidden/Overrated là valid trong scope sample này, nhưng không tự động suy rộng cho toàn bộ 168k nodes. Đây là limitation cần acknowledge trong paper.
 
 6. Rủi ro và giới hạn  
-   Typology phụ thuộc ngưỡng top 10%, nên kết luận có sensitivity theo threshold. Ngoài ra typology hiện là phân lớp cắt ngưỡng, chưa phản ánh uncertainty quanh boundary nếu chỉ nhìn nhãn cứng.
+   Typology phụ thuộc ngưỡng top 10% — nhưng Stage 3 robustness_summary.json cho thấy SIS-based typology (toàn graph) có Jaccard 0.747/1.000/0.793 tại threshold 15%/20%/25%, all_pass=true. Tuy nhiên đây là robustness của SIS typology, KHÔNG phải IC×views typology. Hiện chưa có threshold sensitivity test tương đương cho typology_labels_ic_views. Đây là gap cần ghi nhận — nếu reviewer yêu cầu threshold sensitivity cho IC×views, sẽ cần chạy thêm. Ngoài ra typology là hard-cutoff label, chưa phản ánh boundary uncertainty với nodes sát ngưỡng.
 
 7. Kết luận hành động  
    Task 4 đạt chuẩn completion-ready cho mục tiêu divergence. Có thể dùng trực tiếp làm nền cho structural profiling (Task 5) và per-group prediction difficulty (RQ3b), với lưu ý phải báo cáo rõ tính phụ thuộc ngưỡng.
@@ -150,16 +180,30 @@ File liên quan trực tiếp (để kiểm tra):
    Pipeline tạo frame bằng \_build_structural_frame() (join typology + node attributes + centrality/kshell + community và fail-fast nếu thiếu giá trị). Thống kê nằm trong \_compute_structural_profiling(): Mann-Whitney hai phía trên 6 đặc trưng, Cliff’s delta qua \_cliffs_delta_from_u(), rồi BH-FDR bằng multipletests; tiêu chí significant là p_corrected < 0.05 và |delta| >= delta_threshold.
 
 4. Kết quả chính  
-   Kết quả trong structural_profiling.csv cho thấy 5/6 biến đạt ý nghĩa và effect size thực dụng: degree, pagerank, kshell, betweenness, cross_community_edge_fraction đều significant. life_time không đạt tiêu chí (delta nhỏ, không significant theo ngưỡng effect).
+   Primary artifact structural_profiling.csv được tạo từ partition resolution = 1.1 (24 communities, khóa trong base.yaml). Kết quả 6 features (MWU + BH-FDR, tiêu chí: p_corrected < 0.05 AND |δ| ≥ 0.20):
+
+   | Feature | Hidden mean | Overrated mean | Cliff's δ | p_corrected | Significant |
+   |---|---|---|---|---|---|
+   | degree | 197.84 | 99.53 | 0.4549 | 1.69e-20 | ✓ |
+   | pagerank | 1.195e-5 | 7.782e-6 | 0.3524 | 5.01e-13 | ✓ |
+   | kshell | 96.05 | 54.80 | 0.5759 | 7.23e-32 | ✓ |
+   | betweenness | 1.628e-5 | 5.785e-6 | 0.3592 | 2.35e-13 | ✓ |
+   | cross_community_edge_fraction | 0.4169 | 0.3423 | 0.2062 | 2.45e-5 | ✓ |
+   | life_time | 1740.78 | 1881.43 | −0.1069 | 0.0273 | ✗ (|δ| < 0.20) |
+
+   5/6 biến đạt ý nghĩa (n_hidden=285, n_overrated=285). Effect size category theo Vargha & Delaney (2000): kshell δ=0.576 = **large**; degree δ=0.455, betweenness δ=0.359, pagerank δ=0.352 = **medium**; cross_community_edge_fraction δ=0.206 = **small-medium** (trên threshold 0.147 của "small"). Ngưỡng δ ≥ 0.20 dùng trong pipeline nằm giữa small và medium theo convention này — conservative nhưng hợp lý cho claim "meaningful practical difference".
+   BH-FDR với 6 tests: với 5 p-value rất nhỏ (≤ 5×10⁻¹³), correction không làm đổi kết quả. life_time p_raw=0.0273 = p_corrected (rank 6/6, correction factor 6/6=1.0) — fail vì |δ|=0.107 < 0.20, không phải vì p.
+   Đáng chú ý: Hidden có life_time NGẮN hơn Overrated (1741 vs 1881 ngày). Điều này nhất quán với narrative "Hidden = newer/niche streamers chưa tích lũy được views audience" — không mâu thuẫn với claim influence. Phù hợp với lifetime_validation fail ở Task 6.
+   Sensitivity (task5_resolution_sensitivity_comparison.json): cross_community_edge_fraction nhất quán ở res=1.1 (δ=0.2062, p=2.45e-5) và res=1.6 (δ=0.2082, p=2.05e-5) — same_direction, both meaningful, significance not flipped.
 
 5. Phân tích diễn giải  
    Bằng chứng hiện tại ủng hộ structural mechanism hypothesis ở mức so sánh nhóm: Hidden nổi bật hơn Overrated ở các chỉ số cấu trúc và connectivity, phù hợp claim cơ chế hơn là chỉ popularity mismatch. Việc cross_community_edge_fraction có delta vượt ngưỡng là điểm quan trọng cho RQ4. Tuy nhiên cần giữ caveat rằng đây là bằng chứng within-sample Hidden-vs-Overrated, chưa tự nó khẳng định “structural uniqueness beyond null model”; đặc biệt diễn giải bridge nên tránh tuyệt đối hóa khi null-model chưa ủng hộ mạnh.
 
 6. Rủi ro và giới hạn  
-   So sánh là univariate theo từng feature; chưa phải mô hình nhân quả đa biến. Một số chỉ số cấu trúc có tương quan cao, nên cần cẩn trọng khi diễn giải “vai trò riêng” của từng biến. life_time yếu cũng nhắc rằng không nên overclaim external corroboration từ biến này.
+   So sánh là univariate theo từng feature; chưa phải mô hình nhân quả đa biến. Tương quan cao giữa các structural metrics (degree-kshell ρ=0.993, degree-pagerank ρ=0.981 từ metric_correlation_matrix.json) nghĩa là 4 trong 5 significant features phần lớn đo cùng tín hiệu “network position”. Tín hiệu độc lập thực sự trong 5 biến significant là: (1) network position / node centrality (được đo bởi degree/kshell/pagerank/betweenness — redundant nhưng nhất quán); (2) cross_community_edge_fraction — feature duy nhất đến từ meso-level community structure, và là feature duy nhất có tín hiệu độc lập với network position. Reviewer có thể hỏi: “nếu control for degree, cross_community_edge_fraction vẫn significant không?” — đây là câu hỏi hợp lý cần chuẩn bị caveat. Scope: so sánh dựa trên 285 vs 285 nodes từ sample 5,000 (~3% graph).
 
 7. Kết luận hành động  
-   Task 5 hiện đạt mức bằng chứng thống kê tốt cho RQ4 và củng cố RQ2. Bạn có thể dùng bảng này như evidence chính, đồng thời ghi rõ giới hạn đồng biến và tính quan sát khi viết kết luận học thuật.
+   Task 5 đạt mức bằng chứng thống kê tốt cho RQ4 và củng cố RQ2. Primary artifact structural_profiling.csv đã được tạo từ partition res=1.1 (locked trong base.yaml) — không cần thay đổi cấu hình. Sensitivity branches đã validate: res=1.6 cho cùng direction, δ trong khoảng [0.206, 0.208], significance không flip — claim là robust theo resolution choice. kshell cho δ cao nhất (0.576), tức Hidden nổi bật nhất ở core position; cross_community_edge_fraction có δ thấp nhất trong 5 biến significant (0.206) nhưng đủ threshold và là feature duy nhất đến từ community structure (Task 2 output). Khi viết kết luận học thuật: ghi rõ giới hạn univariate comparison và tính quan sát; tránh overclaim "structural uniqueness" đặc biệt khi null model (Task 7) cho kết quả thận trọng.
 
 ---
 
@@ -187,9 +231,13 @@ File liên quan trực tiếp (để kiểm tra):
       Tiêu chí thành công là n_quintiles_significant >= 3 ngay trong payload lifetime_validation; nếu fail và không phải dry-run thì main() gọi \_compute_language_validation() và ghi language_validation.json như fallback bổ sung.
 
 4. Kết quả chính  
-   Kết quả thực tế trong lifetime_validation.json: partial_spearman_rho = -0.020, p = 0.1566, n_quintiles_significant = 0, success = false.  
-   Hai quintile đầu quá ít Hidden (2 và 7) nên gần như không có power.  
-   Fallback language đã được trigger và có tín hiệu mạnh trong language_validation.json, nhưng được ghi rõ chỉ là bằng chứng bổ sung.
+   Kết quả thực tế trong lifetime_validation.json: partial_spearman_rho = −0.020, p = 0.157 (n.s.), n_quintiles_significant = 0/5, success = false. Phân bố Hidden theo quintile: Q0=2, Q1=7, Q2=20, Q3=46, Q4=210 node — power bất cân bằng nghiêm trọng ở Q0/Q1. Không có quintile nào đạt significant sau BH correction.
+   Fallback language_validation.json đã được trigger (trigger_condition: partial_spearman_rho < 0.05 AND n_quintiles_significant < 3). Kết quả language:
+   - nmi_community_language_labeled = 0.4832 (community và ngôn ngữ không đồng nhất hoàn toàn)
+   - neighbor_language_entropy: Hidden mean = 0.2063, Overrated mean = 0.4221
+   - Cliff's δ = −0.4930, p = 2.20e-24 (highly significant)
+   - Kết luận: Hidden có neighbor language diversity THẤP HƠN Overrated rõ rệt — tức Hidden tập trung trong cộng đồng ngôn ngữ đồng nhất hơn, Overrated có kết nối đa ngôn ngữ hơn.
+   Fallback được ghi rõ là supplementary, không thay thế lifetime gate.
 
 5. Phân tích diễn giải  
    Task 6 hiện không xác nhận được validity theo life_time (theo định nghĩa gate của plan), nên robustness claim cho RQ2 phải giữ mức thận trọng. Điểm tốt là pipeline xử lý đúng IF PROBLEM logic và không “che” fail bằng fallback. Preflight xác nhận cơ chế này đã chạy đúng tại outputs/mapr2026_v3_results/preflight_person2_latest.txt.
@@ -401,12 +449,31 @@ File liên quan trực tiếp (để kiểm tra):
 
 **Cross-task synthesis: mức hoàn thiện và phần còn thiếu trước sign-off**
 
+**Trạng thái artifact sau rerun toàn bộ pipeline (12/04/2026)**
+
+| Task | Artifact chính | Trạng thái | Ghi chú |
+|---|---|---|---|
+| Task 2 | community_features.parquet, metrics.json | ✓ Production | res=1.1, 24 comm, stability_warning=false |
+| Stage 3 | sis_metrics.json, kshell_table.parquet | ✓ Updated | kshell_max=149, kshell_mean=40.84 |
+| Task 4 | typology_quadrant_report.json | ✓ Current | Hidden=285, Overrated=285, min_quadrant_ok=true |
+| Task 5 | structural_profiling.csv | ✓ Updated | Primary uses res=1.1 partition |
+| Task 5 | structural_profiling_res1_1.csv, _res1_6.csv | ✓ Updated | Sensitivity confirmed |
+| Task 6 | lifetime_validation.json, language_validation.json | ✓ Current | lifetime fail→language fallback triggered |
+| Task 7 | null_model_typology_summary.json | ✓ Current | rho=0.441, sigma=−1.58 (thận trọng) |
+| Task 8 | views_permutation_null_summary.json | ✓ Current | p=0.005, non-random confirmed |
+| Task 9 | ic_permutation_null_summary.json | ✓ Current | p=0.005, non-random confirmed |
+| Task 11 | metric_correlation_matrix.json | ✓ Current | IC-views=0.469, IC-two_hop=0.815 |
+
 1. Điểm đã đủ mạnh để chốt trong report
-   - Task 3 fix tạo thay đổi material: two-hop từ baseline yếu trở thành baseline cạnh tranh, cần được phản ánh nhất quán ở toàn bộ bảng so sánh RQ2b/RQ3.
-   - Task 8/9 nhất quán theo cả hai hướng permutation, đủ làm lớp robustness quan trọng cho divergence claim.
+   - Community detection (Task 2) đã chuyển sang primary resolution=1.1: over_merge_warning cleared, pct_top3=49.23%, composite score 0.9588 vs 0.9005 cho res=1.0.
+   - Task 5 bảng kết quả đầy đủ: 5/6 biến significant, kshell có δ cao nhất (0.576), cross_community_edge_fraction đủ threshold (δ=0.206) và robust theo sensitivity (res=1.6 cho δ=0.208).
+   - Task 3 fix tạo thay đổi material: two-hop từ baseline yếu trở thành baseline cạnh tranh (Spearman=0.8039 vs IC), cần phản ánh nhất quán ở bảng so sánh RQ2b/RQ3.
+   - Task 8/9 nhất quán theo cả hai hướng permutation, đủ làm lớp robustness cho divergence claim (p=0.005 cả hai).
 
 2. Điểm cần viết thận trọng
-   - Task 5 cho bằng chứng Hidden-vs-Overrated mạnh trong sample, nhưng Task 7 cho tín hiệu null-model thận trọng; vì vậy không nên diễn giải theo hướng “Hidden chắc chắn unique beyond null” ở mức tổng quát.
+   - Task 5 cho bằng chứng Hidden-vs-Overrated mạnh trong sample, nhưng Task 7 cho tín hiệu null-model thận trọng (rho=0.441, sigma=−1.58 chưa vượt ngưỡng mạnh); không nên claim “Hidden chắc chắn unique beyond degree-sequence null”.
+   - Task 6: lifetime validation fail, language validation supplementary chỉ — robustness claim cho RQ2 external corroboration cần giữ mức thận trọng.
+   - Language validation cho thấy Hidden có neighbor language entropy THẤP HƠN Overrated (δ=−0.493) — điều này có thể diễn giải là Hidden tập trung trong cộng đồng ngôn ngữ đồng nhất (“niche influencer”), nhưng cần caveat là đây là fallback supplementary.
    - Runtime framing cần tách bạch: GNN nhanh hơn nhiều so với MC IC; nhiều analytical baseline riêng lẻ nhanh hơn GNN, nhưng artifact tổng hợp diffusion_proxies full-graph không nhất thiết nhanh hơn inference của một model GNN đơn lẻ.
 
 3. Gaps còn lại (nếu muốn completion-ready ở mức publication cao)

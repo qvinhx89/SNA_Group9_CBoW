@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-11T11:36:38",
+  "timestamp": "2026-04-12T21:42:11",
   "n_rows": 5000,
   "n_rows_expected": 5000,
   "coverage_ok": true,
@@ -187,32 +187,5 @@
     "one_hop_spread": "one_hop_spread",
     "two_hop_spread": "two_hop_spread"
   },
-  "mapping_note": "Canonical metric name follows plan. If source has 'betweenness' only, it is exported as canonical 'betweenness_approx'.",
-  "rho_by_degree_quintile": {
-    "Q0": {
-      "n": 1065,
-      "rho_ic_views": 0.25127287949510385,
-      "rho_ic_degree": 0.49327996769345045
-    },
-    "Q1": {
-      "n": 972,
-      "rho_ic_views": 0.15274054706473933,
-      "rho_ic_degree": 0.2463617954228116
-    },
-    "Q2": {
-      "n": 969,
-      "rho_ic_views": 0.12745995962068335,
-      "rho_ic_degree": 0.2571398453155016
-    },
-    "Q3": {
-      "n": 1001,
-      "rho_ic_views": 0.05252366807525487,
-      "rho_ic_degree": 0.27897026894127436
-    },
-    "Q4": {
-      "n": 993,
-      "rho_ic_views": 0.4064833681263202,
-      "rho_ic_degree": 0.6773024520685809
-    }
-  }
+  "mapping_note": "Canonical metric name follows plan. If source has 'betweenness' only, it is exported as canonical 'betweenness_approx'."
 }
