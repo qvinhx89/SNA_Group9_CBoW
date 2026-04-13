@@ -1,21 +1,28 @@
 {
-  "timestamp": "2026-04-11T11:33:50",
+  "timestamp": "2026-04-13T15:07:09",
   "n_nodes": 500,
-  "n_realizations": 3,
+  "n_realizations": 10,
   "n_runs_per_node": 100,
-  "rho_mean": 0.4412250485654581,
-  "rho_std": 0.0023013926329473458,
+  "rho_mean": 0.4408948930370955,
+  "rho_std": 0.0023391072679575763,
   "hidden_betweenness_real_subgraph_mean": 1.6767135341633737e-05,
-  "hidden_betweenness_null_mean": 7.928456795773959e-05,
-  "hidden_betweenness_null_std": 3.950009331861928e-05,
-  "hidden_betweenness_gap": -6.251743261610586e-05,
-  "hidden_betweenness_gap_sigma": -1.5827160739044843,
-  "interpretation": "Hidden-node betweenness is comparable to configuration null on this scale (gap=-6.252e-05, z=-1.58); report potential degree-distribution artifact (rho_mean=0.441).",
+  "hidden_betweenness_null_mean": 6.308955859663068e-05,
+  "hidden_betweenness_null_std": 3.741650357506075e-05,
+  "hidden_betweenness_gap": -4.632242325499694e-05,
+  "hidden_betweenness_gap_sigma": -1.2380211625618665,
+  "interpretation": "Hidden-node betweenness is comparable to configuration null on this scale (gap=-4.632e-05, z=-1.24); report potential degree-distribution artifact (rho_mean=0.441).",
   "top_pct": 0.1,
   "sample_seed": 42,
   "realization_seeds": [
     0,
     100,
-    200
+    200,
+    300,
+    400,
+    500,
+    600,
+    700,
+    800,
+    900
   ]
 }
