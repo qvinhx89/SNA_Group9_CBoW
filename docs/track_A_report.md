@@ -2,6 +2,9 @@
 
 Ngày cập nhật: 2026-04-13  
 Phạm vi: Tổng hợp đầy đủ 11 task của Person 1 theo parallel coding plan v3, dùng số liệu thật từ artifacts đang có trong workspace.
+Ghi chú snapshot thời gian cho Task 4-5: report cập nhật ngày 13/04, nhưng artifact benchmark đang dùng được sinh ngày 07/04 (theo timestamp trong ic_runtime_benchmark.json và one_hop_correlation.json).
+
+Cập nhật theo feedback trước present (13/04): đã rollback 3 artifact Stage 0 (node_attributes.parquet, metrics.json, preprocess_report.json) về baseline an toàn để không phá vỡ contract downstream của Person 2/3; đồng thời giữ nguyên code fix đo lường n_missing_views_filled trong src/data/preprocess_graph.py và toàn bộ chỉnh sửa narrative Task 1-5 trong report này.
 
 ## Bộ câu hỏi nghiên cứu chính của project (v3)
 
@@ -39,16 +42,16 @@ Task 1 thuộc milestone M1 (6/4), là hạ tầng bắt buộc cho RQ1 và RQ3 
 Đây là task chuẩn bị kỹ thuật, nhưng có ý nghĩa khoa học gián tiếp rất quan trọng: nếu mapping node không deterministic thì mọi so sánh ổn định (H1) và so sánh surrogate-vs-IC (H4) đều mất tính hợp lệ. Nói cách khác, task này kiểm định điều kiện đo lường trước khi kiểm định giả thuyết. Nó bảo vệ luận điểm rằng divergence hay instability quan sát được về sau là hiện tượng của mạng, không phải lỗi do thay đổi thứ tự node giữa các lần chạy.
 
 ### Thiết kế và protocol
-Script đọc edge list active, dựng đồ thị vô hướng bằng cách thêm cả hai chiều cạnh, rồi sắp xếp theo thứ tự lexicographic để khóa tính tái lập. Sau đó script xuất contract CSR gồm indptr, indices, degrees, node_ids vào graph_csr.npz. Rule pass thực thi gồm: file tồn tại, đủ 4 key schema, và quy mô khớp với dữ liệu preprocess. Rule kiểm chứng bổ sung: nnz trong CSR phải khớp đúng với 2 nhân số cạnh active vì biểu diễn vô hướng lưu cả hai chiều. Artifact này được các script day1_benchmark và ic_labels_primary dùng trực tiếp.
+Script đọc edge list active và khóa determinism theo hai bước riêng. Bước một: sort node_id theo thứ tự lexicographic để gán index nhất quán trong mapping node_to_idx. Bước hai: sau khi dựng cạnh hai chiều, sort numeric theo row/col bằng lexsort để khóa thứ tự CSR. Sau đó script xuất contract gồm indptr, indices, degrees, node_ids vào graph_csr.npz. Rule pass gồm: file tồn tại, đủ 4 key schema, và quy mô khớp dữ liệu preprocess. Rule kiểm chứng bổ sung: nnz trong CSR phải khớp đúng với 2 nhân số cạnh active vì biểu diễn vô hướng lưu cả hai chiều.
 
 ### Kết quả chính
-CSR hiện tại có 168114 nodes và 13595114 non-zero entries. Degree mean là 80.8684, median là 32, min là 1, max là 35279, cho thấy phân phối bậc lệch mạnh. Trong metrics stage0, n_edges_active là 6797557, và nnz đúng bằng 2 nhân 6797557. Điều này xác nhận export vô hướng đang đúng contract.
+CSR hiện tại có 168114 nodes và 13595114 non-zero entries. Degree mean là 80.8684, median là 32, min là 1, max là 35279, cho thấy phân phối bậc lệch mạnh. Trong metrics stage0, key đúng là n_edges_active_graph = 6797557, và nnz đúng bằng 2 nhân 6797557. Điều này xác nhận export vô hướng đang đúng contract.
 
 ### Phân tích diễn giải
 Kết quả ủng hộ mục tiêu tái lập của Task 1: nền tảng đo lường đã ổn định, nên các kết luận ở Task 5-8 có thể diễn giải theo ý nghĩa học thuật thay vì nghi ngờ lỗi dữ liệu. Với đồ thị cỡ 168k node, CSR cũng giúp giảm overhead truy cập lân cận cho mô phỏng cascade. Về học thuật, task này không xác nhận H1/H4 trực tiếp, nhưng là điều kiện cần để mọi kiểm định sau đó có giá trị.
 
 ### Rủi ro/giới hạn
-Script hiện vẫn là bản dựng adjacency trực tiếp, có thể gây áp lực RAM nếu quy mô graph tăng thêm. Ngoài ra, chưa có artifact benchmark riêng cho thời gian export CSR. Rủi ro governance còn lại là rerun input mà không khóa version tag mới.
+Script hiện vẫn là scaffold với TODO memory optimization, nên nguy cơ áp lực RAM còn hiện hữu nếu quy mô graph tăng thêm. Mặc định script sẽ không export thật nếu thiếu cờ --run; đây là cơ chế an toàn nhưng cũng là điểm dễ nhầm khi vận hành thủ công. Ngoài ra chưa có artifact benchmark riêng cho thời gian export CSR. Rủi ro governance còn lại là rerun input mà không khóa version tag mới.
 
 ### Kết luận hành động
 Trạng thái: done.  
@@ -70,7 +73,7 @@ Task 2 thuộc milestone M0 (6/4), phục vụ kiểm soát bias cho RQ1-RQ4 b�
 Task này kiểm định một giả định quan trọng trước phân tích influence: dead account có đủ lớn để làm méo tín hiệu cấu trúc và popularity hay không. Nó không kiểm định trực tiếp H1-H6, nhưng đóng vai trò kiểm định chất lượng bối cảnh thực nghiệm để tránh overclaim ở RQ4. Nếu dead account có degree hoặc views bất thường, kết quả diffusion có thể phản ánh artifact dữ liệu hơn là cơ chế lan truyền thực.
 
 ### Thiết kế và protocol
-Script đọc raw features và edges, tự suy luận tên cột đầu-cuối cạnh theo các pattern phổ biến, sau đó tính degree bằng tần suất xuất hiện node trên cả hai đầu cạnh. Dữ liệu được chuẩn hóa node_id thành string và merge degree vào bảng node. Script tách hai nhóm dead và live theo cột dead_account, rồi báo cáo số lượng và trung bình views, degree theo từng nhóm. Rule pass: không thiếu cột bắt buộc numeric_id, dead_account, views; report JSON ghi đủ key contract.
+Script đọc trực tiếp từ raw files (large_twitch_features.csv và large_twitch_edges.csv), không chạy trên active graph đã preprocess. Script tự suy luận tên cột đầu-cuối cạnh theo các pattern phổ biến, sau đó tính degree bằng tần suất xuất hiện node trên cả hai đầu cạnh. Dữ liệu được chuẩn hóa node_id thành string và merge degree vào bảng node. Script tách hai nhóm dead và live theo cột dead_account, rồi báo cáo số lượng và trung bình views, degree theo từng nhóm. Rule pass: không thiếu cột bắt buộc numeric_id, dead_account, views; report JSON ghi đủ key contract.
 
 ### Kết quả chính
 Kết quả cho thấy n_dead = 5159 và n_live = 162955, tương ứng pct_dead = 3.0688%. Mean degree dead = 17.4582 thấp hơn mạnh so với live = 82.8759. Mean views dead = 2555.61 trong khi live = 194037.88. Tức là nhóm dead vừa ít về số lượng, vừa yếu về kết nối và tín hiệu popularity.
@@ -79,7 +82,7 @@ Kết quả cho thấy n_dead = 5159 và n_live = 162955, tương ứng pct_dead
 Kết quả nghiêng về việc dead account không phải động lực chính tạo ra tín hiệu influence quan sát được. Điều này giúp củng cố diễn giải rằng instability top-10 ở các task sau khó quy hoàn toàn cho lỗi vệ sinh dữ liệu. Về học thuật, đây là phần caveat bắt buộc để diễn giải divergence có trách nhiệm: ta có bằng chứng định lượng rằng nguồn nhiễu dead account tồn tại, nhưng không phải thành phần chi phối cấu trúc.
 
 ### Rủi ro/giới hạn
-Định nghĩa dead_account phụ thuộc metadata tại thời điểm crawl, có thể lệch theo thời gian. Báo cáo chưa phân rã theo community hoặc degree regime nên chưa biết dead account tập trung ở vùng cấu trúc nào. Nếu raw schema đổi, cơ chế suy luận cột cạnh cần kiểm tra lại.
+Định nghĩa dead_account phụ thuộc metadata tại thời điểm crawl, có thể lệch theo thời gian. Do scope audit nằm ở raw data, kết quả không phản ánh trực tiếp phân bố trên active graph sau lọc LCC. Báo cáo chưa phân rã theo community hoặc degree regime nên chưa biết dead account tập trung ở vùng cấu trúc nào. Ngoài ra, hiện chưa có unit test riêng trong tests cho dead_account_audit.py.
 
 ### Kết luận hành động
 Trạng thái: done.  
@@ -107,10 +110,10 @@ Script đọc edge list active bằng networkx, tính connected components, lấ
 Kết quả hiện tại: n_nodes_total = 168114, n_nodes_lcc = 168114, pct_lcc = 100.0, n_components = 1. Nghĩa là toàn bộ đồ thị active nằm trong một thành phần liên thông duy nhất. Không có island component cần xử lý riêng.
 
 ### Phân tích diễn giải
-Kết quả 100% LCC ủng hộ mạnh tính hợp lệ nội bộ cho pipeline IC và surrogate. Khi binary top-10 bất ổn, ta không cần ưu tiên giả thuyết lỗi do graph rời rạc. Về mặt học thuật, điều này giúp các so sánh one-hop, IC, GNN nằm trên cùng một nền topological, tăng độ tin cậy cho diễn giải chênh lệch performance.
+Kết quả 100% LCC vẫn hữu ích cho sanity check vận hành, nhưng cần nhấn mạnh đây không phải independent validation trên raw graph vì graph_active đã được tạo sau bước lấy largest connected component ở preprocess. Nói cách khác, task này xác nhận tính nhất quán của artifact đầu vào downstream hơn là khám phá cấu trúc mới. Về mặt học thuật, kết luận nên giữ ở mức kiểm chứng pipeline, không overclaim rằng đã chứng minh độc lập tính liên thông của dữ liệu thô.
 
 ### Rủi ro/giới hạn
-Kết quả phụ thuộc snapshot active hiện tại; nếu preprocess thay đổi phải rerun. Báo cáo LCC không phản ánh các đặc tính hình học khác như đường kính hay modularity. Script đọc toàn bộ graph vào memory nên cần theo dõi khi data tăng.
+Kết quả phụ thuộc snapshot active hiện tại; nếu preprocess thay đổi phải rerun. Báo cáo LCC không phản ánh các đặc tính hình học khác như đường kính hay modularity. Script đọc toàn bộ graph vào memory nên cần theo dõi khi data tăng. Ngoài ra hiện chưa có unit test riêng trong tests cho lcc_audit.py.
 
 ### Kết luận hành động
 Trạng thái: done.  
@@ -123,7 +126,7 @@ Quyết định tiếp theo: rerun LCC audit khi có thay đổi preprocess lớ
 ### File liên quan trực tiếp để kiểm tra
 - Code chính: src/mapr2026_v3/day1_benchmark.py  
 - Input chính: data/processed/graph_csr.npz  
-- Output/check chính: outputs/day1_benchmark/ic_runtime_benchmark.json, outputs/mapr2026_v3_results/runtime_breakdown.csv
+- Output/check chính: outputs/day1_benchmark/ic_runtime_benchmark.json
 
 ### Bối cảnh task (1 câu)
 Task 4 thuộc milestone M2 (7/4), phục vụ RQ3 và H4 bằng cách đo chi phí thực của MC IC labeling trước khi so với surrogate/proxy.
@@ -132,10 +135,10 @@ Task 4 thuộc milestone M2 (7/4), phục vụ RQ3 và H4 bằng cách đo chi p
 Task này kiểm định tính khả thi tính toán cho nhánh nghiên cứu surrogate: liệu có đủ budget để dùng IC làm mốc so sánh hay không. H4 nói về lợi ích tốc độ của surrogate so với MC labeling, vì vậy phải có baseline runtime định lượng và tái lập. Đây không phải task chứng minh model nào tốt hơn, mà là task khóa điều kiện thử nghiệm.
 
 ### Thiết kế và protocol
-Protocol benchmark dùng 100 node (degree-quintile stratified), chạy 50 mô phỏng mỗi node để ước lượng per_sim_ms. Từ per_sim_ms, script nội suy projected_total_hours cho cấu hình chính 5000 x 200 và hai cấu hình giảm tải 3000 x 150, 2000 x 100. Rule quyết định khóa theo plan: projected < 4h thì proceed_as_planned; 4-8h giảm tải; >8h tối thiểu hóa budget. Kết quả được ghi vào artifact JSON và thêm hàng mc_ic_labeling trong runtime_breakdown.csv để so với các baseline khác.
+Protocol benchmark dùng 100 node (degree-quintile stratified), chạy 50 mô phỏng mỗi node để ước lượng per_sim_ms. Từ per_sim_ms, script nội suy projected_total_hours cho cấu hình chính 5000 x 200 và hai cấu hình giảm tải 3000 x 150, 2000 x 100. Rule quyết định đúng theo code là: projected < 4h thì proceed_as_planned; 4h <= projected <= 8h thì reduce_compute_with_limitation; projected > 8h thì minimum_budget_with_limitation. day1_benchmark.py chỉ ghi 2 JSON benchmark (runtime và one-hop). runtime_breakdown.csv là bảng tổng hợp downstream (không được ghi trực tiếp bởi day1_benchmark.py).
 
 ### Kết quả chính
-per_sim_ms = 0.480275 và projected_total_hours cho 5000 x 200 là 0.13341 giờ. Hai phương án dự phòng lần lượt là 0.06003 giờ (3000 x 150) và 0.02668 giờ (2000 x 100). Decision action là proceed_as_planned. Trong runtime_breakdown.csv, mc_ic_labeling được ghi là 480.275 giây full-graph-equivalent.
+per_sim_ms = 0.480275 và projected_total_hours cho 5000 x 200 là 0.13341 giờ. Hai phương án dự phòng lần lượt là 0.06003 giờ (3000 x 150) và 0.02668 giờ (2000 x 100). Decision action là proceed_as_planned.
 
 ### Phân tích diễn giải
 Kết quả ủng hộ điều kiện vận hành của H4: MC IC labeling không bị compute bottleneck trên hệ hiện tại. Vì vậy so sánh surrogate-vs-IC có thể triển khai thực nghiệm thay vì chỉ mang tính ý tưởng. Về học thuật, baseline runtime định lượng giúp diễn giải lợi ích tính toán theo ratio minh bạch, tránh kết luận cảm tính.
@@ -163,16 +166,16 @@ Task 5 thuộc milestone M2 (7/4), phục vụ RQ2b và RQ3 bằng cách kiểm 
 Task này kiểm định phần trọng tâm của H3: one-hop có thể tương quan cao với IC nhưng không thay thế hoàn toàn. Đồng thời, nó là gate thực nghiệm cho H4: nếu one-hop quá sát IC, động lực học surrogate sẽ giảm. Vì vậy task đóng vai trò phân nhánh phương pháp, không chỉ báo cáo tương quan.
 
 ### Thiết kế và protocol
-Script lấy 200 pilot nodes theo stratified degree, chạy IC 50 runs/node để lấy ic_mean, đồng thời tính one-hop spread bằng tổng 1/degree của hàng xóm. Các chỉ số báo cáo gồm Spearman rho toàn cục, p-value, Jaccard@10% cho overlap top-k, và NDCG@10% cho chất lượng ranking top-k. Rule nhánh: rho < 0.8 thì viable_gnn; 0.8-0.9 thì two_hop_primary; >0.9 mới cân nhắc restructure.
+Script lấy 200 pilot nodes theo stratified degree, chạy IC 50 runs/node để lấy ic_mean, đồng thời tính one-hop spread bằng tổng 1/degree của hàng xóm. Các chỉ số báo cáo gồm Spearman rho toàn cục, p-value, Jaccard@10% cho overlap top-k, và NDCG@10% cho chất lượng ranking top-k. NDCG tại đây dùng continuous relevance từ ic_mean (không dùng binary relevance). Rule nhánh đúng theo code là: rho < 0.8 thì viable_gnn; 0.8 <= rho <= 0.9 thì two_hop_primary; rho > 0.9 thì restructure.
 
 ### Kết quả chính
-spearman_rho = 0.739190, p_value = 7.8149e-36, jaccard_at_10pct = 0.111111, ndcg_at_10pct = 0.329979. Decision branch là viable_gnn. Số node hợp lệ trong pilot là 200.
+spearman_rho = 0.739190, p_value = 7.8149e-36, jaccard_at_10pct = 0.111111, ndcg_at_10pct = 0.329979. Với pilot 200 node thì k = 20; Jaccard 0.111111 tương ứng overlap thô 4 trên 20 node top-k. Decision branch là viable_gnn.
 
 ### Phân tích diễn giải
 Kết quả vừa ủng hộ vừa giới hạn H3: liên hệ thứ hạng có thật và có ý nghĩa thống kê, nhưng overlap top-k rất thấp. Điều này cho thấy one-hop là proxy tốt ở mức tổng quát, nhưng mất thông tin ở vùng ảnh hưởng cao nhất. Về học thuật, đây là bằng chứng thực nghiệm quan trọng để giữ hướng surrogate thay vì dừng ở baseline rẻ.
 
 ### Rủi ro/giới hạn
-Pilot cỡ 200 node có thể dao động ở top-k do tail distribution nặng. Kết quả phụ thuộc seed và stochastic cascade dù đã cố định quy tắc seed. One-hop là metric cục bộ nên không phản ánh đầy đủ tương tác đa-bước.
+Pilot cỡ 200 node có thể dao động ở top-k do tail distribution nặng. Kết quả phụ thuộc seed và stochastic cascade dù đã cố định quy tắc seed. Ngoài ra cần phân biệt scope chỉ số: rho pilot của Task 5 là 0.739190 (one-hop vs IC trên 200 node), trong khi một chỉ số Spearman khác ở ic_regression_stability là 0.717974 thuộc bài toán ổn định IC score qua seed/n_runs; hai số này không mâu thuẫn vì đo hai đối tượng khác nhau, và đều không làm đổi kết luận nhánh. One-hop vẫn là metric cục bộ nên không phản ánh đầy đủ tương tác đa-bước.
 
 ### Kết luận hành động
 Trạng thái: done.  
@@ -373,3 +376,52 @@ Quyết định tiếp theo: giữ narrative strong_divergence cho chu kỳ hi�
 - Blocked: Không có task bị blocked kỹ thuật trong checklist Person 1.
 
 Kết luận vận hành: Person 1 đã hoàn thành trọn gói Day-1 lockstep v3i với chuỗi artifact có thể truy vết, kiểm chứng và bàn giao; điểm cần thận trọng còn lại là instability của nhãn binary top-10, đã được lượng hóa và diễn giải minh bạch.
+
+---
+
+## Chứng minh RQ1 (dùng khi bảo vệ)
+
+### Phát biểu cần chứng minh
+RQ1: IC operationalization có tạo được ranking influence đủ phân biệt và đủ ổn định để dùng làm surrogate target hay không?
+
+Theo H1 đã khóa ở đầu báo cáo, đây là mệnh đề hai tầng:
+- Tầng A (continuous): tín hiệu IC phải đủ phân biệt, không degenerate, dùng được cho regression.
+- Tầng B (binary): nhãn top-10 có thể bất ổn ở boundary, nhưng bất ổn đó phải được lượng hóa và diễn giải minh bạch.
+
+### Chuỗi bằng chứng định lượng
+
+1) Tầng A đạt yêu cầu về độ phân biệt tín hiệu
+- Trong pilot diagnostics: mean_reach = 26.2124, median_reach = 3.28, top10_to_median_ratio = 57.528963.
+- Trong full labeling 5000 node: ic_score_mean có mean = 31.0962, median = 6.2525, p90 = 77.67, max = 2317.71.
+
+Diễn giải: phân phối có biên độ rộng, không sụp về một cụm hẹp, nên đủ thông tin để làm regression target.
+
+2) Tầng A có tính ổn định theo hướng hội tụ khi tăng budget
+- Stability sweep cho Spearman mean theo n_runs: 150 -> 0.6854, 300 -> 0.7180, 500 -> 0.7503, 800 -> 0.7868, 1200 -> 0.8267.
+
+Diễn giải: xu hướng tăng đơn điệu theo budget cho thấy tín hiệu continuous có trật tự hội tụ, không phải nhiễu ngẫu nhiên do pipeline lỗi.
+
+3) Tầng A khả thi vận hành
+- per_sim_ms = 0.480275, projected_total_hours cho cấu hình chính 5000x200 chỉ 0.13341 giờ, decision_action = proceed_as_planned.
+
+Diễn giải: target IC continuous không chỉ đúng về mặt thống kê mà còn triển khai được trong ngân sách chạy thực tế.
+
+4) Tầng B thất bại có kiểm soát (đúng như caveat của H1)
+- quality gate: cv_score = 0.210879 (<0.3), jaccard_mean = 0.306930 (<0.85), jaccard_min = 0.302083 (<0.8), pass_all = false.
+- uncertainty: boundary_ratio = 0.199, ambiguous_ratio = 0.155, n_boundary_ci_crossing_threshold = 995/5000.
+
+Diễn giải: binary top-10 không ổn định ở vùng biên, nên không được dùng làm target chính.
+
+5) Bằng chứng nguyên nhân cấu trúc (không phải bug đơn lẻ)
+- pct_communities_spanning_boundary = 0.842 (16/19 community span boundary).
+- mean_gap_to_noise = 0.002392857, n_thresholds_tested = 28, interpretation = structural.
+- Đổi policy A -> B chỉ giảm nhiễu nhưng không triệt tiêu (boundary và ambiguous vẫn cao).
+
+Diễn giải: bất ổn nhị phân là hệ quả boundary mixing + threshold sensitivity của cấu trúc mạng, không phải lỗi if-else đơn giản trong gán nhãn.
+
+### Kết luận logic
+RQ1 được chấp nhận theo dạng có điều kiện, phù hợp đúng định nghĩa H1:
+- Đúng ở tầng continuous: IC operationalization tạo được surrogate target cho regression (discriminative + có xu hướng ổn định + khả thi compute).
+- Không đúng ở tầng binary cứng: top-10 unstable tại boundary, nên chỉ giữ vai trò phụ trợ kèm uncertainty.
+
+Nói ngắn gọn khi bảo vệ: "RQ1 đúng cho mục tiêu continuous regression và sai có kiểm soát cho binary top-10; đây là kết luận phương pháp luận chặt chẽ, không phải né kết quả xấu."
