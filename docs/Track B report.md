@@ -6,17 +6,17 @@ Bộ câu hỏi nghiên cứu chính của project (phiên bản v3 hiện tại
    Hypothesis H1:
    Weighted-cascade IC tạo tín hiệu continuous có ý nghĩa cho regression (discriminative, không degenerate), dù nhãn binary top-10 có thể bất ổn ở boundary.
    Điểm kỳ vọng:
-   cv_score vượt ngưỡng readiness cho regression; nếu Jaccard nhãn thấp thì đó là đặc tính cấu trúc của graph hơn là lỗi sampling thuần túy.
+   cv_score có thể không vượt ngưỡng heuristic `cv_adequate=0.3` trong regime near-critical; readiness cho regression được đánh giá chủ yếu qua độ ổn định thứ hạng (Spearman) và bằng chứng “structural boundary” khi Jaccard nhãn thấp (không quy kết đơn giản là sampling error).
 
 2. RQ2: Views (popularity) đồng thuận tới mức nào với IC-based influence ranking?
    Hypothesis H2:
-   Mức divergence được khóa theo narrative-tier của plan dựa trên rho(views, IC): strong divergence / moderate divergence / high agreement.
+   Mức divergence được khóa theo narrative-tier của plan dựa trên rho(views, IC): strong divergence / moderate divergence / high agreement (run hiện tại: rho(views, IC) ≈ 0.469 → moderate divergence).
    Dù thuộc tier nào, typology Hidden (IC cao, views thấp) và Overrated (views cao, IC thấp) vẫn là khung phân tích chính để kiểm định bất đồng rank.
 
 3. RQ2b: Tương quan giữa IC với views, centrality, one-hop, two-hop là gì (global và theo regime)?
    Hypothesis H3:
    One-hop và các structural metric sẽ tương quan khá cao với IC, nhưng không thay thế hoàn toàn IC.
-   Two-hop bổ sung thêm biến thiên beyond one-hop, và pattern tương quan không đồng đều giữa các vùng cấu trúc.
+   Two-hop có tương quan cao hơn one-hop (run hiện tại: rho(IC, two_hop) ≈ 0.815 vs rho(IC, one_hop) ≈ 0.717), gợi ý có thêm thông tin từ 2-hop; đồng thời pattern tương quan có thể không đồng đều giữa các vùng cấu trúc (cần stratified analysis để khóa claim này).
 
 4. RQ3: GNN surrogate có xấp xỉ IC tốt hơn cheap proxies không, và lợi ích tính toán là bao nhiêu?
    Hypothesis H4:
