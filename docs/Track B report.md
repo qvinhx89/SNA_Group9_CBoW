@@ -96,27 +96,27 @@ File liên quan trực tiếp (để kiểm tra):
    Trong main(), script load CSR và gọi \_assert_csr_bidirectional() để kiểm tra contract vô hướng hai chiều. Proxy được tính bằng \_compute_one_hop() và \_compute_two_hop(), sau đó validate unique node_id + full coverage + no NaN trước khi ghi diffusion_proxies.parquet. Runtime được cập nhật qua \_upsert_runtime_row() vào runtime_breakdown.csv, đồng thời status được ghi qua write_json() vào diffusion_proxies_status.json.
 
 4. Kết quả chính  
-   Artifact proxies đang ở mode real_full_graph, rows = 168,114 trong diffusion_proxies_status.json. Runtime theo runtime_breakdown.csv: one_hop = 0.003815s, two_hop = 0.004734s (inference per full graph theo bảng hiện tại). Lưu ý: `diffusion_proxies` row trong runtime_breakdown = 1.089s là runtime của toàn bộ artifact (cả hai proxy cùng lúc + overhead I/O), không phải inference của riêng two_hop.
+   Artifact proxies đang ở mode real_full_graph, rows = 168,114 trong diffusion_proxies_status.json. Runtime theo runtime_breakdown.csv: one_hop = 0.007645s, two_hop = 0.005135s (inference per full graph theo bảng hiện tại). Lưu ý: `diffusion_proxies` row trong runtime_breakdown = 1.089s là runtime của toàn bộ artifact (cả hai proxy cùng lúc + overhead I/O), không phải inference của riêng two_hop.
    Hiệu năng ranking (baseline_ranking_metrics.csv):
 
    | Model        | Spearman   | NDCG@10%   | Precision@10% | Inference (s) |
    | ------------ | ---------- | ---------- | ------------- | ------------- |
-   | degree       | 0.8263     | 0.8815     | 0.60          | 0.006169      |
-   | pagerank     | 0.8241     | 0.8568     | 0.56          | 0.005640      |
-   | kshell       | 0.8159     | 0.6771     | 0.50          | 0.000351      |
-   | node2vec_lr  | 0.8108     | 0.8573     | 0.592         | 0.021849      |
-   | **two_hop**  | **0.8039** | **0.8478** | **0.55**      | **0.004734**  |
-   | one_hop      | 0.6877     | 0.8329     | 0.52          | 0.003815      |
-   | betweenness  | 0.7164     | 0.7348     | 0.42          | 0.000270      |
-   | mlp_raw_attr | 0.4353     | 0.6012     | 0.424         | 0.000473      |
-   | views        | 0.4261     | 0.6098     | 0.45          | 0.006650      |
-   | views_day    | 0.3655     | 0.5795     | 0.41          | 0.002651      |
+   | degree       | 0.8263     | 0.8815     | 0.60          | 0.004771      |
+   | pagerank     | 0.8241     | 0.8568     | 0.56          | 0.006908      |
+   | kshell       | 0.8159     | 0.7782     | 0.50          | 0.008757      |
+   | node2vec_lr  | 0.8090     | 0.8515     | 0.576         | 0.042504      |
+   | **two_hop**  | **0.8039** | **0.8478** | **0.55**      | **0.005135**  |
+   | one_hop      | 0.6877     | 0.8329     | 0.52          | 0.007645      |
+   | betweenness  | 0.7164     | 0.7348     | 0.42          | 0.004790      |
+   | mlp_raw_attr | 0.4348     | 0.6014     | 0.424         | 0.001347      |
+   | views        | 0.4261     | 0.6098     | 0.45          | 0.003712      |
+   | views_day    | 0.3655     | 0.5795     | 0.41          | 0.003317      |
 
-   GNN models (surrogate_ranking_metrics.csv): gnn_centrality Spearman = 0.8172 (inference = 0.048s, train = 17.4s); gnn_full = 0.8130 (inference = 0.050s, train = 17.8s); gnn_graph_only = 0.4724; gnn_raw_attr = 0.5357. MC IC labeling = 480s.
-   Caveat cho reviewer: row `gnn_random` hiện có runtime/train time rất lớn (4.43s / 2132.7s), không đồng pha với các model còn lại (~0.048s / ~17s). Đây là sanity row đặc biệt và không nên dùng làm mốc chính cho so sánh hiệu năng nếu chưa xác nhận lại cấu hình run.
+   GNN models (surrogate_ranking_metrics.csv): gnn_centrality Spearman = 0.8168 (inference = 0.067s, train = 23.5s); gnn_full = 0.8134 (inference = 0.069s, train = 23.8s); gnn_graph_only = 0.4703; gnn_raw_attr = 0.5341; gnn_random = 0.2750. MC IC labeling = 480s.
+   Ghi chú: `gnn_random` hiện đã có runtime/train time cùng tier với các GNN còn lại (~0.067s / ~23.5s). Đây là null baseline hợp lệ để so sánh “learned signal” theo nhóm, nhưng không dùng để claim chất lượng surrogate.
    Correlation matrix (metric_correlation_matrix.json): IC-one_hop = 0.717, IC-two_hop = 0.815.
    Speedup context: `diffusion_proxies.py` (compute cả hai proxies từ CSR từ đầu) = 1.089s → **480s / 1.089s ≈ 441× nhanh hơn MC IC**. Với Spearman chỉ kém gnn_centrality 0.013 (0.804 vs 0.817).
-   Lưu ý kỹ thuật về runtime tables: `runtime_sec` cho `one_hop` (0.003815s) và `two_hop` (0.004734s) trong `baseline_ranking_metrics.csv` và `runtime_breakdown.csv` là thời gian **convert preloaded values sang PyTorch tensor** trong `eval_heuristic()` (run_baselines.py:283-306) — KHÔNG phải thời gian compute từ CSR. Thời gian compute thực sự từ scratch được ghi ở row `diffusion_proxies` (1.089s). Khi viết paper về runtime, dùng 1.089s (cả hai proxies) làm baseline, không dùng các số một-digit milliseconds từ bảng baseline.
+   Lưu ý kỹ thuật về runtime tables: `runtime_sec` cho `one_hop` (0.007645s) và `two_hop` (0.005135s) trong `baseline_ranking_metrics.csv` và `runtime_breakdown.csv` là thời gian **convert preloaded values sang PyTorch tensor** trong `eval_heuristic()` (run_baselines.py:283-306) — KHÔNG phải thời gian compute từ CSR. Thời gian compute thực sự từ scratch được ghi ở row `diffusion_proxies` (1.089s). Khi viết paper về runtime, dùng 1.089s (cả hai proxies) làm baseline, không dùng các số một-digit milliseconds từ bảng baseline.
 
 5. Phân tích diễn giải  
    Task 3 hoàn thành mạnh về cả operational objective lẫn scientific utility sau khi fix công thức. Full-graph inference vẫn nhanh và reproducible, đồng thời two-hop hiện thể hiện tín hiệu mạnh hơn one-hop trên các chỉ số ranking chính. Quan trọng hơn, two-hop đã tiệm cận nhóm baseline mạnh (degree/pagerank) và khá gần gnn_centrality về Spearman, cho thấy proxy giải tích O(E) có thể nén phần lớn tín hiệu cấu trúc liên quan IC trong setting hiện tại. Kết quả này hỗ trợ tốt hơn cho RQ2b/RQ3: cheap diffusion proxies có thể đạt mức tương quan cao với IC khi định nghĩa đúng theo weighted-cascade.
@@ -482,6 +482,6 @@ File liên quan trực tiếp (để kiểm tra):
    - Runtime framing cần tách bạch: GNN nhanh hơn nhiều so với MC IC; nhiều analytical baseline riêng lẻ nhanh hơn GNN, nhưng artifact tổng hợp diffusion_proxies full-graph không nhất thiết nhanh hơn inference của một model GNN đơn lẻ.
 
 3. Gaps còn lại (nếu muốn completion-ready ở mức publication cao)
-   - RQ3b hiện đã có artifact per-group đầy đủ cho các model GNN chính (gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full) trong per_group_prediction_error.csv, và bằng chứng nhất quán cho thấy Hidden là nhóm khó dự đoán nhất (Spearman thấp nhất, MAE cao nhất). Có thể khóa H5 ở mức kết luận chính, kèm caveat scope test-split.
-   - Cần ghi chú ngắn về `gnn_random`: vì runtime/train time hiện bất thường so với các model còn lại, nên xem đây là sanity row và không dùng làm mốc hiệu năng chính cho narrative.
+   - RQ3b hiện đã có artifact per-group đầy đủ cho các model GNN (gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full, gnn_random) trong per_group_prediction_error.csv. Bằng chứng nhất quán cho thấy Hidden là nhóm khó dự đoán nhất (Spearman thấp nhất, MAE cao nhất). Có thể khóa H5 ở mức kết luận chính, kèm caveat scope test-split.
+   - `gnn_random` tạo null baseline hữu ích: giúp chứng minh các GNN “có học signal” theo từng typology group, thay vì chỉ nhiễu ngẫu nhiên.
    - Task 10 vẫn là contingency chưa implement đầy đủ đường auto (two-sample + residual artifact), cần quyết định rõ triển khai code hay lock manual protocol trong tài liệu.
