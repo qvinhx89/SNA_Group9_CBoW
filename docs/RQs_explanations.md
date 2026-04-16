@@ -1037,3 +1037,102 @@ Kết luận RQ4:
 ### Một câu tóm gọn RQ4
 
 > **"Hidden influencers có vị trí mạng mạnh hơn Overrated trên mọi chiều đo lường (degree gấp đôi, kshell gấp 1.75×, cross-community fraction cao hơn 22%) — điều này giải thích IC cao của họ. Nhưng configuration null model cho thấy structural advantage này là hệ quả tự nhiên của degree cao, không phải một property cấu trúc độc lập. Điều thực sự bất thường không phải là cấu trúc mạng của Hidden nodes, mà là sự vắng mặt của views tương xứng — một hiện tượng ngoài tầm giải thích của structural analysis thuần túy."**
+
+---
+
+## Appendix — Sensitivity của IC với công thức $p(u,v)$
+
+Phần chính của project dùng IC với **weighted cascade**:
+
+$$p(u,v) = \min\left(1, \frac{\kappa}{\deg(v)}\right),\quad \kappa = 1$$
+
+Trong code/artefacts hiện tại, $p$ phụ thuộc vào **degree của node bị tác động** (target) $v$ (tức là node “dễ bị kích hoạt” hơn khi degree nhỏ). Trong feasibility protocol đã có “kappa sweep” để kiểm tra việc tăng/giảm cường độ xác suất có thay đổi kết luận hay chỉ thay đổi chế độ cascade.
+
+Mục tiêu của appendix này là: nếu reviewer hỏi “kết luận RQ1–RQ4 có phụ thuộc vào cách chọn $p(u,v)$ không?”, ta có một **ablation/sensitivity plan** rõ ràng, rẻ, và diễn giải được.
+
+### Nguyên tắc quan trọng nhất: tránh đổi _cascade regime_ một cách tầm thường
+
+Nhiều công thức $p(u,v)$ “nghe hợp lý” nhưng nếu không chuẩn hoá thì sẽ đẩy xác suất lên quá cao (ví dụ nhiều cạnh có $p\approx 0.2$–$0.5$), làm cascade bùng nổ và IC scores **bão hoà**. Khi đó mọi thứ (ranking, correlation, typology) có thể thay đổi mạnh nhưng không phải vì “cơ chế đúng hơn”, mà vì ta đã đổi bài toán sang một regime khác.
+
+Vì vậy, khi thử $p(u,v)$ mới, nên giữ “mức năng lượng” tương đương baseline, theo một trong hai cách:
+
+- **Calibrate theo mean edge probability:** đặt $p'(u,v)=\mathrm{clip}(s\,p_\text{raw}(u,v),0,1)$, chọn $s$ sao cho $\mathbb{E}[p'] \approx \mathbb{E}[p_\text{WC}]$ trên sample cạnh.
+- **Calibrate theo cascade size trên sample:** chọn tham số (hoặc hệ số $s$) sao cho mean cascade size / mean influence trên một sample node (ví dụ 200–400 nodes) gần baseline.
+
+Nếu không calibrate, thí nghiệm sẽ khó bảo vệ vì “khác biệt” có thể chỉ là artefact của scaling.
+
+### Phân loại các họ công thức $p(u,v)$ (và rủi ro)
+
+Để thảo luận “đúng/sai” cho $p(u,v)$, cách sạch nhất là tách thành 2 tầng:
+
+1. **Node susceptibility (target-based):** $p$ tăng/giảm theo đặc trưng của node $v$ (degree/kshell/pagerank/views/life_time).
+2. **Edge affinity (edge-based):** $p$ phụ thuộc vào “độ liên quan” của cặp $(u,v)$ (cùng community, common neighbors, Adamic–Adar, Jaccard, v.v.).
+
+Trong đồ án hiện tại, cấu trúc “target-based” là phù hợp vì:
+
+- Dữ liệu cạnh không có trọng số tương tác theo thời gian, nên edge-affinity phức tạp dễ trở thành “tự chế” khó justify.
+- Một số edge-affinity (CN/AA) có chi phí tính toán lớn trên graph lớn.
+
+#### (A) Structural-only: an toàn, dễ defend
+
+- **WC baseline:** $p=1/\deg(v)$.
+- **Kappa-scaled WC:** $p=\min(1,\kappa/\deg(v))$ với $\kappa\in\{1.5,2.0,3.0\}$ (đã có khung trong feasibility protocol).
+- **Degree exponent:** $p=\min(1,\kappa/\deg(v)^\alpha)$ với $\alpha\in\{0.5,1.0,1.5\}$.
+
+Ý nghĩa khoa học: kiểm tra xem kết luận có “đứng vững” khi ta điều chỉnh mức penalty theo degree.
+
+#### (B) Community/bridge modifiers: giá trị cao cho RQ4, nhưng phải giữ scale
+
+Một modifier hợp lý (vì RQ4 nhấn mạnh “cross-community position”) là:
+
+$$p'(u,v)=\mathrm{clip}\big(p_\text{base}(u,v)\cdot (1+\beta\,g(u,v)),0,1\big)$$
+
+trong đó $g(u,v)$ có thể là:
+
+- indicator “edge là cross-community” (cần community assignment có sẵn), hoặc
+- hàm của node-level `cross_community_edge_fraction`.
+
+Sau đó **calibrate lại** $\beta$ hoặc hệ số scale để giữ mean $p$ / cascade size tương đương baseline.
+
+Ý nghĩa khoa học: nếu Hidden vẫn nổi bật khi ta thay đổi giả định “bridging edges mạnh hơn/yếu hơn”, thì narrative “Hidden là bridge/core” trở nên reviewer-proof hơn.
+
+#### (C) Popularity-driven / Twitch signals: chỉ nên dùng như _stress test_
+
+Các công thức dùng `views`/`life_time`/các tín hiệu Twitch để tăng $p(u,v)$ có thể hợp lý nếu ta coi đây là “propensity to influence” gắn với popularity. Tuy nhiên nó tạo rủi ro diễn giải:
+
+- Nếu $p(u,v)$ phụ thuộc vào `views(v)` thì IC label sẽ “nhiễm” popularity ngay trong định nghĩa, làm RQ2/RQ3 dễ bị circular.
+
+Vì vậy nếu thử, nên trình bày rõ đây là **sensitivity/stress test**: “Nếu ta giả định diffusion probability phụ thuộc popularity thì kết luận thay đổi như thế nào?” chứ không phải “model đúng hơn”.
+
+#### (D) Similarity-based (CN/AA/Jaccard): có thể đúng về mặt ý tưởng, nhưng đắt
+
+Các edge-affinity kiểu common neighbors / Adamic–Adar thường yêu cầu tính overlap lân cận cho rất nhiều cạnh → nặng trên graph lớn. Nếu muốn dùng, nên:
+
+- chỉ chạy trên subgraph/sample,
+- hoặc chỉ dùng cho một tập cạnh giới hạn,
+- hoặc dùng approximation.
+
+Nếu mục tiêu là “defend kết luận”, họ (A) và (B) thường đủ và rẻ hơn.
+
+### Bộ thí nghiệm tối thiểu (khuyến nghị) để bổ sung robustness
+
+Để vừa ít công, vừa trả lời reviewer một cách thuyết phục, đề xuất chạy 3 cấu hình $p(u,v)$:
+
+1. **Baseline:** WC ($\kappa=1$).
+2. **Scaling ablation:** WC với $\kappa=2$ (hoặc $\alpha=0.5$) đã **calibrate** để không bùng cascade.
+3. **Bridge ablation:** WC $\times$ cross-community modifier (boost hoặc penalty), calibrate để giữ mean $p$/cascade size.
+
+Tuỳ thời gian, thêm 1 stress test:
+
+4. **Popularity hybrid (stress test):** convex blend giữa WC và một popularity score đã chuẩn hoá, rồi calibrate lại để tránh regime change.
+
+### Cách báo cáo để “khóa” diễn giải RQ1–RQ4
+
+Không cần thêm quá nhiều metric mới; chỉ cần vài kiểm tra chuẩn:
+
+- **Stability của IC labels:** Spearman $\rho$ giữa IC scores (baseline vs variant) + overlap của top-k.
+- **Stability của typology:** số lượng Hidden/Overrated/True/Non và Jaccard overlap của tập Hidden.
+- **RQ2 invariance:** tương quan (IC vs one-hop/two-hop/kshell/views) có giữ thứ tự/độ lớn tương đối không.
+- **RQ4 narrative check:** structural profiling Hidden vs Overrated có giữ dấu hiệu chính (degree/kshell/bridge) không.
+
+Nếu các kết luận chính giữ nguyên dưới (1)–(3), ta có một câu trả lời rất mạnh: “kết luận chủ yếu đến từ cấu trúc mạng, không phụ thuộc vào một công thức $p(u,v)$ cụ thể”.

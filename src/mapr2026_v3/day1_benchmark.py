@@ -230,8 +230,9 @@ def _run_one_hop_correlation(
     n_valid = int(len(sampled))
     k = max(1, int(np.ceil(float(top_pct) * n_valid)))
 
-    rank_one_hop = np.argsort(-one_hop_scores)
-    rank_ic = np.argsort(-ic_means)
+    # Stable top-k: primary key = score (desc), tie-break = node_id (asc).
+    rank_one_hop = np.lexsort((sampled, -one_hop_scores))
+    rank_ic = np.lexsort((sampled, -ic_means))
     top_one_hop = set(rank_one_hop[:k].tolist())
     top_ic = set(rank_ic[:k].tolist())
 
