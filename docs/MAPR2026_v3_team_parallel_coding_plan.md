@@ -539,6 +539,10 @@ IC scores + split_masks ──────────────────�
    >
    > **Framing bắt buộc:** "Sensitivity to diffusion rule choice" — không phải "chọn rule giúp GNN thắng degree".
 
+   > 🔵 **[SUPPLEMENTARY TRACK — SKIP nếu không activate I-A]**
+   > Toàn bộ block I-A bên dưới chỉ relevant nếu pilot pass (3 checks bên dưới).
+   > Nếu A0 only: bỏ qua toàn bộ I-A block, C2-I-A, và C4-I-A → tiếp tục sang Person 2.
+
    > ✦ **[SHOULD DO — nếu bật I-A] I-A: Attribute-Informed IC (Row-Normalized Views)**
    >
    > **Điều kiện kích hoạt (PHẢI thỏa TẤT CẢ):**
@@ -644,7 +648,8 @@ IC scores + split_masks ──────────────────�
    >
    > - Output: `outputs/mapr2026_v3_results/ic_scores_ia.parquet` (same schema as primary)
    > - Compute: `Spearman(IC-I-A, degree)` và `Spearman(IC-I-A, IC-A0)` → `ic_ia_vs_primary.json`
-   > - **Handoff sang Person 3:** Person 3 chạy C2-I-A (4 archs × 5 seeds trên I-A labels) → tạo `surrogate_ranking_metrics_ia.csv`; sau đó C4-I-A (bootstrap CI GNN_best_ia vs degree on I-A labels) → `gnn_vs_degree_bootstrap_ci_ia.json`
+   > - **Handoff sang Person 3:** Person 3 chạy **C2-I-A** (**5 archs**: APPNP + **GATv2** + GIN + GCN + SAGE × 5 seeds trên I-A labels) → `surrogate_ranking_metrics_ia.csv`; sau đó C4-I-A (bootstrap CI GNN_best_ia vs degree on I-A labels) → `gnn_vs_degree_bootstrap_ci_ia.json`
+   > - **Lưu ý:** C2-I-A dùng **GATv2** thay cho GAT v1 — xem H4 hypothesis bên dưới.
    >
    > **Nếu ANY FAIL → Fallback:**
    >
@@ -658,6 +663,54 @@ IC scores + split_masks ──────────────────�
    > - Table caption: "I-A labels are used for supplementary GNN advantage analysis; A0 (weighted cascade) remains the primary IC operationalization."
    >
    > **Framing bắt buộc:** "GNN advantage under attribute-informed diffusion" — không phải "I-A labels tốt hơn A0 labels". A0 LUÔN là primary framing; I-A là supplementary analysis chứng minh GNN advantage mechanism.
+
+   > **H4 — GATv2 cho C2-I-A (quan trọng — đọc trước khi implement):**
+   >
+   > | | GAT v1 | GATv2 |
+   > |---|---|---|
+   > | Attention | Static: `e(i,j) = a_src·(W·h_i) + a_tgt·(W·h_j)` | Dynamic: `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])` |
+   > | Tính chất | Ranking của j KHÔNG đổi theo i | Ranking của j PHỤ THUỘC ngữ cảnh i |
+   > | I-A formula | `p(u,v) = views(v)/Σviews(N(u))` — denominator phụ thuộc u | ← Cần dynamic attention để model |
+   > | Verdict A0 | ✅ OK (static `1/deg(v)` chỉ cần target node) | Overkill cho A0 |
+   > | Verdict I-A | ❌ Cannot model row-normalization | **✅ H4: GATv2 là correct arch** |
+   >
+   > **GATv2 implementation (thêm vào `run_surrogates.py`):**
+   >
+   > ```python
+   > from torch_geometric.nn import GATv2Conv
+   > import torch.nn.functional as F
+   >
+   > class GATv2Surrogate(nn.Module):
+   >     """
+   >     GATv2 — Dynamic attention (Brody et al., ICLR 2022).
+   >     Dùng cho C2-I-A (H4): I-A p(u,v) row-normalized per source → cần dynamic attention.
+   >     KHÔNG dùng trong C2-A0 (GAT v1 phù hợp hơn cho static A0).
+   >     """
+   >     def __init__(self, in_dim=3, hidden_dim=128, heads=4, dropout=0.3):
+   >         super().__init__()
+   >         self.conv1 = GATv2Conv(in_dim, hidden_dim // heads, heads=heads,
+   >                                dropout=dropout, concat=True)
+   >         self.conv2 = GATv2Conv(hidden_dim, hidden_dim // heads, heads=heads,
+   >                                dropout=dropout, concat=True)
+   >         self.head  = nn.Linear(hidden_dim, 1)
+   >         self.drop  = nn.Dropout(dropout)
+   >
+   >     def forward(self, x, edge_index):
+   >         x = F.elu(self.conv1(x, edge_index))
+   >         x = self.drop(x)
+   >         x = F.elu(self.conv2(x, edge_index))
+   >         return self.head(x).squeeze(-1)
+   >
+   > # Thêm vào get_model() factory:
+   > # elif arch == 'gatv2':
+   > #     return GATv2Surrogate(in_dim=in_dim, hidden_dim=hidden_dim,
+   > #                           heads=4, dropout=dropout)
+   >
+   > # C2-I-A architectures (GATv2 thay GAT v1):
+   > C2_IA_ARCHITECTURES = ['appnp', 'gatv2', 'gin', 'gcn', 'sage']
+   > # model_name trong surrogate_ranking_metrics_ia.csv:
+   > # appnp_raw_attr_ia, gatv2_raw_attr_ia, gin_raw_attr_ia, gcn_raw_attr_ia, gnn_raw_attr_ia
+   > ```
 
    > ✦ **[IF TIME] Robust diagnostics** — thêm vào `ic_pilot_diagnostics.json` nếu còn thời gian sau khi xong MUST:
    >
@@ -1375,7 +1428,7 @@ Chạy với `raw_attr` features, 5 seeds mỗi arch — **5 architectures total
 | ----------------- | ------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | GraphSAGE (đã có) | **`gnn_raw_attr`** ← tên CSV chuẩn (alias: sage_raw_attr — chỉ dùng trong docs) | ✅ Done              | Mean agg. — baseline                                                                                                     |
 | **GCN**           | `gcn_raw_attr`                                                                  | **MUST (C2)**        | **H2: `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric diffusion — expected better under A2 labels (nếu chạy sensitivity S1)**         |
-| GIN               | `gin_raw_attr`                                                                  | **MUST (C2)**        | Sum agg. ≈ uniform-p IC; highest WL expressiveness; may capture two-hop structure                                        |
+| GIN               | `gin_raw_attr`                                                                  | **MUST (C2)**        | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics        |
 | **GAT**           | `gat_raw_attr`                                                                  | **MUST (C2)**        | **H1: learned attention có thể học 1/deg(v) weighting** _(hypothesis — C2 decides)_                                      |
 | **🆕 APPNP**      | `appnp_raw_attr`                                                                | **MUST (C2) — H3 ★** | **H3: K-step PPR propagation + teleport/restart (structural analogy/inductive bias) — STRONGEST theoretical motivation** |
 
@@ -1389,18 +1442,7 @@ Chạy với `raw_attr` features, 5 seeds mỗi arch — **5 architectures total
 >
 > **Tie-break (nếu diff < 0.001):** APPNP > GAT > GIN > GCN > SAGE (**pre-registered**; APPNP ưu tiên vì H3 theory).
 
-> **⚠ Context quan trọng — tại sao GNN-A0 khó beat degree:**
->
-> IC-A0 dùng `p(u,v) = 1/deg(v)` → label **degree-coupled** (transition phụ thuộc trực tiếp `deg(v)`) → `degree` ρ=**0.826** là baseline rất mạnh.
->
-> - `one_hop_spread` ρ = **0.688** — hop 1 không capture đủ IC
-> - `two_hop_spread` ρ = **0.804** — IC phản ánh multi-hop composition (+0.116 vs one_hop)
-> - `gnn_graph_only` (SAGE) = **0.470** — SAGE mean aggregation bị smoothing, không capture gap
-> - `gnn_raw_attr` (SAGE) = **0.534** — raw attrs giúp nhưng vẫn xa degree
->
-> **H3 rationale:** APPNP với PPR-style multi-hop propagation có thể capture two-hop IC composition (0.804 > 0.688) tốt hơn SAGE mean → kỳ vọng close gap với degree hoặc vượt qua.
->
-> **Nếu C2 vẫn không beat degree:** Đây là **structural expectation** (A0 label ∝ 1/deg(v) = degree-derived) — KHÔNG phải implementation bug. → I-A labels (degree-blind) sẽ unlock genuine GNN advantage (xem Person 1 I-A pilot).
+> **Context:** Xem bảng real numbers trong **ablation story** bên dưới để hiểu structural constraint của A0 (tại sao GNN khó beat degree, H3 rationale, và outcome interpretations).
 
 **[NEW v3.1 — MUST] Ranking Loss (C3):**
 Sau khi C2 xong → train best arch với combined α·Huber + (1-α)·pairwise-margin-loss.
@@ -1714,6 +1756,110 @@ def train_and_eval(arch, features, seed, data, epochs=200, lr=1e-3):
     return preds
 ```
 
+**✦ [IF TIME — C5] GINESurrogate với IC Edge Features (supplemental upper bound):**
+
+> **Khi nào làm:** Chỉ sau khi C2 + C3 + C4 xong. Không block critical path.
+>
+> **Lý do GINE đặc biệt:** GINEConv incorporates edge features vào message passing. Nếu `edge_attr = 1/deg(v)` (= IC-A0 probability của mỗi cạnh), model nhận **explicit IC mechanism** trong từng message — message từ u đến v = `ReLU(h_u + p(u,v))`.
+>
+> Đây là **upper bound experiment**: quantify gain khi model được "cho biết" xác suất IC của mỗi cạnh. Nếu GINE + IC edge feat vẫn không beat degree → IC-A0 structural constraint là absolute.
+>
+> **⚠ KHÔNG phải "feature-agnostic":** edge features = structural property (1/deg). **KHÔNG** đưa vào C2 fair comparison. Label rõ trong paper là "C5 supplemental: GNN with explicit IC mechanism encoding."
+
+```python
+from torch_geometric.nn import GINEConv
+
+class GINESurrogate(nn.Module):
+    """
+    GINE + IC edge features — explicit IC mechanism encoding (C5 supplemental).
+    edge_attr = IC propagation probability per edge (shape: E × 1).
+    
+    ⚠ Không phải feature-agnostic. Không đưa vào C2 fair comparison.
+    Dùng: C5 supplemental — upper bound analysis (sau khi C2/C3/C4 xong).
+    
+    Ref: Hu et al., NeurIPS 2019.
+    """
+    def __init__(self, in_dim=3, hidden_dim=128, edge_dim=1, dropout=0.3):
+        super().__init__()
+        nn1 = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        nn2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        self.conv1 = GINEConv(nn1, train_eps=True, edge_dim=edge_dim)
+        self.conv2 = GINEConv(nn2, train_eps=True, edge_dim=edge_dim)
+        self.head  = nn.Linear(hidden_dim, 1)
+        self.drop  = nn.Dropout(dropout)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = F.relu(self.conv1(x, edge_index, edge_attr))
+        x = self.drop(x)
+        x = F.relu(self.conv2(x, edge_index, edge_attr))
+        return self.head(x).squeeze(-1)
+
+
+def compute_ic_edge_features(edge_index, degrees, rule='a0'):
+    """
+    Tạo IC probability làm edge feature cho mỗi directed edge (u, v).
+    
+    rule='a0': p(u,v) = 1/deg(v)               — IC primary (Weighted Cascade)
+    rule='a2': p(u,v) = 1/sqrt(deg(u)*deg(v))  — IC symmetric (A2 sensitivity)
+    
+    Returns: edge_attr tensor shape (E, 1)
+    """
+    src, dst = edge_index[0], edge_index[1]
+    if rule == 'a0':
+        probs = 1.0 / degrees[dst].float().clamp(min=1)
+    elif rule == 'a2':
+        probs = 1.0 / (degrees[src].float() * degrees[dst].float()).sqrt().clamp(min=1)
+    return probs.unsqueeze(-1)   # (E, 1)
+
+# Cách dùng C5:
+# edge_attr = compute_ic_edge_features(data.edge_index, degree_tensor, rule='a0')
+# model_gine = GINESurrogate(in_dim=3, hidden_dim=128, edge_dim=1)
+# preds = model_gine(data.x, data.edge_index, edge_attr)[data.test_mask]
+# CSV model_name: 'gine_ic_a0_raw_attr'
+```
+
+> **C5 experiment variants (nếu có thời gian):**
+>
+> | Variant | Edge features | Node features | CSV model_name |
+> |---|---|---|---|
+> | GINE-IC-A0 (primary) | `1/deg(v)` | `raw_attr` | `gine_ic_a0_raw_attr` |
+> | GINE-IC-A2 | `1/√(deg(u)×deg(v))` | `raw_attr` | `gine_ic_a2_raw_attr` |
+>
+> **Paper framing C5:** "As supplemental upper-bound analysis, we encode IC propagation probabilities directly as edge features (GINE; Hu et al., 2019). Comparing GINE-IC-A0 against GNN-raw-attr (no edge features) quantifies the information gain from explicit IC mechanism encoding."
+
+---
+
+**📋 Architecture Evaluation Log — Tổng kết các model GNN đã đánh giá**
+
+> **Mục đích:** Khi reviewer hỏi "why not try X?", team có documented rationale sẵn. Cũng là checklist để không waste time implement architectures không phù hợp với project này.
+
+| Architecture | Verdict | Dùng ở đâu | Lý do chi tiết |
+|---|---|---|---|
+| **SAGE** (mean agg.) | ✅ **Trong C2-A0** (baseline) | C2-A0 row `gnn_raw_attr` | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr). |
+| **GCN** | ✅ **MUST C2-A0** (H2) | C2-A0 `gcn_raw_attr` | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2. |
+| **GIN** | ✅ **MUST C2-A0** | C2-A0 `gin_raw_attr` | Sum agg. — highest WL expressiveness; preserves hop counts. |
+| **GAT v1** | ✅ **MUST C2-A0** (H1) | C2-A0 `gat_raw_attr` | H1: static attention có thể học 1/deg(v). Static = đúng cho A0. |
+| **APPNP** | ✅ **MUST C2-A0** (H3) | C2-A0 `appnp_raw_attr` | H3: K-step PPR ≈ IC cascade. Expected best arch. |
+| **GATv2** | ✅ **MUST C2-I-A** (H4) | C2-I-A `gatv2_raw_attr_ia` | H4: dynamic attention khớp I-A row-normalization. **KHÔNG dùng trong C2-A0** (static GAT phù hợp hơn cho A0). |
+| **GINE + IC edge feat** | ✅ **C5 [IF TIME]** | `gine_ic_a0_raw_attr` | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment. |
+| **GCNII** | ❌ **Skip C2** | — | Advantage chỉ tại L=16–64. Tại `n_layers=2` (C2 locked) ≈ GCN + residual. Cần separate L=16 experiment → phá fair comparison. |
+| **HGT** | ❌ **Loại hoàn toàn** | — | Designed cho **heterogeneous graphs** (many node/edge types). Twitch = **homogeneous** (1 type). Type matrices collapse → complex GAT variant, không có lợi. |
+| **GraphGPS** | ❌ **Loại — scale** | — | MPNN + Transformer O(N²) với N=168k = 28 tỷ pairs. LapPE eigendecomposition 168k×168k tốn 30–60 phút. Overkill cho 3-feature node regression. |
+
+> **Quick rule cho future architectures:**
+> - Graph homogeneous? → Loại HGT, DGI heterogeneous variants
+> - Scale O(N²)? → Loại nếu không có efficient approx + benchmark trước
+> - Advantage chỉ tại L >> 2? → Không đưa vào C2, test riêng
+> - Cần edge features ngoài structural? → Verify có data trước khi implement
+
+---
+
 **C3 — Ranking Loss Experiment (sau khi C2 xác định best arch):**
 
 ```python
@@ -1926,7 +2072,13 @@ print(metrics)
 
 ---
 
-## 4) Nhịp tích hợp (deadline 30/4/2026 — **📍 Hôm nay: 16/4/2026, còn 14 ngày**)
+## 4) Nhịp tích hợp (deadline 30/4/2026 — **📍 Hôm nay: 17/4/2026, còn 13 ngày**)
+
+> 📍 **Execution status (17/4/2026):**
+> - M0–M3: ✅ Hoàn thành (IC labels, split mask, baselines Group 1–3 done)
+> - M4: 🔄 Đang chạy — C1 (16/4 done), C2 (19/4), C3/C4 (21/4)
+> - M5: ⏳ Pending — 22–27/4
+> _(Update dòng này mỗi ngày khi milestone mới complete)_
 
 ### Milestone M0 — Kick-off (6/4, buổi sáng, ~1 giờ)
 
@@ -2129,6 +2281,8 @@ Nếu timeline tight, cắt theo thứ tự này (an toàn nhất trước):
 | GNN-full variant                                      | Community detection (stability explanation only)                               |
 | Ranking loss α sweep (chỉ dùng 1 α tốt nhất)          | GNN-raw-attr (primary) + GNN-graph-only (ablation)                             |
 | Inductive generalization test (9.1c)                  | Runtime comparison table                                                       |
+| **C5 GINE + IC edge features** ← cắt đầu tiên nếu tight sau C4 | C2-I-A + GATv2 ← SHOULD DO nếu I-A pilot pass |
+| **C2-I-A GATv2** ← cắt nếu I-A pilot fail (không có I-A labels) | Bootstrap CI (A0 labels) ← MUST regardless |
 | Secondary metrics (P@10%)                             | BH-FDR correction cho correlation matrix p-values                              |
 
 **Quy tắc:** Không cắt bất kỳ mục nào ở cột phải mà không thảo luận cả team + ghi vào `docs/experiment_registry.md`.
@@ -2286,9 +2440,9 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | 12  | **[NEW v3.1 — C2] Architecture comparison** — 5 archs (GCN/GIN/GAT/APPNP + SAGE baseline) × raw_attr, 5 seeds each; dùng `get_model(arch, ...)` factory; **APPNP là H3 expected best** | `run_surrogates.py` (dùng `get_model()`) | rows `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, **`appnp_raw_attr`** trong `surrogate_ranking_metrics.csv`     | **19/4** (1 ngày thêm cho APPNP)   |
 | 13  | **[NEW v3.1 — C3] Ranking loss** best arch (kết quả C2) + combined α·Huber + (1-α)·pairwise-margin; UPDATE model_name với tên arch thực tế (e.g., `appnp_raw_attr_rankloss`)           | `run_surrogates.py`                      | row `best_arch_raw_attr_rankloss` (tên thực: e.g., `appnp_raw_attr_rankloss`) trong `surrogate_ranking_metrics.csv` | 21/4 (sau C2)                      |
 | 14  | **[NEW v3.1 — C4] Bootstrap CI** GNN best (mean preds qua 5 seeds) vs degree (1000 resamplings) → xem 3 outcome interpretations                                                        | `run_surrogates.py` / standalone         | `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci.json`                                                       | 21/4 (song song C3)                |
-| 15  | **[SHOULD DO] C2-I-A** — nếu I-A pilot pass (Person 1 row 14): chạy best arch (từ C2-A0) × I-A labels × 5 seeds                                                                        | `run_surrogates.py (p_rule='ia')`        | `surrogate_ranking_metrics_ia.csv` + `gnn_vs_degree_bootstrap_ci_ia.json`                                           | ≈23/4 (sau Person 1 row 15)        |
-| 15  | **[SHOULD DO, phụ thuộc Person 1 row 13] C2-A2 — GCN/GIN/GAT/SAGE trên A2 labels** (test GCN–A2 alignment hypothesis H2)                                                               | `run_surrogates.py` (p_rule='symmetric') | rows `gcn_a2_raw_attr`, `gin_a2_raw_attr`, etc. trong `surrogate_ranking_metrics.csv`                               | Sau A2 labels + C2-A0 xong (≈22/4) |
-| 16  | **[SHOULD DO — chỉ khi Person 1 row 15 pass + ic_scores_ia.parquet có sẵn] C2-I-A + C4-I-A** — 4 archs × 5 seeds trên I-A labels + Bootstrap CI GNN_best_ia vs degree                  | `run_surrogates.py` (p_rule='ia')        | `outputs/mapr2026_v3_results/surrogate_ranking_metrics_ia.csv` + `gnn_vs_degree_bootstrap_ci_ia.json`               | ≈23/4 (sau Person 1 row 15 xong)   |
+| 15  | **[SHOULD DO, phụ thuộc Person 1 row 13] C2-A2** — GCN/GIN/GAT/APPNP/SAGE trên A2 labels (test H2: GCN–A2 alignment hypothesis)                                                        | `run_surrogates.py` (p_rule='symmetric') | rows `gcn_a2_raw_attr`, `gin_a2_raw_attr`, `appnp_a2_raw_attr`, etc. trong `surrogate_ranking_metrics.csv`          | Sau A2 labels + C2-A0 xong (≈22/4) |
+| 16  | **[SHOULD DO — chỉ khi Person 1 row 15 pass] C2-I-A + C4-I-A** — **5 archs**: APPNP + **GATv2** (H4!) + GIN + GCN + SAGE × 5 seeds trên I-A labels + Bootstrap CI; dùng `GATv2Surrogate` | `run_surrogates.py` (p_rule='ia')        | `surrogate_ranking_metrics_ia.csv` (model_name: `appnp_raw_attr_ia`, `gatv2_raw_attr_ia`, ...) + `gnn_vs_degree_bootstrap_ci_ia.json` | ≈23/4 (sau Person 1 row 15 xong)   |
+| 17  | **✦ [IF TIME — C5] GINE + IC edge features** — upper bound experiment sau khi C2+C3+C4 done; `edge_attr = 1/deg(v)` per edge; dùng `GINESurrogate`; **KHÔNG** đưa vào C2 fair comparison | `run_surrogates.py` + `GINESurrogate`    | rows `gine_ic_a0_raw_attr`, `gine_ic_a2_raw_attr` trong `surrogate_ranking_metrics.csv`                             | ≈25/4 (sau C2/C3/C4 xong)          |
 
 > **Các bước có tính metrics (2–8, 10, 11):** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).

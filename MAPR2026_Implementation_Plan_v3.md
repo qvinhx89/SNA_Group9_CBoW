@@ -356,6 +356,10 @@ pilot_diagnostics:
 
 #### I-A — Attribute-Informed IC (Row-Normalized Views Attention)
 
+> 🔵 **[SUPPLEMENTARY TRACK — SKIP nếu không activate I-A]**
+> Toàn bộ block này chỉ relevant nếu I-A pilot pass (3 checks bên dưới).
+> Nếu A0 only: bỏ qua toàn bộ I-A, II-B, và C2-I-A sections → tiếp tục từ "Framework thử nghiệm".
+
 > **Điều kiện kích hoạt:** Chỉ chạy như **supplemental** label set; bắt buộc có pilot gate + ghi rõ trong paper đây là **attribute-informed operationalization** (không phải sensitivity của A0).
 
 **Formula:**
@@ -544,11 +548,88 @@ CHECK 3 — Simple proxy not dominant:
 
 ALL PASS (CHECK 1+2+3):
   → Run full I-A IC sim: 5k nodes × 200 runs → ic_scores_ia.parquet
-  → Run C2-I-A: 4 archs × 5 seeds trên I-A labels → surrogate_ranking_metrics_ia.csv
+  → Run C2-I-A: 5 archs × 5 seeds trên I-A labels → surrogate_ranking_metrics_ia.csv
+      (APPNP + GAT + **GATv2** + GIN + GCN — xem bên dưới tại sao GATv2 thay thế/bổ sung GAT trong I-A)
   → Run C4-I-A: Bootstrap CI GNN_best vs degree on I-A labels
 
 ANY FAIL → Fallback theo thứ tự: II-B → A2 → A0 only
 ```
+
+---
+
+#### C2-I-A Architecture Selection — Tại sao GATv2 quan trọng hơn GAT trong I-A track
+
+> **Lý thuyết alignment quan trọng (pre-register trước C2-I-A):**
+>
+> | | GAT v1 | GATv2 |
+> |---|---|---|
+> | Attention formula | `e(i,j) = a^T [W·h_i \|\| W·h_j]` | `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])` |
+> | Attention type | **Static** — ranking của j không thay đổi theo i | **Dynamic** — ranking của j phụ thuộc i |
+> | I-A formula | `p(u,v) = views(v) / Σviews(N(u))` | Row-normalize: denominator phụ thuộc u |
+> | Alignment | GAT v1 attention KHÔNG dynamic → không thể học I-A row-normalization | **GATv2 dynamic attention khớp trực tiếp với I-A: trọng số của v phụ thuộc u** |
+> | A0 alignment | OK (static 1/deg(v) chỉ cần target-node info) | Overkill cho A0, fine nhưng no advantage |
+>
+> **Kết luận:** Trong C2-A0, GAT v1 là đúng choice (static attention ≈ A0 static p(u,v)). Trong C2-I-A, **GATv2 là correct architecture** — dynamic attention cho phép model học row-normalized views weighting.
+
+**C2-I-A architecture list (nếu I-A pilot pass):**
+
+```python
+from torch_geometric.nn import GATv2Conv
+
+class GATv2Surrogate(nn.Module):
+    """
+    GATv2 surrogate — Dynamic attention (Brody et al., ICLR 2022).
+    
+    Alignment với I-A IC (H4):
+    I-A formula: p(u,v) = log1p(views(v)) / Σ_{w∈N(u)} log1p(views(w))
+    → Attention weight của v PHỤ THUỘC ngữ cảnh u (row-normalized per source)
+    → GATv2 dynamic attention: e(i,j) = a^T LeakyReLU(W·[h_i || h_j])
+      → ranking của j thay đổi theo i (dynamic) → có thể học I-A normalization
+    
+    Tại sao GAT v1 không đủ cho I-A:
+    GAT v1: e(i,j) = a_src^T(W·h_i) + a_tgt^T(W·h_j)  [separable]
+    → ranking của j KHÔNG thay đổi theo i → cannot model row-normalization
+    
+    Ref: Brody et al., "How Attentive are Graph Attention Networks?", ICLR 2022
+    """
+    def __init__(self, in_dim=3, hidden_dim=128, heads=4, dropout=0.3):
+        super().__init__()
+        self.conv1 = GATv2Conv(in_dim, hidden_dim // heads, heads=heads,
+                               dropout=dropout, concat=True)
+        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // heads, heads=heads,
+                               dropout=dropout, concat=True)
+        self.head  = nn.Linear(hidden_dim, 1)
+        self.drop  = nn.Dropout(dropout)
+
+    def forward(self, x, edge_index):
+        x = F.elu(self.conv1(x, edge_index))
+        x = self.drop(x)
+        x = F.elu(self.conv2(x, edge_index))
+        return self.head(x).squeeze(-1)
+
+# Hypothesis H4 (GATv2 — I-A dynamic attention alignment):
+# I-A p(u,v) row-normalized per source → requires dynamic attention (H4)
+# Expected: GATv2 > GAT v1 specifically under I-A labels
+# C2-I-A ARCHITECTURES (replace GAT v1 with GATv2 for I-A track):
+C2_IA_ARCHITECTURES = ['appnp', 'gatv2', 'gin', 'gcn', 'sage']
+# Note: 'gatv2' uses GATv2Surrogate; others use same get_model() factory
+# Add to get_model() factory:
+# elif arch == 'gatv2':
+#     return GATv2Surrogate(in_dim=in_dim, hidden_dim=hidden_dim, heads=4, dropout=dropout)
+```
+
+> **C2-I-A vs C2-A0 arch list comparison:**
+>
+> | Arch | C2-A0 | C2-I-A | Lý do khác biệt |
+> |---|---|---|---|
+> | APPNP | ✅ MUST (H3) | ✅ MUST (H3 still valid) | PPR propagation phù hợp cả 2 |
+> | GAT v1 | ✅ MUST (H1) | ❌ Replaced by GATv2 | Static attention không model I-A |
+> | **GATv2** | ❌ Not in C2-A0 | ✅ MUST (H4) | Dynamic attention = I-A alignment |
+> | GIN | ✅ MUST | ✅ MUST | Sum agg. reference |
+> | GCN | ✅ MUST (H2) | ✅ MUST | Baseline comparison |
+> | SAGE | ✅ Done (baseline) | ✅ Done (baseline) | Mean agg. baseline |
+
+**Output C2-I-A:** `surrogate_ranking_metrics_ia.csv` — same schema as primary CSV, với model_name: `appnp_raw_attr_ia`, `gatv2_raw_attr_ia`, `gin_raw_attr_ia`, `gcn_raw_attr_ia`, `gnn_raw_attr_ia` (SAGE).
 
 ---
 
@@ -1006,7 +1087,7 @@ def two_hop_expected_spread(node, G, degrees):
 | ------------ | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | GraphSAGE    | `SAGEConv` | Mean (baseline)       | Hiện tại đang dùng; reference point                                                                                                              |
 | **GCN**      | `GCNConv`  | **Sym. norm. sum**    | Spectral baseline; **`D^{-1/2}AD^{-1/2}` structurally analogous to A2 diffusion rule** — additional inductive bias check nếu chạy A2 sensitivity |
-| GIN          | `GINConv`  | Sum + MLP             | WL-equivalent expressiveness, highest discriminative power; uniform-like aggregation ≈ uniform-p IC                                              |
+| GIN          | `GINConv`  | Sum + MLP             | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics                                |
 | **GAT**      | `GATConv`  | **Learned attention** | **Hypothesis (confirm via C2):** p(u,v)=1/degree(v) → attention **có thể** học weighting này                                                     |
 
 > **Hai inductive bias hypotheses (cả hai to be confirmed by C2):**
@@ -1213,6 +1294,11 @@ std_spearman  = np.std( [r['spearman'] for r in results_per_seed])
 
 > **v3.1:** Mở rộng từ GraphSAGE duy nhất → 5 architectures. Config chuẩn giống nhau để fair comparison.
 > **APPNP là architecture được bổ sung mới** vì lý do lý thuyết mạnh nhất: K-step Personalized PageRank propagation với teleport/restart là **structural analogy/inductive bias** cho target diffusion-like — xem H3 bên dưới.
+>
+> **⚠ PyG version check (trước khi chạy):** `APPNP` requires PyG ≥ 2.3. Verify:
+> ```python
+> from torch_geometric.nn import APPNP; print("APPNP OK")  # must print without ImportError
+> ```
 
 ```python
 import torch, torch.nn as nn, torch.nn.functional as F
@@ -1463,6 +1549,140 @@ train_edge_index = subgraph(train_node_mask, full_edge_index)[0]
 
 ---
 
+### 9.1d GINE + IC Edge Features — C5 Supplemental _(CAN HAVE — nếu còn thời gian sau C2/C3/C4)_
+
+> **Khi nào làm:** Chỉ sau khi C2 + C3 + C4 đều done. Đây là strongest possible alignment experiment nhưng không phải "feature-agnostic" nữa — cần label rõ trong paper.
+>
+> **Không làm trước C2/C3/C4** — không block critical path.
+
+**Lý do GINE là architecture đặc biệt cho IC surrogate:**
+
+GINE (Hu et al., NeurIPS 2019) mở rộng GIN bằng cách incorporate **edge features** vào message passing:
+```
+GIN:   h_v = MLP( (1+ε)·h_v + Σ_{u∈N(v)} h_u )
+GINE:  h_v = MLP( (1+ε)·h_v + Σ_{u∈N(v)} ReLU(h_u + e_uv) )
+                                                   ^^^^^^
+                                              edge feature incorporated
+```
+
+**Insight then chốt:** Với `e_uv = 1/deg(v)` (= IC-A0 propagation probability), GINE nhận **explicit IC mechanism** trong message passing — model biết xác suất "được infected" của mỗi cạnh. Đây là upper bound experiment: nếu GINE với IC edge features vẫn không beat degree → structural constraint của A0 là absolute.
+
+```python
+from torch_geometric.nn import GINEConv
+
+class GINESurrogate(nn.Module):
+    """
+    GINE surrogate với IC propagation probabilities làm edge features.
+    
+    Alignment với IC (C5 hypothesis — H5):
+    IC-A0: p(u,v) = 1/deg(v) — propagation probability của mỗi edge.
+    GINE nhận e_uv = p(u,v) explicitly → message từ u đến v = ReLU(h_u + 1/deg(v))
+    → Model biết "trọng số" của mỗi cạnh theo IC dynamics.
+    
+    ⚠ Không phải "feature-agnostic": edge features = structural property (1/deg).
+    Trong paper: "GINE with explicit IC mechanism encoding" — supplemental upper bound.
+    ⚠ KHÔNG đưa vào C2 fair comparison (C2 = node features only, no edge features).
+    
+    Ref: Hu et al., "Strategies for Pre-training Graph Neural Networks", NeurIPS 2019
+    """
+    def __init__(self, in_dim=3, hidden_dim=128, edge_dim=1, dropout=0.3):
+        super().__init__()
+        # GINE cần edge_dim phải khớp với hidden_dim trong MLP
+        nn1 = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        nn2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        self.conv1 = GINEConv(nn1, train_eps=True, edge_dim=edge_dim)
+        self.conv2 = GINEConv(nn2, train_eps=True, edge_dim=edge_dim)
+        self.head  = nn.Linear(hidden_dim, 1)
+        self.drop  = nn.Dropout(dropout)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = F.relu(self.conv1(x, edge_index, edge_attr))
+        x = self.drop(x)
+        x = F.relu(self.conv2(x, edge_index, edge_attr))
+        return self.head(x).squeeze(-1)
+
+
+def compute_ic_edge_features(edge_index, degrees, rule='a0'):
+    """
+    Compute IC propagation probability for each edge as edge feature.
+    
+    rule='a0': p(u,v) = 1/deg(v)          — IC primary (Weighted Cascade)
+    rule='a2': p(u,v) = 1/sqrt(deg(u)*deg(v)) — IC symmetric sensitivity
+    
+    Returns: edge_attr of shape (E, 1) — IC probability per directed edge
+    """
+    src, dst = edge_index[0], edge_index[1]
+    if rule == 'a0':
+        # p(u,v) = 1/deg(v) — sink-degree only
+        probs = 1.0 / degrees[dst].float().clamp(min=1)
+    elif rule == 'a2':
+        # p(u,v) = 1/sqrt(deg(u)*deg(v)) — symmetric
+        probs = 1.0 / (degrees[src].float() * degrees[dst].float()).sqrt().clamp(min=1)
+    return probs.unsqueeze(-1)          # shape: (E, 1)
+
+# Cách dùng C5:
+# edge_attr_a0 = compute_ic_edge_features(data.edge_index, degree_tensor, rule='a0')
+# model_gine = GINESurrogate(in_dim=3, hidden_dim=128, edge_dim=1)
+# preds = model_gine(data.x, data.edge_index, edge_attr_a0)
+```
+
+**C5 Experiment protocol:**
+
+| Variant | Edge features | Node features | CSV model_name | Priority |
+|---|---|---|---|---|
+| GINE-IC-A0 | `1/deg(v)` per edge | `raw_attr` | `gine_ic_a0_raw_attr` | ✦ [IF TIME] |
+| GINE-IC-A2 | `1/√(deg(u)×deg(v))` per edge | `raw_attr` | `gine_ic_a2_raw_attr` | ✦ [IF TIME] |
+| GINE-graph-only | `1/deg(v)` per edge | `degree_norm` only | `gine_ic_a0_graph_only` | ✦ [IF TIME] |
+
+> **Framing C5 trong paper (bắt buộc nếu include):** "As an upper bound analysis, we augment GNN message passing with explicit IC propagation probabilities as edge features (GINE; Hu et al., 2019). This test quantifies how much structural improvement remains when the diffusion mechanism is directly encoded — distinguishing architectural expressiveness limits from information limits."
+>
+> **Nếu GINE-IC-A0 cũng không beat degree:** → definitive evidence rằng IC-A0 label là structurally degree-equivalent; chuyển full focus sang I-A track cho GNN advantage claim.
+>
+> **Nếu GINE-IC-A0 beat degree:** → thú vị — explicit IC mechanism encoding helps; paper claim = "surrogate learning benefits from encoding diffusion mechanism structure."
+
+**Output:** Thêm rows vào `surrogate_ranking_metrics.csv` (same schema).
+
+---
+
+### 9.1e Architecture Evaluation Log — Considered & Rejected
+
+> **Tại sao section này tồn tại:** Khi reviewer hỏi "why not try X?", team có documented rationale. Đây cũng là checklist để không waste time implement architectures không phù hợp.
+
+| Architecture | Xem xét? | Verdict | Lý do chi tiết |
+|---|---|---|---|
+| **GATv2** (Brody et al., ICLR 2022) | ✅ | ✅ Dùng cho **C2-I-A** | Dynamic attention khớp I-A row-normalization; C2-A0 dùng GAT v1 (static attention phù hợp hơn cho A0). Xem Section 9.1 và C2-I-A block. |
+| **GINE** (Hu et al., NeurIPS 2019) | ✅ | ✅ **C5 supplemental** [IF TIME] | Edge features = IC prob — strongest explicit alignment; NOT feature-agnostic; không vào C2 fair comparison. |
+| **GCNII** (Chen et al., ICML 2020) | ✅ | ❌ Skip cho C2 | Advantage chỉ xuất hiện tại L=16–64 layers. Tại `n_layers=2` (C2 locked), GCNII ≈ GCN + residual connection — không đủ khác biệt để justify thêm vào. Nếu muốn test, cần L=16 separate experiment, phá vỡ fair comparison. |
+| **HGT** (Hu et al., WWW 2020) | ✅ | ❌ **Loại hoàn toàn** | Designed cho heterogeneous graphs (multiple node/edge types). Twitch follower graph là **homogeneous** (1 node type, 1 edge type) → type-specific attention matrices collapse về 1 matrix → HGT = complex GAT variant với overhead không có lợi. Wrong problem type. |
+| **GraphGPS** (Rampášek et al., NeurIPS 2022) | ✅ | ❌ **Loại — scale blocker** | MPNN + global Transformer attention. Standard Transformer = O(N²) với N=168k → 28 tỷ attention pairs, không fit GPU. Efficient variants (Performer, BigBird) cần precompute LapPE/RWSE (~30–60 phút eigendecomposition trên 168k×168k). Overkill cho task node regression với 3 features. |
+
+**Quick decision rule cho future architectures:**
+
+```
+Câu hỏi 1: Graph có nhiều node/edge types không?
+  → Không (Twitch = homogeneous) → Loại HGT và mọi heterogeneous GNN
+
+Câu hỏi 2: Architecture scale được với 168k nodes + 6.8M edges trên 1 GPU?
+  → O(N²) attention (standard Transformer) → Loại nếu không có efficient approx
+  → Cần eigendecomposition của full Laplacian → Cần benchmark trước
+
+Câu hỏi 3: Architecture có advantage chỉ ở L >> 2 không?
+  → Yes (GCNII, DeepGCN...) → Skip (C2 locked tại n_layers=2 cho fair comparison)
+  → Có thể test riêng ngoài C2 nếu thời gian
+
+Câu hỏi 4: Architecture cần edge features không có trong đồ thị?
+  → Nếu edge features có thể compute từ graph structure → OK (GINE + IC prob)
+  → Nếu cần external data không có → Loại
+```
+
+---
+
 ### 9.2 Training Protocol
 
 ```python
@@ -1663,7 +1883,7 @@ def dead_account_audit(df_raw):
 **3.2 IC Captures Higher-Order Effects (Multi-hop Composition + Degree-Controlled Variance)**
 
 - **Empirical evidence từ artifacts (không suy đoán — đã có số liệu):**
-  - `one_hop_spread` Spearman với IC = **0.688** — local neighbors alone không predict IC well
+  - `one_hop_spread` Spearman với IC = **0.688** _(test-split evaluation; full-sample Spearman: 0.717 per correlation matrix)_ — local neighbors alone không predict IC well
     - `two_hop_spread` Spearman với IC = **0.804** — hai hop captures IC đáng kể tốt hơn (+0.116)
   - `degree` Spearman với IC = **0.826** — degree là strongest structural predictor
     - **Gap one_hop vs two_hop (+0.116)** chứng minh IC phản ánh **multi-hop cascade composition**, không phải single-hop structure
@@ -1675,7 +1895,7 @@ def dead_account_audit(df_raw):
   - This justifies MC-IC as a richer operational metric than degree rank alone
 
 - **Paper narrative chuẩn cho 3.2:**
-  > _"IC simulation captures multi-hop cascade composition beyond degree: two-hop spread correlates with IC at ρ=0.804, exceeding one-hop spread (ρ=0.688), indicating that influence propagates through second-order neighborhoods. While degree remains the strongest single predictor (ρ=0.826), degree-controlled variance analysis reveals IC encodes additional community structure — confirming MC-IC as a richer operational metric than centrality-based ranking."_
+  > _"IC simulation captures multi-hop cascade composition beyond degree: two-hop spread correlates with IC at ρ=0.804, exceeding one-hop spread (ρ=0.688; test-split evaluation — full-sample Spearman: 0.717), indicating that influence propagates through second-order neighborhoods. While degree remains the strongest single predictor (ρ=0.826), degree-controlled variance analysis reveals IC encodes additional community structure — confirming MC-IC as a richer operational metric than centrality-based ranking."_
 
 **3.3 Label Stability Analysis**
 
