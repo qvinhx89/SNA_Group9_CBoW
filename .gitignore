@@ -38,6 +38,10 @@ outputs/*
 !outputs/stage2/**
 !outputs/stage3/
 !outputs/stage3/**
+!outputs/ic_feasibility/
+!outputs/ic_feasibility/**
+!outputs/mapr2026_v3_results/
+!outputs/mapr2026_v3_results/**
 !outputs/day1_benchmark/
 !outputs/day1_benchmark/ic_runtime_benchmark.json
 !outputs/day1_benchmark/one_hop_correlation.json
@@ -62,12 +66,15 @@ data/processed/*
 !data/processed/node_attributes.parquet
 !data/processed/centrality_table.parquet
 !data/processed/community_labels.parquet
+!data/processed/community_features.parquet
 !data/processed/kshell_table.parquet
 !data/processed/sis_table.parquet
 !data/processed/typology_labels.parquet
+!data/processed/typology_labels_ic_views.parquet
 !data/processed/graph_csr.npz
 !data/processed/ic_scores_primary.parquet
 !data/processed/ic_scores_primary_with_ci.parquet
+!data/processed/diffusion_proxies.parquet
 !data/processed/regression_targets.parquet
 !data/processed/classification_labels.parquet
 !data/processed/split_masks.parquet

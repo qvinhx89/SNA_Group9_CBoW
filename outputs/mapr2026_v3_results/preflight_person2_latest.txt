@@ -1,0 +1,151 @@
+﻿
+================================================================================
+MAPR2026 v3 - Person 2 Preflight Report
+================================================================================
+[PASS] [BLOCK] Python version: Detected Python 3.12.13 (required: 3.10..3.12)
+[PASS] [BLOCK] Required Python packages: All required modules import successfully (including python-louvain).
+[PASS] [BLOCK] Stage-0 active graph: Found: D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\graph_active.edgelist
+[PASS] [BLOCK] node_attributes base schema: OK columns and non-missing values in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\node_attributes.parquet: node_id, views, life_time
+[PASS] [BLOCK] Results directory writable: Writable: D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\outputs\mapr2026_v3_results
+[PASS] [BLOCK] Day-1 benchmark artifacts: Found required Day-1 artifacts and keys in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\outputs\day1_benchmark
+[PASS] [BLOCK] CSR artifact contract: OK schema, bounds, determinism, and degree consistency in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\graph_csr.npz
+[PASS] [BLOCK] IC scores contract: OK schema, uniqueness, non-missing, n_runs>0, and p_model=weighted_cascade in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\ic_scores_primary.parquet (rows=5000)
+[PASS] [BLOCK] Community features contract: Valid schema + no missing + full active-node coverage in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\community_features.parquet
+[PASS] [BLOCK] Centrality table contract: Valid schema + non-missing + full active-node coverage in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\centrality_table.parquet
+[PASS] [BLOCK] Day-1 decisions note: Found locked decisions in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\docs\day1_decisions.md
+[PASS] [BLOCK] Input join coherence: All IC-labeled nodes can be joined with views/life_time, centrality, and community features
+[PASS] [BLOCK] Stage-5 null package: Found complete Task 7/8/9 null package: null_model_typology_summary.json + views_permutation_null_summary.json + ic_permutation_null_summary.json
+[PASS] [BLOCK] Metric correlation matrix: Valid Task 11 artifact in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\outputs\mapr2026_v3_results\metric_correlation_matrix.json (n_rows=5000, n_rows_expected=5000, betweenness_source=betweenness)
+[PASS] [INFO ] Permutation quality policy: Permutation artifacts satisfy soft policy: n_permutations >= 200, p-resolution <= 0.01, top_pct=0.10
+[PASS] [INFO ] Lifetime IF PROBLEM status: IF PROBLEM handled: lifetime trigger active and fallback corroboration documented (language_validation.json present + assumptions_limitations note found).
+[PASS] [INFO ] Existing proxies schema: Proxies appear real-mode complete in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\data\processed\diffusion_proxies.parquet (rows=168114)
+[PASS] [INFO ] Existing null-model summary schema: Schema matches final contract in D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\outputs\mapr2026_v3_results\null_model_typology_summary.json
+
+--------------------------------------------------------------------------------
+Summary: PASS=18, WARN=0, FAIL=0
+Ready for independent Track B coding (dry-run/skeleton): PASS
+Ready for full real-mode Track B execution: PASS
+Ready for completion-ready declaration: PASS
+Overall blocking status: PASS
+--------------------------------------------------------------------------------
+{
+  "summary": {
+    "pass": 18,
+    "warn": 0,
+    "fail": 0,
+    "overall_blocking_status": "PASS",
+    "ready_independent": true,
+    "ready_real_mode": true,
+    "ready_completion": true
+  },
+  "checks": [
+    {
+      "name": "Python version",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Detected Python 3.12.13 (required: 3.10..3.12)"
+    },
+    {
+      "name": "Required Python packages",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "All required modules import successfully (including python-louvain)."
+    },
+    {
+      "name": "Stage-0 active graph",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Found: D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\graph_active.edgelist"
+    },
+    {
+      "name": "node_attributes base schema",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "OK columns and non-missing values in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\node_attributes.parquet: node_id, views, life_time"
+    },
+    {
+      "name": "Results directory writable",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Writable: D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\mapr2026_v3_results"
+    },
+    {
+      "name": "Day-1 benchmark artifacts",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Found required Day-1 artifacts and keys in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\day1_benchmark"
+    },
+    {
+      "name": "CSR artifact contract",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "OK schema, bounds, determinism, and degree consistency in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\graph_csr.npz"
+    },
+    {
+      "name": "IC scores contract",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "OK schema, uniqueness, non-missing, n_runs>0, and p_model=weighted_cascade in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\ic_scores_primary.parquet (rows=5000)"
+    },
+    {
+      "name": "Community features contract",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Valid schema + no missing + full active-node coverage in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\community_features.parquet"
+    },
+    {
+      "name": "Centrality table contract",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Valid schema + non-missing + full active-node coverage in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\centrality_table.parquet"
+    },
+    {
+      "name": "Day-1 decisions note",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Found locked decisions in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\docs\\day1_decisions.md"
+    },
+    {
+      "name": "Input join coherence",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "All IC-labeled nodes can be joined with views/life_time, centrality, and community features"
+    },
+    {
+      "name": "Stage-5 null package",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Found complete Task 7/8/9 null package: null_model_typology_summary.json + views_permutation_null_summary.json + ic_permutation_null_summary.json"
+    },
+    {
+      "name": "Metric correlation matrix",
+      "status": "PASS",
+      "blocking": true,
+      "detail": "Valid Task 11 artifact in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\mapr2026_v3_results\\metric_correlation_matrix.json (n_rows=5000, n_rows_expected=5000, betweenness_source=betweenness)"
+    },
+    {
+      "name": "Permutation quality policy",
+      "status": "PASS",
+      "blocking": false,
+      "detail": "Permutation artifacts satisfy soft policy: n_permutations >= 200, p-resolution <= 0.01, top_pct=0.10"
+    },
+    {
+      "name": "Lifetime IF PROBLEM status",
+      "status": "PASS",
+      "blocking": false,
+      "detail": "IF PROBLEM handled: lifetime trigger active and fallback corroboration documented (language_validation.json present + assumptions_limitations note found)."
+    },
+    {
+      "name": "Existing proxies schema",
+      "status": "PASS",
+      "blocking": false,
+      "detail": "Proxies appear real-mode complete in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\diffusion_proxies.parquet (rows=168114)"
+    },
+    {
+      "name": "Existing null-model summary schema",
+      "status": "PASS",
+      "blocking": false,
+      "detail": "Schema matches final contract in D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\mapr2026_v3_results\\null_model_typology_summary.json"
+    }
+  ]
+}

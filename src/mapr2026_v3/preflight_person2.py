@@ -29,6 +29,7 @@ import pandas as pd
 
 
 REQUIRED_P_MODEL = "weighted_cascade"
+DEFAULT_PERM_MIN_POLICY = 200
 
 INDEPENDENT_CHECKS = {
     "Python version",
@@ -62,6 +63,8 @@ COMPLETION_READY_CHECKS = {
     "Day-1 decisions note",
     "Centrality table contract",
     "Input join coherence",
+    "Stage-5 null package",
+    "Metric correlation matrix",
 }
 
 
@@ -495,8 +498,19 @@ def _check_day1_decisions(path: Path) -> CheckResult:
         )
 
     text = path.read_text(encoding="utf-8", errors="ignore").lower()
-    expected_tokens = ["n_seeds", "n_runs", "narrative"]
-    missing_tokens = [tok for tok in expected_tokens if tok not in text]
+
+    # Plan uses n_sample/n_runs/narrative_branch (legacy docs may still mention n_seeds/narrative).
+    has_sample = ("n_sample" in text) or ("n_seeds" in text)
+    has_runs = "n_runs" in text
+    has_narrative = ("narrative_branch" in text) or ("narrative" in text)
+
+    missing_tokens: list[str] = []
+    if not has_sample:
+        missing_tokens.append("n_sample")
+    if not has_runs:
+        missing_tokens.append("n_runs")
+    if not has_narrative:
+        missing_tokens.append("narrative_branch")
     if missing_tokens:
         return CheckResult(
             name="Day-1 decisions note",
@@ -745,6 +759,558 @@ def _check_outputs_dir(path: Path) -> CheckResult:
         )
 
 
+def _check_stage5_null_package(results_dir: Path) -> CheckResult:
+    """Blocking completion check for Stage-5 null package (Task 7/8/9)."""
+    null_model_path = results_dir / "null_model_typology_summary.json"
+    views_perm_path = results_dir / "views_permutation_null_summary.json"
+    ic_perm_path = results_dir / "ic_permutation_null_summary.json"
+
+    missing_files = [str(p) for p in [null_model_path, views_perm_path, ic_perm_path] if not p.exists()]
+    if missing_files:
+        return CheckResult(
+            name="Stage-5 null package",
+            status="FAIL",
+            blocking=True,
+            detail=f"Missing required null-package artifact(s): {missing_files}",
+        )
+
+    def _load_json(path: Path) -> dict[str, Any]:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    try:
+        payload_null = _load_json(null_model_path)
+        payload_views = _load_json(views_perm_path)
+        payload_ic = _load_json(ic_perm_path)
+    except Exception as ex:
+        return CheckResult(
+            name="Stage-5 null package",
+            status="FAIL",
+            blocking=True,
+            detail=f"Failed to parse one or more null-package JSON files: {ex}",
+        )
+
+    required_null = [
+        "timestamp",
+        "n_nodes",
+        "n_realizations",
+        "n_runs_per_node",
+        "rho_mean",
+        "rho_std",
+        "hidden_betweenness_real_subgraph_mean",
+        "hidden_betweenness_null_mean",
+        "hidden_betweenness_null_std",
+        "interpretation",
+    ]
+    missing_null = [k for k in required_null if k not in payload_null]
+    if missing_null:
+        return CheckResult(
+            name="Stage-5 null package",
+            status="FAIL",
+            blocking=True,
+            detail=f"null_model_typology_summary.json missing keys: {missing_null}",
+        )
+
+    for label, payload in [
+        ("views_permutation_null_summary.json", payload_views),
+        ("ic_permutation_null_summary.json", payload_ic),
+    ]:
+        required_top = [
+            "timestamp",
+            "n_nodes_labeled",
+            "n_permutations",
+            "top_pct",
+            "real",
+            "null_distribution",
+            "empirical_p_values",
+            "interpretation",
+        ]
+        missing_top = [k for k in required_top if k not in payload]
+        if missing_top:
+            return CheckResult(
+                name="Stage-5 null package",
+                status="FAIL",
+                blocking=True,
+                detail=f"{label} missing top-level keys: {missing_top}",
+            )
+
+        if int(payload.get("n_permutations", 0)) < 1:
+            return CheckResult(
+                name="Stage-5 null package",
+                status="FAIL",
+                blocking=True,
+                detail=f"{label} has invalid n_permutations={payload.get('n_permutations')}",
+            )
+
+        if not isinstance(payload.get("real"), dict) or "agreement_rate" not in payload["real"]:
+            return CheckResult(
+                name="Stage-5 null package",
+                status="FAIL",
+                blocking=True,
+                detail=f"{label} missing real.agreement_rate",
+            )
+
+        if not isinstance(payload.get("null_distribution"), dict) or "agreement_rate_mean" not in payload["null_distribution"]:
+            return CheckResult(
+                name="Stage-5 null package",
+                status="FAIL",
+                blocking=True,
+                detail=f"{label} missing null_distribution.agreement_rate_mean",
+            )
+
+        if not isinstance(payload.get("empirical_p_values"), dict):
+            return CheckResult(
+                name="Stage-5 null package",
+                status="FAIL",
+                blocking=True,
+                detail=f"{label} missing empirical_p_values object",
+            )
+
+    return CheckResult(
+        name="Stage-5 null package",
+        status="PASS",
+        blocking=True,
+        detail=(
+            "Found complete Task 7/8/9 null package: "
+            "null_model_typology_summary.json + views_permutation_null_summary.json + ic_permutation_null_summary.json"
+        ),
+    )
+
+
+def _soft_check_permutation_quality(results_dir: Path, min_permutations_policy: int) -> CheckResult:
+    """Non-blocking quality check for Task 8/9 permutation artifacts.
+
+    This check is intentionally soft (WARN/PASS only) to avoid blocking pipeline
+    completion while still surfacing statistical-quality risks.
+    """
+    if int(min_permutations_policy) < 1:
+        return CheckResult(
+            name="Permutation quality policy",
+            status="WARN",
+            blocking=False,
+            detail=f"Invalid min_permutations_policy={min_permutations_policy}; expected >=1",
+        )
+
+    views_perm_path = results_dir / "views_permutation_null_summary.json"
+    ic_perm_path = results_dir / "ic_permutation_null_summary.json"
+
+    missing_files = [str(p) for p in [views_perm_path, ic_perm_path] if not p.exists()]
+    if missing_files:
+        return CheckResult(
+            name="Permutation quality policy",
+            status="WARN",
+            blocking=False,
+            detail=f"Cannot evaluate permutation quality because artifact(s) missing: {missing_files}",
+        )
+
+    try:
+        payload_views = json.loads(views_perm_path.read_text(encoding="utf-8"))
+        payload_ic = json.loads(ic_perm_path.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return CheckResult(
+            name="Permutation quality policy",
+            status="WARN",
+            blocking=False,
+            detail=f"Could not parse permutation artifacts for soft quality check: {ex}",
+        )
+
+    warns: list[str] = []
+
+    def _eval_one(label: str, payload: dict[str, Any]) -> None:
+        n_perm = int(payload.get("n_permutations", 0))
+        if n_perm < int(min_permutations_policy):
+            warns.append(
+                f"{label}: n_permutations={n_perm} < policy_min={min_permutations_policy}"
+            )
+
+        if n_perm > 0:
+            min_p_resolution = 1.0 / float(n_perm + 1)
+            if min_p_resolution > 0.01:
+                warns.append(
+                    f"{label}: min empirical p-value resolution={min_p_resolution:.4f} is coarse (>0.01)"
+                )
+
+        top_pct = float(payload.get("top_pct", -1.0))
+        if not np.isclose(top_pct, 0.10, atol=1e-9):
+            warns.append(f"{label}: top_pct={top_pct} differs from M0 lock 0.10")
+
+        null_dist = payload.get("null_distribution")
+        if isinstance(null_dist, dict):
+            std_agree = float(null_dist.get("agreement_rate_std", 0.0))
+            if std_agree <= 0.0:
+                warns.append(f"{label}: agreement_rate_std<=0 suggests degenerate/null issue")
+
+    _eval_one("views_permutation_null_summary.json", payload_views)
+    _eval_one("ic_permutation_null_summary.json", payload_ic)
+
+    if warns:
+        return CheckResult(
+            name="Permutation quality policy",
+            status="WARN",
+            blocking=False,
+            detail="; ".join(warns),
+        )
+
+    return CheckResult(
+        name="Permutation quality policy",
+        status="PASS",
+        blocking=False,
+        detail=(
+            "Permutation artifacts satisfy soft policy: "
+            f"n_permutations >= {min_permutations_policy}, p-resolution <= 0.01, top_pct=0.10"
+        ),
+    )
+
+
+def _check_lifetime_if_problem_handled(results_dir: Path, assumptions_doc: Path) -> CheckResult:
+    """Non-blocking visibility check for Task 6 IF PROBLEM fallback handling."""
+    lifetime_path = results_dir / "lifetime_validation.json"
+    language_path = results_dir / "language_validation.json"
+
+    if not lifetime_path.exists():
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail=f"Cannot evaluate lifetime fallback status because artifact is missing: {lifetime_path}",
+        )
+
+    try:
+        lifetime_payload = json.loads(lifetime_path.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail=f"Could not parse lifetime_validation.json for fallback visibility: {ex}",
+        )
+
+    if not isinstance(lifetime_payload, dict):
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail="lifetime_validation.json payload is not an object; cannot determine IF PROBLEM status",
+        )
+
+    try:
+        rho = float(lifetime_payload.get("partial_spearman_rho", np.nan))
+    except Exception:
+        rho = float("nan")
+
+    try:
+        n_sig = int(lifetime_payload.get("n_quintiles_significant"))
+    except Exception:
+        n_sig = -1
+
+    success_flag = lifetime_payload.get("success")
+    trigger_from_metrics = (np.isfinite(rho) and rho < 0.05) or (n_sig >= 0 and n_sig < 3)
+    trigger_from_success = isinstance(success_flag, bool) and (not success_flag)
+    fallback_triggered = bool(trigger_from_metrics or trigger_from_success)
+
+    if not fallback_triggered:
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="PASS",
+            blocking=False,
+            detail=(
+                "IF PROBLEM not triggered: lifetime_validation.json passes trigger conditions "
+                f"(partial_spearman_rho={rho:.4f}, n_quintiles_significant={n_sig})"
+            ),
+        )
+
+    if not language_path.exists():
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail=(
+                "IF PROBLEM triggered by lifetime_validation.json but language fallback artifact is missing: "
+                f"{language_path}"
+            ),
+        )
+
+    try:
+        language_payload = json.loads(language_path.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail=f"IF PROBLEM triggered but language_validation.json could not be parsed: {ex}",
+        )
+
+    if not isinstance(language_payload, dict):
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="WARN",
+            blocking=False,
+            detail="IF PROBLEM triggered but language_validation.json payload is not an object",
+        )
+
+    assumptions_note_present = False
+    if assumptions_doc.exists():
+        try:
+            assumptions_text = assumptions_doc.read_text(encoding="utf-8").lower()
+            assumptions_note_present = (
+                "task 6 if problem" in assumptions_text
+                and "language-based corroboration" in assumptions_text
+                and "supplementary" in assumptions_text
+            )
+        except Exception:
+            assumptions_note_present = False
+
+    if assumptions_note_present:
+        return CheckResult(
+            name="Lifetime IF PROBLEM status",
+            status="PASS",
+            blocking=False,
+            detail=(
+                "IF PROBLEM handled: lifetime trigger active and fallback corroboration documented "
+                "(language_validation.json present + assumptions_limitations note found)."
+            ),
+        )
+
+    return CheckResult(
+        name="Lifetime IF PROBLEM status",
+        status="WARN",
+        blocking=False,
+        detail=(
+            "IF PROBLEM triggered and language_validation.json exists, but assumptions_limitations note "
+            "(Task 6 IF PROBLEM + supplementary language corroboration) was not found."
+        ),
+    )
+
+
+def _check_metric_correlation_matrix(results_dir: Path, ic_scores_path: Path) -> CheckResult:
+    """Blocking completion check for Task 11 metric correlation artifact."""
+    path = results_dir / "metric_correlation_matrix.json"
+    if not path.exists():
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="FAIL",
+            blocking=True,
+            detail=f"Missing required artifact: {path}",
+        )
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="FAIL",
+            blocking=True,
+            detail=f"Failed to parse JSON: {ex}",
+        )
+
+    if not isinstance(payload, dict):
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="FAIL",
+            blocking=True,
+            detail="Top-level JSON payload must be an object",
+        )
+
+    try:
+        df_ic = _load_parquet(ic_scores_path)
+        if "node_id" not in df_ic.columns:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"IC scores file missing node_id column: {ic_scores_path}",
+            )
+        expected_rows_from_ic = int(df_ic["node_id"].astype(str).nunique())
+    except Exception as ex:
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="FAIL",
+            blocking=True,
+            detail=f"Could not read IC scores for coverage check: {ex}",
+        )
+    try:
+        required_top = [
+            "timestamp",
+            "n_rows",
+            "n_rows_expected",
+            "coverage_ok",
+            "metrics",
+            "rho_matrix",
+            "p_matrix_corrected",
+            "column_mapping",
+        ]
+        missing_top = [k for k in required_top if k not in payload]
+        if missing_top:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"Missing top-level keys: {missing_top}",
+            )
+
+        expected_metrics = [
+            "ic_score_mean",
+            "views",
+            "degree",
+            "pagerank",
+            "kshell",
+            "betweenness_approx",
+            "one_hop_spread",
+            "two_hop_spread",
+        ]
+        metrics = payload.get("metrics")
+        if metrics != expected_metrics:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"metrics list mismatch. expected={expected_metrics}, got={metrics}",
+            )
+
+        try:
+            n_rows = int(payload.get("n_rows"))
+            n_rows_expected = int(payload.get("n_rows_expected"))
+        except Exception as ex:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"n_rows/n_rows_expected must be integer-like values: {ex}",
+            )
+
+        coverage_ok = payload.get("coverage_ok")
+        if not isinstance(coverage_ok, bool):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="coverage_ok must be a boolean",
+            )
+        if not coverage_ok:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="coverage_ok=false in Task 11 artifact",
+            )
+        if n_rows != n_rows_expected:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"n_rows mismatch inside artifact: n_rows={n_rows}, n_rows_expected={n_rows_expected}",
+            )
+        if n_rows != expected_rows_from_ic:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=(
+                    "Task 11 coverage mismatch vs IC labels: "
+                    f"artifact n_rows={n_rows}, IC unique node_id={expected_rows_from_ic}"
+                ),
+            )
+
+        n = len(expected_metrics)
+        try:
+            rho = np.asarray(payload.get("rho_matrix"), dtype=float)
+            p_corr = np.asarray(payload.get("p_matrix_corrected"), dtype=float)
+        except Exception as ex:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"Invalid matrix payload: {ex}",
+            )
+
+        if rho.shape != (n, n) or p_corr.shape != (n, n):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"Matrix shape mismatch: rho={rho.shape}, p_matrix_corrected={p_corr.shape}, expected={(n, n)}",
+            )
+
+        if not np.isfinite(rho).all() or not np.isfinite(p_corr).all():
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="rho_matrix or p_matrix_corrected contains non-finite values",
+            )
+
+        if np.any(p_corr < 0.0) or np.any(p_corr > 1.0):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="p_matrix_corrected contains values outside [0,1]",
+            )
+
+        # Convention lock: diagonal corresponds to self-correlation (no test), must be 1.0.
+        if not np.allclose(np.diag(p_corr), np.ones(n, dtype=float), atol=1e-12):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="p_matrix_corrected diagonal must be 1.0 for all metrics",
+            )
+
+        if not np.allclose(rho, rho.T, atol=1e-12) or not np.allclose(p_corr, p_corr.T, atol=1e-12):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="rho_matrix or p_matrix_corrected is not symmetric",
+            )
+
+        mapping = payload.get("column_mapping")
+        if not isinstance(mapping, dict):
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail="column_mapping must be an object",
+            )
+
+        missing_mapping = [m for m in expected_metrics if m not in mapping]
+        if missing_mapping:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=f"column_mapping missing canonical metrics: {missing_mapping}",
+            )
+
+        bet_source = str(mapping.get("betweenness_approx"))
+        if bet_source not in {"betweenness_approx", "betweenness"}:
+            return CheckResult(
+                name="Metric correlation matrix",
+                status="FAIL",
+                blocking=True,
+                detail=(
+                    "column_mapping['betweenness_approx'] must map to source 'betweenness_approx' "
+                    f"or 'betweenness'; got '{bet_source}'"
+                ),
+            )
+
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="PASS",
+            blocking=True,
+            detail=(
+                f"Valid Task 11 artifact in {path} (n_rows={n_rows}, "
+                f"n_rows_expected={n_rows_expected}, betweenness_source={bet_source})"
+            ),
+        )
+    except Exception as ex:
+        return CheckResult(
+            name="Metric correlation matrix",
+            status="FAIL",
+            blocking=True,
+            detail=f"Unexpected validation error (structured fail): {ex}",
+        )
+
+
 def _optional_existing_artifact_checks(repo: Path, active_nodes_count: int) -> list[CheckResult]:
     """Validate already-generated Track B artifacts if they exist.
 
@@ -813,6 +1379,7 @@ def _optional_existing_artifact_checks(repo: Path, active_nodes_count: int) -> l
                 "n_runs_per_node",
                 "rho_mean",
                 "rho_std",
+                "hidden_betweenness_real_subgraph_mean",
                 "hidden_betweenness_null_mean",
                 "hidden_betweenness_null_std",
                 "interpretation",
@@ -877,6 +1444,12 @@ def main() -> int:
         action="store_true",
         help="Print machine-readable JSON summary in addition to text output.",
     )
+    parser.add_argument(
+        "--perm-min-policy",
+        type=int,
+        default=DEFAULT_PERM_MIN_POLICY,
+        help="Soft policy minimum for permutation count in Task 8/9 artifacts (non-blocking WARN if below).",
+    )
     args = parser.parse_args()
 
     repo = _repo_root()
@@ -890,6 +1463,7 @@ def main() -> int:
     centrality_table = repo / "data/processed/centrality_table.parquet"
     day1_dir = repo / "outputs/day1_benchmark"
     day1_note = repo / "docs/day1_decisions.md"
+    assumptions_doc = repo / "docs/assumptions_limitations.md"
     results_dir = repo / "outputs/mapr2026_v3_results"
 
     checks: list[CheckResult] = []
@@ -926,6 +1500,10 @@ def main() -> int:
     checks.append(_check_centrality_contract(centrality_table, active_nodes))
     checks.append(_check_day1_decisions(day1_note))
     checks.append(_check_input_join_coherence(ic_scores, node_attrs, community_features, centrality_table))
+    checks.append(_check_stage5_null_package(results_dir))
+    checks.append(_check_metric_correlation_matrix(results_dir, ic_scores_path=ic_scores))
+    checks.append(_soft_check_permutation_quality(results_dir, min_permutations_policy=int(args.perm_min_policy)))
+    checks.append(_check_lifetime_if_problem_handled(results_dir=results_dir, assumptions_doc=assumptions_doc))
 
     # 4) Non-blocking checks on currently existing artifacts (if present)
     checks.extend(_optional_existing_artifact_checks(repo, active_nodes_count=len(active_nodes)))

@@ -1,0 +1,16 @@
+﻿
+handoff                                                  file_count
+-------                                                  ----------
+person1_day1_20260406_p1_day1_v1                                  1
+person1_day1_20260406_p1_day1_v2_provisional                      1
+person1_day1_20260406_p1_day1_v3_provisional_consensusB           1
+person1_day1_20260406_p1_day1_v3b_provisional_consensusB          1
+person1_day1_20260406_p1_day1_v3c_provisional_consensusB          1
+person1_day1_20260406_p1_day1_v3d_optionB_lockstep                1
+person1_day1_20260407_p1_day1_v3e_optionB_lockstep               24
+person1_day1_20260408_p1_day1_v3g_optionB_lockstep               26
+person1_day1_20260408_p1_day1_v3h_optionB_lockstep                1
+person1_day1_20260409_p1_day1_v3i_optionB_lockstep                1
+
+
+

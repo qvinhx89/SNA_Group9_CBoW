@@ -8,7 +8,7 @@
 
 ## 1) Decision Summary
 
-Team can not close Stage 4 with hard-gate pass under current thresholds, even after reproducible reruns and policy cleanup.  
+Team can not close Stage 4 with hard-gate pass under current thresholds, even after reproducible reruns and policy cleanup.
 This request asks approvers to choose an official governance path so Person 2 and Person 3 can continue without contract drift.
 
 Requested decision outcome:
@@ -42,7 +42,7 @@ Requested decision outcome:
 - Locked definition: `policy_b == (seed_vote_count >= consensus_k)`
 - Source: `outputs/day1_benchmark/policy_compare/policy_comparison_summary.json`
 - Consensus export consistency report:
-	`outputs/day1_benchmark/policy_compare/classification_labels_consensus_report.json`
+  `outputs/day1_benchmark/policy_compare/classification_labels_consensus_report.json`
 
 ## 3) Constraints To Respect
 
@@ -149,7 +149,7 @@ If Option B is approved, Person 1 will execute:
 
 1. Update governance note in `docs/day1_decisions.md` with approved wording.
 2. Publish consume rules to Person 2/3 using package:
-	 `outputs/handoffs/person1_day1_20260406_p1_day1_v3c_provisional_consensusB`
+   `outputs/handoffs/person1_day1_20260406_p1_day1_v3c_provisional_consensusB`
 3. If any requested adjustments are made, freeze new immutable package with new tag.
 
 If Option A is approved, Person 1 will execute:
@@ -169,5 +169,3 @@ If Option C is approved, Person 1 will execute:
 1. Team blocks continue due to unresolved acceptance criteria.
 2. Person 2/3 may consume labels inconsistently.
 3. Final report defense risk increases due to undocumented governance gap.
-
-
