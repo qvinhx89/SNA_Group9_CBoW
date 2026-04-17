@@ -22,6 +22,7 @@ Scaffold behavior
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass
 from pathlib import Path
 import time
@@ -29,6 +30,7 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
@@ -67,8 +69,11 @@ class SurrogateDataBundle:
     train_mask: torch.Tensor
     val_mask: torch.Tensor
     test_mask: torch.Tensor
+    sample_weight: torch.Tensor
+    train_eligible_mask: torch.Tensor
     scaler: MinMaxScaler
     split_mask_df: pd.DataFrame
+    label_gate: dict[str, Any]
 
 
 class GraphSAGERegressor(nn.Module):
@@ -138,6 +143,35 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
     return features
 
 
+def _parse_clip_range(raw: str) -> tuple[float, float]:
+    parts = [x.strip() for x in str(raw).split(",") if x.strip()]
+    if len(parts) != 2:
+        raise ValueError("--uncertainty-weight-clip must be in format 'min,max'")
+    lo = float(parts[0])
+    hi = float(parts[1])
+    if lo <= 0 or hi <= 0 or hi < lo:
+        raise ValueError("--uncertainty-weight-clip requires 0 < min <= max")
+    return lo, hi
+
+
+def _parse_int_list(raw: str) -> list[int]:
+    values: list[int] = []
+    for token in str(raw).split(","):
+        token = token.strip()
+        if token:
+            values.append(int(token))
+    if not values:
+        raise ValueError("List cannot be empty")
+    return values
+
+
+def _parse_str_list(raw: str) -> list[str]:
+    values = [token.strip() for token in str(raw).split(",") if token.strip()]
+    if not values:
+        raise ValueError("List cannot be empty")
+    return values
+
+
 def split_sets_from_shared_mask(split_mask_path: str | Path) -> dict[str, set[str]]:
     split_df = load_shared_split_mask(resolve_project_path(split_mask_path))
     split_df = _ensure_node_id_str(split_df)
@@ -184,8 +218,15 @@ def load_surrogate_data_bundle(
     node_attributes_path: str | Path = PATHS.node_attributes,
     centrality_path: str | Path = "data/processed/centrality_table.parquet",
     targets_path: str | Path = PATHS.regression_targets,
+    ic_scores_path: str | Path = PATHS.ic_scores,
     split_mask_path: str | Path = PATHS.split_masks,
     edgelist_path: str | Path = PATHS.graph_edgelist,
+    use_label_uncertainty_weights: bool = False,
+    uncertainty_eps: float = 1e-6,
+    uncertainty_weight_clip: tuple[float, float] = (0.25, 4.0),
+    drop_noisy_quantile: float = 0.0,
+    min_train_kept: int = 200,
+    stability_summary_csv: str | Path | None = None,
 ) -> SurrogateDataBundle:
     if Data is None:
         raise ImportError("torch_geometric is required for surrogate data bundle construction.")
@@ -276,6 +317,105 @@ def load_surrogate_data_bundle(
     merged[feature_cols] = merged[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     x_raw = merged[feature_cols].to_numpy(dtype=np.float32)
 
+    ic_std = np.full(len(merged), np.nan, dtype=float)
+    ic_scores_resolved = resolve_project_path(ic_scores_path)
+    if ic_scores_resolved.exists():
+        ic_scores_df = _ensure_node_id_str(pd.read_parquet(ic_scores_resolved))
+        if "ic_score_std" in ic_scores_df.columns:
+            std_ser = pd.to_numeric(
+                ic_scores_df.set_index("node_id")["ic_score_std"], errors="coerce"
+            )
+            ic_std = std_ser.reindex(node_ids).to_numpy(dtype=float)
+
+    finite_mask = np.isfinite(ic_std)
+    std_fill = float(np.nanmedian(ic_std[finite_mask])) if finite_mask.any() else 1.0
+    if not np.isfinite(std_fill) or std_fill < 0:
+        std_fill = 1.0
+    ic_std = np.where(np.isfinite(ic_std), ic_std, std_fill)
+    ic_std = np.maximum(ic_std, 0.0)
+
+    sample_weight_np = np.ones(len(merged), dtype=np.float32)
+    if use_label_uncertainty_weights:
+        inv_std = 1.0 / (ic_std + float(max(uncertainty_eps, 1e-12)))
+        ref = float(np.median(inv_std[train_mask_np])) if train_mask_np.any() else float(np.median(inv_std))
+        if not np.isfinite(ref) or ref <= 0:
+            ref = 1.0
+        lo, hi = uncertainty_weight_clip
+        sample_weight_np = np.clip(inv_std / ref, float(lo), float(hi)).astype(np.float32)
+
+    train_eligible_np = np.ones(len(merged), dtype=bool)
+    dropped_threshold = None
+    dropped_train_nodes = 0
+    if float(drop_noisy_quantile) > 0:
+        q = float(np.clip(drop_noisy_quantile, 0.0, 0.999))
+        if train_mask_np.any():
+            dropped_threshold = float(np.quantile(ic_std[train_mask_np], q))
+        else:
+            dropped_threshold = float(np.quantile(ic_std, q))
+
+        drop_mask = train_mask_np & (ic_std > dropped_threshold)
+        train_eligible_np[drop_mask] = False
+
+        n_train_total = int(np.sum(train_mask_np))
+        n_train_kept = int(np.sum(train_mask_np & train_eligible_np))
+        min_keep = int(min(max(1, int(min_train_kept)), n_train_total)) if n_train_total > 0 else 0
+        if n_train_total > 0 and n_train_kept < min_keep:
+            train_idx = np.where(train_mask_np)[0]
+            order = train_idx[np.argsort(ic_std[train_idx])]
+            keep_idx = order[:min_keep]
+            train_eligible_np[train_mask_np] = False
+            train_eligible_np[keep_idx] = True
+
+        dropped_train_nodes = int(np.sum(train_mask_np & (~train_eligible_np)))
+
+    label_gate: dict[str, Any] = {
+        "use_label_uncertainty_weights": bool(use_label_uncertainty_weights),
+        "uncertainty_eps": float(uncertainty_eps),
+        "uncertainty_weight_clip": [
+            float(uncertainty_weight_clip[0]),
+            float(uncertainty_weight_clip[1]),
+        ],
+        "drop_noisy_quantile": float(drop_noisy_quantile),
+        "drop_threshold_ic_score_std": (None if dropped_threshold is None else float(dropped_threshold)),
+        "n_nodes": int(len(merged)),
+        "n_train_total": int(np.sum(train_mask_np)),
+        "n_train_kept": int(np.sum(train_mask_np & train_eligible_np)),
+        "n_train_dropped": int(dropped_train_nodes),
+        "train_dropped_rate": (
+            float(dropped_train_nodes / max(1, int(np.sum(train_mask_np)))) if train_mask_np.any() else 0.0
+        ),
+        "ic_score_std": {
+            "min": float(np.min(ic_std)),
+            "p50": float(np.median(ic_std)),
+            "p90": float(np.quantile(ic_std, 0.90)),
+            "max": float(np.max(ic_std)),
+        },
+        "sample_weight": {
+            "min": float(np.min(sample_weight_np)),
+            "p50": float(np.median(sample_weight_np)),
+            "p90": float(np.quantile(sample_weight_np, 0.90)),
+            "max": float(np.max(sample_weight_np)),
+        },
+    }
+
+    if stability_summary_csv:
+        stability_path = resolve_project_path(stability_summary_csv)
+        if stability_path.exists():
+            try:
+                stability_df = pd.read_csv(stability_path)
+                if len(stability_df) > 0 and "n_runs" in stability_df.columns:
+                    best_row = stability_df.sort_values("n_runs").iloc[-1]
+                    label_gate["stability_reference"] = {
+                        "path": str(stability_path).replace("\\", "/"),
+                        "n_runs": int(best_row.get("n_runs", -1)),
+                        "jaccard_mean": float(best_row.get("jaccard_mean", np.nan)),
+                        "jaccard_min": float(best_row.get("jaccard_min", np.nan)),
+                        "spearman_mean": float(best_row.get("spearman_mean", np.nan)),
+                        "spearman_min": float(best_row.get("spearman_min", np.nan)),
+                    }
+            except Exception as exc:
+                label_gate["stability_reference_error"] = str(exc)
+
     scaler = MinMaxScaler()
     if train_mask_np.any():
         scaler.fit(x_raw[train_mask_np])
@@ -294,6 +434,8 @@ def load_surrogate_data_bundle(
     graph_data.train_mask = torch.tensor(train_mask_np, dtype=torch.bool)
     graph_data.val_mask = torch.tensor(val_mask_np, dtype=torch.bool)
     graph_data.test_mask = torch.tensor(test_mask_np, dtype=torch.bool)
+    graph_data.sample_weight = torch.tensor(sample_weight_np, dtype=torch.float32)
+    graph_data.train_eligible_mask = torch.tensor(train_eligible_np, dtype=torch.bool)
 
     return SurrogateDataBundle(
         node_ids=node_ids,
@@ -301,8 +443,11 @@ def load_surrogate_data_bundle(
         train_mask=graph_data.train_mask,
         val_mask=graph_data.val_mask,
         test_mask=graph_data.test_mask,
+        sample_weight=graph_data.sample_weight,
+        train_eligible_mask=graph_data.train_eligible_mask,
         scaler=scaler,
         split_mask_df=split_mask_df,
+        label_gate=label_gate,
     )
 
 
@@ -340,6 +485,7 @@ def train_surrogate_5seeds(
     max_epochs: int = MAX_EPOCHS,
     model_name: str = "gnn_raw_attr",
     randomize_train_target: bool = False,
+    training_seeds: list[int] | None = None,
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -348,8 +494,11 @@ def train_surrogate_5seeds(
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data = bundle.graph_data.to(device)
+    sample_weight = bundle.sample_weight.to(device)
+    train_eligible_mask = bundle.train_eligible_mask.to(device)
+    seeds = training_seeds if training_seeds is not None else TRAINING_SEEDS
 
-    for seed in TRAINING_SEEDS:
+    for seed in seeds:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -358,11 +507,13 @@ def train_surrogate_5seeds(
         model = GraphSAGERegressor(in_channels=data.x.shape[1], hidden_channels=128, dropout=0.3).to(device)
         model.reset_parameters()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        loss_fn = get_loss_function()
+        train_mask_eff = data.train_mask & train_eligible_mask
+        if int(train_mask_eff.sum().item()) == 0:
+            raise ValueError("No train nodes remain after label-gate filtering.")
 
         y_train_target = data.y.clone()
         if randomize_train_target:
-            train_idx = torch.where(data.train_mask)[0]
+            train_idx = torch.where(train_mask_eff)[0]
             if train_idx.numel() > 1:
                 perm = train_idx[torch.randperm(train_idx.numel(), device=device)]
                 y_train_target[train_idx] = data.y[perm]
@@ -372,7 +523,14 @@ def train_surrogate_5seeds(
             model.train()
             optimizer.zero_grad()
             pred = model(data.x, data.edge_index)
-            loss = loss_fn(pred[data.train_mask], y_train_target[data.train_mask])
+            loss_vec = F.huber_loss(
+                pred[train_mask_eff],
+                y_train_target[train_mask_eff],
+                delta=1.0,
+                reduction="none",
+            )
+            train_w = sample_weight[train_mask_eff]
+            loss = torch.sum(loss_vec * train_w) / torch.clamp(torch.sum(train_w), min=1e-8)
             loss.backward()
             optimizer.step()
         t_train_1 = time.time()
@@ -528,6 +686,27 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--run-random-sanity", action="store_true")
     p.add_argument("--only-random", action="store_true")
     p.add_argument("--skip-gnn-full", action="store_true")
+    p.add_argument("--ic-scores-path", default=PATHS.ic_scores)
+    p.add_argument("--use-label-uncertainty-weights", action="store_true")
+    p.add_argument("--uncertainty-eps", type=float, default=1e-6)
+    p.add_argument("--uncertainty-weight-clip", default="0.25,4.0")
+    p.add_argument("--drop-noisy-quantile", type=float, default=0.0)
+    p.add_argument("--min-train-kept", type=int, default=200)
+    p.add_argument("--stability-summary-csv", default="")
+    p.add_argument(
+        "--training-seeds",
+        default=",".join(str(s) for s in TRAINING_SEEDS),
+        help="Comma-separated list of random seeds for training/evaluation.",
+    )
+    p.add_argument(
+        "--models",
+        default="",
+        help="Optional comma-separated subset of model names to run.",
+    )
+    p.add_argument(
+        "--label-gate-report-json",
+        default=str(Path(PATHS.results_dir) / "label_gate_report.json"),
+    )
     return p.parse_args()
 
 
@@ -558,6 +737,8 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Training device: {device}")
+    weight_clip = _parse_clip_range(args.uncertainty_weight_clip)
+    training_seeds = _parse_int_list(args.training_seeds)
 
     model_specs: list[tuple[str, str, bool]] = [
         ("gnn_raw_attr", "raw_attr", False),
@@ -571,6 +752,13 @@ def main() -> None:
         model_specs.append(("gnn_random", "random", False))
     if args.only_random:
         model_specs = [("gnn_random", "random", False)]
+    if args.models:
+        selected_models = set(_parse_str_list(args.models))
+        available_models = {name for name, _, _ in model_specs}
+        unknown_models = sorted(selected_models - available_models)
+        if unknown_models:
+            raise ValueError(f"Unknown model names in --models: {unknown_models}")
+        model_specs = [spec for spec in model_specs if spec[0] in selected_models]
 
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
@@ -578,7 +766,16 @@ def main() -> None:
 
     for model_name, feature_mode, randomize_train_target in model_specs:
         try:
-            bundle = load_surrogate_data_bundle(feature_mode=feature_mode)
+            bundle = load_surrogate_data_bundle(
+                feature_mode=feature_mode,
+                ic_scores_path=args.ic_scores_path,
+                use_label_uncertainty_weights=bool(args.use_label_uncertainty_weights),
+                uncertainty_eps=float(args.uncertainty_eps),
+                uncertainty_weight_clip=weight_clip,
+                drop_noisy_quantile=float(args.drop_noisy_quantile),
+                min_train_kept=int(args.min_train_kept),
+                stability_summary_csv=(args.stability_summary_csv or None),
+            )
             if base_bundle is None:
                 base_bundle = bundle
             row, pred = train_surrogate_5seeds(
@@ -586,6 +783,7 @@ def main() -> None:
                 max_epochs=args.max_epochs,
                 model_name=model_name,
                 randomize_train_target=randomize_train_target,
+                training_seeds=training_seeds,
             )
             results_list.append(row)
             predictions_by_model[model_name] = pred
@@ -597,6 +795,30 @@ def main() -> None:
 
     _upsert_rows(out_csv, rows=results_list, cols=cols, key="model_name")
     _upsert_runtime_rows(results_list)
+
+    if base_bundle is not None:
+        gate_path = resolve_project_path(args.label_gate_report_json)
+        gate_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "timestamp": now_iso(),
+            "config": {
+                "ic_scores_path": str(resolve_project_path(args.ic_scores_path)).replace("\\", "/"),
+                "use_label_uncertainty_weights": bool(args.use_label_uncertainty_weights),
+                "uncertainty_eps": float(args.uncertainty_eps),
+                "uncertainty_weight_clip": [float(weight_clip[0]), float(weight_clip[1])],
+                "drop_noisy_quantile": float(args.drop_noisy_quantile),
+                "min_train_kept": int(args.min_train_kept),
+                "stability_summary_csv": (
+                    str(resolve_project_path(args.stability_summary_csv)).replace("\\", "/")
+                    if args.stability_summary_csv
+                    else ""
+                ),
+            },
+            "label_gate": base_bundle.label_gate,
+        }
+        with gate_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        print(f"[OK] Wrote label gate report: {gate_path}")
 
     if base_bundle is not None and predictions_by_model:
         per_group_path = resolve_project_path(args.per_group_error_csv)

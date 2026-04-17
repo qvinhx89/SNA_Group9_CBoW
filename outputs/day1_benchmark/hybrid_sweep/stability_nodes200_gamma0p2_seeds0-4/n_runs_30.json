@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-04-15T15:08:29",
+  "n_runs": 30,
+  "n_labeled_nodes": 200,
+  "mc_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "seed_runtime_sec": {
+    "0": 34.856351899999936,
+    "1": 34.03737279999996,
+    "2": 29.1565164000001,
+    "3": 27.31163020000008,
+    "4": 32.42027959999996
+  },
+  "runtime_sec": 157.8076994999999,
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.2903225806451613,
+      "spearman_rank": 0.6418385766666592
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.2903225806451613,
+      "spearman_rank": 0.7166831167388948
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.21212121212121213,
+      "spearman_rank": 0.6468459412175517
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.1111111111111111,
+      "spearman_rank": 0.6206757607830267
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.6179613124108672
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.14285714285714285,
+      "spearman_rank": 0.5583491245549416
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.14285714285714285,
+      "spearman_rank": 0.5690665021042178
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.21212121212121213,
+      "spearman_rank": 0.6490785776053987
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.21212121212121213,
+      "spearman_rank": 0.6933581353861997
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.17647058823529413,
+      "spearman_rank": 0.662407823404599
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.20403047827146498,
+    "jaccard_min": 0.1111111111111111,
+    "spearman_mean": 0.6376264870872357,
+    "spearman_min": 0.5583491245549416,
+    "pass_plan_threshold": false,
+    "threshold_jaccard_mean": 0.85,
+    "threshold_jaccard_min": 0.8
+  }
+}

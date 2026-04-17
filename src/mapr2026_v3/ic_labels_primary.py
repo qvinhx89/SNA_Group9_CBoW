@@ -45,6 +45,78 @@ from sklearn.model_selection import train_test_split
 from _shared import PATHS, ensure_parent, load_csr_npz, now_iso, require_columns
 
 
+def _resolve_io_path(path_like: str | Path) -> Path:
+    """Resolve relative I/O paths for both run contexts.
+
+    Supports running from either:
+    - repository root
+    - src/mapr2026_v3
+    """
+    p = Path(path_like)
+    if p.is_absolute():
+        return p
+
+    # Prefer current working directory when it already points to a valid location.
+    if p.exists() or p.parent.exists():
+        return p
+
+    # Fallback to repository root relative to this file.
+    repo_root = Path(__file__).resolve().parents[2]
+    return repo_root / p
+
+
+def _compute_views_strength_aligned(
+    node_ids: np.ndarray,
+    node_attrs_path: str | Path,
+    views_col: str = "views",
+    q_low: float = 0.05,
+    q_high: float = 0.95,
+) -> tuple[np.ndarray, dict[str, float | str]]:
+    """Compute a robust [0,1] sender strength from views, aligned to CSR node order.
+
+    Strength definition:
+      x = log1p(max(views, 0))
+      strength = clip((x - q_low(x)) / (q_high(x) - q_low(x)), 0, 1)
+    """
+    if not (0.0 <= float(q_low) < float(q_high) <= 1.0):
+        raise ValueError("q_low/q_high must satisfy 0<=q_low<q_high<=1")
+
+    attrs_path = _resolve_io_path(node_attrs_path)
+    if not attrs_path.exists():
+        raise FileNotFoundError(f"Missing node attributes parquet: {attrs_path}")
+
+    attrs = pd.read_parquet(attrs_path, columns=["node_id", views_col])
+    require_columns(attrs, ["node_id", views_col], "node_attributes")
+
+    attrs = attrs[["node_id", views_col]].copy()
+    attrs["node_id"] = attrs["node_id"].astype(str)
+    attrs[views_col] = pd.to_numeric(attrs[views_col], errors="coerce").fillna(0.0)
+
+    views_series = attrs.set_index("node_id")[views_col]
+    views_aligned = (
+        views_series.reindex(pd.Index(node_ids.astype(str)))
+        .fillna(0.0)
+        .astype(float)
+        .to_numpy()
+    )
+
+    x = np.log1p(np.maximum(views_aligned, 0.0))
+    lo, hi = np.quantile(x, [float(q_low), float(q_high)])
+    denom = float(hi - lo)
+    if not np.isfinite(denom) or denom <= 0.0:
+        denom = 1.0
+    strength = np.clip((x - float(lo)) / denom, 0.0, 1.0).astype(np.float64, copy=False)
+
+    meta = {
+        "views_col": str(views_col),
+        "q_low": float(q_low),
+        "q_high": float(q_high),
+        "log1p_lo": float(lo),
+        "log1p_hi": float(hi),
+    }
+    return strength, meta
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="MAPR2026 v3 IC labels (primary) scaffold")
     p.add_argument("--csr", default=PATHS.csr_npz)
@@ -59,6 +131,24 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-runs", type=int, default=50)
     p.add_argument("--n-jobs", type=int, default=-1,
                    help="Parallel jobs for IC simulation in real mode")
+
+    # IC probability model
+    p.add_argument(
+        "--p-model",
+        default="weighted_cascade",
+        choices=["weighted_cascade", "hybrid_degree_views_mult", "hybrid_degree_views_centered"],
+        help=(
+            "Activation probability model. weighted_cascade uses p(u->v)=1/deg(v). "
+            "hybrid_degree_views_mult uses p(u->v)=min(1, (1/deg(v))*(1+gamma*views_strength(u))). "
+            "hybrid_degree_views_centered uses p(u->v)=clip( (1/deg(v))*(1+gamma*(views_strength(u)-mean_strength)), 0, 1)."
+        ),
+    )
+    p.add_argument("--node-attrs", default=PATHS.node_attributes, help="Parquet with node attributes (expects node_id + views)")
+    p.add_argument("--views-col", default="views", help="Column name for view count in node attributes")
+    p.add_argument("--hybrid-gamma", type=float, default=1.0, help="Hybrid sender strength multiplier gamma (0 recovers weighted_cascade)")
+    p.add_argument("--views-q-low", type=float, default=0.05, help="Lower quantile for robust scaling of log1p(views)")
+    p.add_argument("--views-q-high", type=float, default=0.95, help="Upper quantile for robust scaling of log1p(views)")
+
     # M0-locked defaults — change only via explicit flag and update docs/m0_decisions.md
     p.add_argument("--n-sample", type=int, default=5000,
                    help="Number of labeled nodes to sample for IC (real mode only)")
@@ -114,6 +204,9 @@ def _simulate_ic_once(
     indices: np.ndarray,
     inv_degrees: np.ndarray,
     rng: np.random.Generator,
+    p_model: str = "weighted_cascade",
+    sender_strength: np.ndarray | None = None,
+    hybrid_gamma: float = 0.0,
 ) -> int:
     activated = {int(source)}
     frontier = [int(source)]
@@ -127,7 +220,23 @@ def _simulate_ic_once(
                 nb = int(nb_raw)
                 if nb in activated:
                     continue
-                p = float(inv_degrees[nb])
+                if p_model == "weighted_cascade":
+                    p = float(inv_degrees[nb])
+                elif p_model == "hybrid_degree_views_mult":
+                    if sender_strength is None:
+                        raise ValueError("hybrid_degree_views_mult requires sender_strength array")
+                    p = float(inv_degrees[nb]) * (1.0 + float(hybrid_gamma) * float(sender_strength[node]))
+                elif p_model == "hybrid_degree_views_centered":
+                    if sender_strength is None:
+                        raise ValueError("hybrid_degree_views_centered requires sender_strength array")
+                    p = float(inv_degrees[nb]) * (1.0 + float(hybrid_gamma) * float(sender_strength[node]))
+                else:
+                    raise ValueError(f"Unknown p_model: {p_model}")
+
+                if p < 0.0:
+                    p = 0.0
+                if p > 1.0:
+                    p = 1.0
                 if p <= 0.0:
                     continue
                 if rng.random() < p:
@@ -145,11 +254,23 @@ def _simulate_ic_node_summary(
     inv_degrees: np.ndarray,
     n_runs: int,
     worker_seed: int,
+    p_model: str = "weighted_cascade",
+    sender_strength: np.ndarray | None = None,
+    hybrid_gamma: float = 0.0,
 ) -> tuple[float, float]:
     rng = np.random.default_rng(worker_seed)
     runs = np.empty(n_runs, dtype=np.int32)
     for i in range(n_runs):
-        runs[i] = _simulate_ic_once(source, indptr, indices, inv_degrees, rng)
+        runs[i] = _simulate_ic_once(
+            source,
+            indptr,
+            indices,
+            inv_degrees,
+            rng,
+            p_model=p_model,
+            sender_strength=sender_strength,
+            hybrid_gamma=hybrid_gamma,
+        )
     return float(runs.mean()), float(runs.std(ddof=0))
 
 
@@ -162,12 +283,37 @@ def _real_ic_scores(
     n_runs: int,
     seed: int,
     n_jobs: int,
+    p_model: str = "weighted_cascade",
+    node_attrs_path: str | Path = PATHS.node_attributes,
+    views_col: str = "views",
+    hybrid_gamma: float = 0.0,
+    views_q_low: float = 0.05,
+    views_q_high: float = 0.95,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     sampled_rows = _sample_labeled_indices(degrees=degrees, n_sample=n_sample, seed=seed)
 
     inv_degrees = np.zeros_like(degrees, dtype=float)
     mask = degrees > 0
     inv_degrees[mask] = 1.0 / degrees[mask].astype(float)
+
+    sender_strength: np.ndarray | None = None
+    views_meta: dict[str, float | str] | None = None
+    if p_model in {"hybrid_degree_views_mult", "hybrid_degree_views_centered"}:
+        raw_strength, views_meta = _compute_views_strength_aligned(
+            node_ids=node_ids,
+            node_attrs_path=node_attrs_path,
+            views_col=views_col,
+            q_low=float(views_q_low),
+            q_high=float(views_q_high),
+        )
+        if p_model == "hybrid_degree_views_centered":
+            mean_strength = float(raw_strength.mean())
+            sender_strength = (raw_strength - mean_strength).astype(np.float64, copy=False)
+            if views_meta is not None:
+                views_meta = dict(views_meta)
+                views_meta["mean_strength"] = float(mean_strength)
+        else:
+            sender_strength = raw_strength
 
     def _worker(row: int) -> tuple[float, float]:
         return _simulate_ic_node_summary(
@@ -177,6 +323,9 @@ def _real_ic_scores(
             inv_degrees=inv_degrees,
             n_runs=n_runs,
             worker_seed=seed + int(row),  # M0/plan: primary worker_seed = 42 + node_index
+            p_model=p_model,
+            sender_strength=sender_strength,
+            hybrid_gamma=float(hybrid_gamma),
         )
 
     t0 = time.time()
@@ -195,9 +344,21 @@ def _real_ic_scores(
             "ic_score_mean": means,
             "ic_score_std": stds,
             "n_runs": int(n_runs),
-            "p_model": "weighted_cascade",
+            "p_model": (
+                "weighted_cascade"
+                if p_model == "weighted_cascade"
+                else (
+                    f"hybrid_degree_views_mult(gamma={float(hybrid_gamma):.6g},q_low={float(views_q_low):.3g},q_high={float(views_q_high):.3g},views_col={views_col})"
+                    if p_model == "hybrid_degree_views_mult"
+                    else f"hybrid_degree_views_centered(gamma={float(hybrid_gamma):.6g},q_low={float(views_q_low):.3g},q_high={float(views_q_high):.3g},views_col={views_col})"
+                )
+            ),
         }
     )
+
+    if views_meta is not None:
+        # Lightweight audit print only (kept out of parquet contract).
+        print(f"[INFO] Hybrid views_strength scaling meta: {views_meta}")
 
     print(
         "[OK] Real IC simulation completed "
@@ -457,6 +618,12 @@ def main() -> None:
             n_runs=int(args.n_runs),
             seed=int(args.seed),
             n_jobs=int(args.n_jobs),
+            p_model=str(args.p_model),
+            node_attrs_path=str(args.node_attrs),
+            views_col=str(args.views_col),
+            hybrid_gamma=float(args.hybrid_gamma),
+            views_q_low=float(args.views_q_low),
+            views_q_high=float(args.views_q_high),
         )
 
     require_columns(df_ic, ["node_id", "ic_score_mean", "ic_score_std", "n_runs", "p_model"], "ic_scores")

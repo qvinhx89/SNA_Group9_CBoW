@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-04-15T15:24:47",
+  "n_runs": 150,
+  "n_labeled_nodes": 200,
+  "mc_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "seed_runtime_sec": {
+    "0": 104.38917810000021,
+    "1": 97.27963560000012,
+    "2": 103.37708859999998,
+    "3": 104.33333300000004,
+    "4": 86.7485256
+  },
+  "runtime_sec": 496.1450180999998,
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.48148148148148145,
+      "spearman_rank": 0.6957517353637531
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.3793103448275862,
+      "spearman_rank": 0.703456161672446
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.3793103448275862,
+      "spearman_rank": 0.7388835970488369
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.48148148148148145,
+      "spearman_rank": 0.7391626548945309
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.3333333333333333,
+      "spearman_rank": 0.6356988883351179
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.3333333333333333,
+      "spearman_rank": 0.6700268791010697
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.3333333333333333,
+      "spearman_rank": 0.6746323736552309
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.3333333333333333,
+      "spearman_rank": 0.6846073506799587
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.2903225806451613,
+      "spearman_rank": 0.6904873343585503
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.42857142857142855,
+      "spearman_rank": 0.7501891146269444
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.3773810995168058,
+    "jaccard_min": 0.2903225806451613,
+    "spearman_mean": 0.698289608973644,
+    "spearman_min": 0.6356988883351179,
+    "pass_plan_threshold": false,
+    "threshold_jaccard_mean": 0.85,
+    "threshold_jaccard_min": 0.8
+  }
+}

@@ -1,0 +1,8 @@
+[2026-04-15T15:03:06] sweep_started run_grid=[10] nodes=50 p_model=hybrid_degree_views_centered gamma=0.2
+[2026-04-15T15:03:06] run_started n_runs=10
+[2026-04-15T15:03:06] seed_started n_runs=10 mc_seed=0
+[2026-04-15T15:03:13] seed_completed n_runs=10 mc_seed=0 runtime_sec=7.29
+[2026-04-15T15:03:13] seed_started n_runs=10 mc_seed=1
+[2026-04-15T15:03:20] seed_completed n_runs=10 mc_seed=1 runtime_sec=7.30
+[2026-04-15T15:03:20] run_completed n_runs=10 jaccard_mean=0.250000 jaccard_min=0.250000 spearman_mean=0.566156 runtime_sec=14.61 pass=False
+[2026-04-15T15:03:20] sweep_completed any_pass=False summary=outputs\day1_benchmark\hybrid_sweep\_smoke_stability_sweep\stability_sweep_summary.csv

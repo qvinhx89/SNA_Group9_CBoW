@@ -1,0 +1,50 @@
+{"timestamp": "2026-04-15T21:38:28", "event": "sweep_started", "config": {"run_grid": [30, 50, 100, 150], "mc_seeds": [0, 1, 2, 3, 4], "seed_multiplier": 10000, "top_pct": 0.1, "n_jobs": 4, "min_jaccard_mean": 0.85, "min_jaccard_min": 0.8, "n_labeled_nodes": 200, "max_nodes": 200, "worker_seed_rule": "mc_seed * seed_multiplier + node_row", "p_model": "weighted_cascade", "hybrid_gamma": 0.0, "views_col": "views", "views_q_low": 0.05, "views_q_high": 0.95, "split_sha256": "005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104", "ic_scores_sha256": "ff0c6635d2b79b825810eacbd47cc4aabb7faee8edea8ce360b20acb8f59f0e2"}}
+{"timestamp": "2026-04-15T21:38:28", "event": "run_started", "n_runs": 30, "mc_seeds": [0, 1, 2, 3, 4]}
+{"timestamp": "2026-04-15T21:38:28", "event": "seed_started", "n_runs": 30, "mc_seed": 0, "seed_offset": 0}
+{"timestamp": "2026-04-15T21:38:36", "event": "seed_completed", "n_runs": 30, "mc_seed": 0, "runtime_sec": 8.224107300000469}
+{"timestamp": "2026-04-15T21:38:36", "event": "seed_started", "n_runs": 30, "mc_seed": 1, "seed_offset": 10000}
+{"timestamp": "2026-04-15T21:38:46", "event": "seed_completed", "n_runs": 30, "mc_seed": 1, "runtime_sec": 9.373527100000501}
+{"timestamp": "2026-04-15T21:38:46", "event": "seed_started", "n_runs": 30, "mc_seed": 2, "seed_offset": 20000}
+{"timestamp": "2026-04-15T21:38:54", "event": "seed_completed", "n_runs": 30, "mc_seed": 2, "runtime_sec": 7.994065599999885}
+{"timestamp": "2026-04-15T21:38:54", "event": "seed_started", "n_runs": 30, "mc_seed": 3, "seed_offset": 30000}
+{"timestamp": "2026-04-15T21:39:01", "event": "seed_completed", "n_runs": 30, "mc_seed": 3, "runtime_sec": 6.983151100001123}
+{"timestamp": "2026-04-15T21:39:01", "event": "seed_started", "n_runs": 30, "mc_seed": 4, "seed_offset": 40000}
+{"timestamp": "2026-04-15T21:39:09", "event": "seed_completed", "n_runs": 30, "mc_seed": 4, "runtime_sec": 8.661233899998479}
+{"timestamp": "2026-04-15T21:39:10", "event": "run_completed", "n_runs": 30, "jaccard_mean": 0.2552570294980162, "jaccard_min": 0.17647058823529413, "spearman_mean": 0.6596019186133788, "runtime_sec": 41.25367130000086, "pass_plan_threshold": false}
+{"timestamp": "2026-04-15T21:39:10", "event": "run_started", "n_runs": 50, "mc_seeds": [0, 1, 2, 3, 4]}
+{"timestamp": "2026-04-15T21:39:10", "event": "seed_started", "n_runs": 50, "mc_seed": 0, "seed_offset": 0}
+{"timestamp": "2026-04-15T21:39:23", "event": "seed_completed", "n_runs": 50, "mc_seed": 0, "runtime_sec": 13.272136699997645}
+{"timestamp": "2026-04-15T21:39:23", "event": "seed_started", "n_runs": 50, "mc_seed": 1, "seed_offset": 10000}
+{"timestamp": "2026-04-15T21:39:34", "event": "seed_completed", "n_runs": 50, "mc_seed": 1, "runtime_sec": 10.92955350000193}
+{"timestamp": "2026-04-15T21:39:34", "event": "seed_started", "n_runs": 50, "mc_seed": 2, "seed_offset": 20000}
+{"timestamp": "2026-04-15T21:39:42", "event": "seed_completed", "n_runs": 50, "mc_seed": 2, "runtime_sec": 8.366673900000023}
+{"timestamp": "2026-04-15T21:39:42", "event": "seed_started", "n_runs": 50, "mc_seed": 3, "seed_offset": 30000}
+{"timestamp": "2026-04-15T21:39:50", "event": "seed_completed", "n_runs": 50, "mc_seed": 3, "runtime_sec": 7.8520016000002215}
+{"timestamp": "2026-04-15T21:39:50", "event": "seed_started", "n_runs": 50, "mc_seed": 4, "seed_offset": 40000}
+{"timestamp": "2026-04-15T21:40:03", "event": "seed_completed", "n_runs": 50, "mc_seed": 4, "runtime_sec": 13.171418099998846}
+{"timestamp": "2026-04-15T21:40:03", "event": "run_completed", "n_runs": 50, "jaccard_mean": 0.2438933931343798, "jaccard_min": 0.17647058823529413, "spearman_mean": 0.6830070064229382, "runtime_sec": 53.610153000001446, "pass_plan_threshold": false}
+{"timestamp": "2026-04-15T21:40:03", "event": "run_started", "n_runs": 100, "mc_seeds": [0, 1, 2, 3, 4]}
+{"timestamp": "2026-04-15T21:40:03", "event": "seed_started", "n_runs": 100, "mc_seed": 0, "seed_offset": 0}
+{"timestamp": "2026-04-15T21:40:27", "event": "seed_completed", "n_runs": 100, "mc_seed": 0, "runtime_sec": 23.544481400000222}
+{"timestamp": "2026-04-15T21:40:27", "event": "seed_started", "n_runs": 100, "mc_seed": 1, "seed_offset": 10000}
+{"timestamp": "2026-04-15T21:40:53", "event": "seed_completed", "n_runs": 100, "mc_seed": 1, "runtime_sec": 26.517351499998767}
+{"timestamp": "2026-04-15T21:40:53", "event": "seed_started", "n_runs": 100, "mc_seed": 2, "seed_offset": 20000}
+{"timestamp": "2026-04-15T21:41:18", "event": "seed_completed", "n_runs": 100, "mc_seed": 2, "runtime_sec": 24.719342399999732}
+{"timestamp": "2026-04-15T21:41:18", "event": "seed_started", "n_runs": 100, "mc_seed": 3, "seed_offset": 30000}
+{"timestamp": "2026-04-15T21:41:41", "event": "seed_completed", "n_runs": 100, "mc_seed": 3, "runtime_sec": 23.262641900000744}
+{"timestamp": "2026-04-15T21:41:41", "event": "seed_started", "n_runs": 100, "mc_seed": 4, "seed_offset": 40000}
+{"timestamp": "2026-04-15T21:42:04", "event": "seed_completed", "n_runs": 100, "mc_seed": 4, "runtime_sec": 22.713020200000756}
+{"timestamp": "2026-04-15T21:42:04", "event": "run_completed", "n_runs": 100, "jaccard_mean": 0.3000033707486433, "jaccard_min": 0.21212121212121213, "spearman_mean": 0.692284606689708, "runtime_sec": 120.77672350000284, "pass_plan_threshold": false}
+{"timestamp": "2026-04-15T21:42:04", "event": "run_started", "n_runs": 150, "mc_seeds": [0, 1, 2, 3, 4]}
+{"timestamp": "2026-04-15T21:42:04", "event": "seed_started", "n_runs": 150, "mc_seed": 0, "seed_offset": 0}
+{"timestamp": "2026-04-15T21:42:35", "event": "seed_completed", "n_runs": 150, "mc_seed": 0, "runtime_sec": 30.92755340000076}
+{"timestamp": "2026-04-15T21:42:35", "event": "seed_started", "n_runs": 150, "mc_seed": 1, "seed_offset": 10000}
+{"timestamp": "2026-04-15T21:43:10", "event": "seed_completed", "n_runs": 150, "mc_seed": 1, "runtime_sec": 34.72207730000082}
+{"timestamp": "2026-04-15T21:43:10", "event": "seed_started", "n_runs": 150, "mc_seed": 2, "seed_offset": 20000}
+{"timestamp": "2026-04-15T21:43:48", "event": "seed_completed", "n_runs": 150, "mc_seed": 2, "runtime_sec": 38.62521510000079}
+{"timestamp": "2026-04-15T21:43:48", "event": "seed_started", "n_runs": 150, "mc_seed": 3, "seed_offset": 30000}
+{"timestamp": "2026-04-15T21:44:24", "event": "seed_completed", "n_runs": 150, "mc_seed": 3, "runtime_sec": 35.55572309999843}
+{"timestamp": "2026-04-15T21:44:24", "event": "seed_started", "n_runs": 150, "mc_seed": 4, "seed_offset": 40000}
+{"timestamp": "2026-04-15T21:45:03", "event": "seed_completed", "n_runs": 150, "mc_seed": 4, "runtime_sec": 39.422073500001716}
+{"timestamp": "2026-04-15T21:45:03", "event": "run_completed", "n_runs": 150, "jaccard_mean": 0.3040600667408232, "jaccard_min": 0.25, "spearman_mean": 0.7023855283625201, "runtime_sec": 179.2741934000005, "pass_plan_threshold": false}
+{"timestamp": "2026-04-15T21:45:03", "event": "sweep_completed", "any_pass": false, "summary_csv": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_weighted_cascade_seeds0-4/stability_sweep_summary.csv", "summary_json": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_weighted_cascade_seeds0-4/stability_sweep_summary.json"}

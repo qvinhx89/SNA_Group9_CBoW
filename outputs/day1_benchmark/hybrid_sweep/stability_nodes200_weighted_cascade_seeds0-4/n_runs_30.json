@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-04-15T21:39:09",
+  "n_runs": 30,
+  "n_labeled_nodes": 200,
+  "mc_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "seed_runtime_sec": {
+    "0": 8.224107300000469,
+    "1": 9.373527100000501,
+    "2": 7.994065599999885,
+    "3": 6.983151100001123,
+    "4": 8.661233899998479
+  },
+  "runtime_sec": 41.25367130000086,
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.21212121212121213,
+      "spearman_rank": 0.6336859708834193
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.17647058823529413,
+      "spearman_rank": 0.7034493021932251
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.3333333333333333,
+      "spearman_rank": 0.6514918169607468
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.2903225806451613,
+      "spearman_rank": 0.7013846227361714
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.2903225806451613,
+      "spearman_rank": 0.6576994182939707
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.5853558985870665
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.6778136047942835
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.6547543911956971
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.7005931273030594
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.6297910331861467
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.2552570294980162,
+    "jaccard_min": 0.17647058823529413,
+    "spearman_mean": 0.6596019186133788,
+    "spearman_min": 0.5853558985870665,
+    "pass_plan_threshold": false,
+    "threshold_jaccard_mean": 0.85,
+    "threshold_jaccard_min": 0.8
+  }
+}

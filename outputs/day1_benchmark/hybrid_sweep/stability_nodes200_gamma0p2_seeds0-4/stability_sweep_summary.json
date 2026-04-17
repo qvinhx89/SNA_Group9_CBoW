@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-04-15T15:24:47",
+  "interrupted": false,
+  "config": {
+    "run_grid": [
+      30,
+      50,
+      100,
+      150
+    ],
+    "mc_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "seed_multiplier": 10000,
+    "top_pct": 0.1,
+    "n_jobs": 4,
+    "n_labeled_nodes": 200,
+    "max_nodes": 200,
+    "min_jaccard_mean": 0.85,
+    "min_jaccard_min": 0.8,
+    "p_model": "hybrid_degree_views_centered",
+    "hybrid_gamma": 0.2,
+    "views_col": "views",
+    "views_q_low": 0.05,
+    "views_q_high": 0.95
+  },
+  "rows": [
+    {
+      "n_runs": 30,
+      "jaccard_mean": 0.20403047827146498,
+      "jaccard_min": 0.1111111111111111,
+      "spearman_mean": 0.6376264870872357,
+      "spearman_min": 0.5583491245549416,
+      "runtime_sec": 157.8076994999999,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 50,
+      "jaccard_mean": 0.24706897118236512,
+      "jaccard_min": 0.14285714285714285,
+      "spearman_mean": 0.6809499909254348,
+      "spearman_min": 0.6081602419371068,
+      "runtime_sec": 161.29852340000002,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 100,
+      "jaccard_mean": 0.31331505906033164,
+      "jaccard_min": 0.25,
+      "spearman_mean": 0.6840196452065246,
+      "spearman_min": 0.6472568175825385,
+      "runtime_sec": 319.64168259999997,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 150,
+      "jaccard_mean": 0.3773810995168058,
+      "jaccard_min": 0.2903225806451613,
+      "spearman_mean": 0.698289608973644,
+      "spearman_min": 0.6356988883351179,
+      "runtime_sec": 496.1450180999998,
+      "pass_plan_threshold": false
+    }
+  ],
+  "selected_first_pass": null,
+  "best_by_jaccard": {
+    "n_runs": 150,
+    "jaccard_mean": 0.3773810995168058,
+    "jaccard_min": 0.2903225806451613,
+    "spearman_mean": 0.698289608973644,
+    "spearman_min": 0.6356988883351179,
+    "runtime_sec": 496.1450180999998,
+    "pass_plan_threshold": false
+  },
+  "any_pass": false,
+  "artifacts": {
+    "events_jsonl": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p2_seeds0-4/stability_sweep_events.jsonl",
+    "text_log": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p2_seeds0-4/stability_sweep.log",
+    "summary_csv": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p2_seeds0-4/stability_sweep_summary.csv",
+    "summary_json": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p2_seeds0-4/stability_sweep_summary.json"
+  }
+}

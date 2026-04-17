@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-04-15T15:03:20",
+  "interrupted": false,
+  "config": {
+    "run_grid": [
+      10
+    ],
+    "mc_seeds": [
+      0,
+      1
+    ],
+    "seed_multiplier": 10000,
+    "top_pct": 0.1,
+    "n_jobs": 2,
+    "n_labeled_nodes": 50,
+    "max_nodes": 50,
+    "min_jaccard_mean": 0.85,
+    "min_jaccard_min": 0.8,
+    "p_model": "hybrid_degree_views_centered",
+    "hybrid_gamma": 0.2,
+    "views_col": "views",
+    "views_q_low": 0.05,
+    "views_q_high": 0.95
+  },
+  "rows": [
+    {
+      "n_runs": 10,
+      "jaccard_mean": 0.25,
+      "jaccard_min": 0.25,
+      "spearman_mean": 0.5661559668567812,
+      "spearman_min": 0.5661559668567812,
+      "runtime_sec": 14.60968760000003,
+      "pass_plan_threshold": false
+    }
+  ],
+  "selected_first_pass": null,
+  "best_by_jaccard": {
+    "n_runs": 10,
+    "jaccard_mean": 0.25,
+    "jaccard_min": 0.25,
+    "spearman_mean": 0.5661559668567812,
+    "spearman_min": 0.5661559668567812,
+    "runtime_sec": 14.60968760000003,
+    "pass_plan_threshold": false
+  },
+  "any_pass": false,
+  "artifacts": {
+    "events_jsonl": "outputs/day1_benchmark/hybrid_sweep/_smoke_stability_sweep/stability_sweep_events.jsonl",
+    "text_log": "outputs/day1_benchmark/hybrid_sweep/_smoke_stability_sweep/stability_sweep.log",
+    "summary_csv": "outputs/day1_benchmark/hybrid_sweep/_smoke_stability_sweep/stability_sweep_summary.csv",
+    "summary_json": "outputs/day1_benchmark/hybrid_sweep/_smoke_stability_sweep/stability_sweep_summary.json"
+  }
+}

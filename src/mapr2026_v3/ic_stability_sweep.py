@@ -31,7 +31,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from _shared import PATHS, ensure_dir, load_csr_npz, now_iso, require_columns
-from ic_labels_primary import _simulate_ic_node_summary
+from ic_labels_primary import _compute_views_strength_aligned, _simulate_ic_node_summary
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +47,26 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-jobs", type=int, default=-1)
     p.add_argument("--min-jaccard-mean", type=float, default=0.85)
     p.add_argument("--min-jaccard-min", type=float, default=0.80)
+
+    # IC probability model (default: original weighted cascade)
+    p.add_argument(
+        "--p-model",
+        default="weighted_cascade",
+        choices=[
+            "weighted_cascade",
+            "hybrid_degree_views_mult",
+            "hybrid_degree_views_centered",
+        ],
+        help=(
+            "Activation probability model. weighted_cascade uses p(u->v)=1/deg(v). "
+            "Hybrid variants use sender strength derived from log1p(views)."
+        ),
+    )
+    p.add_argument("--node-attrs", default=PATHS.node_attributes)
+    p.add_argument("--views-col", default="views")
+    p.add_argument("--hybrid-gamma", type=float, default=0.0)
+    p.add_argument("--views-q-low", type=float, default=0.05)
+    p.add_argument("--views-q-high", type=float, default=0.95)
     p.add_argument(
         "--max-nodes",
         type=int,
@@ -90,6 +110,101 @@ def _append_log(path: Path, line: str) -> None:
         f.write(line.rstrip() + "\n")
 
 
+def _print_and_log(text_log_path: Path, line: str) -> None:
+    print(line)
+    _append_log(text_log_path, line)
+
+
+def _init_summary_csv(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "n_runs",
+                "jaccard_mean",
+                "jaccard_min",
+                "spearman_mean",
+                "spearman_min",
+                "runtime_sec",
+                "pass_plan_threshold",
+            ],
+        )
+        writer.writeheader()
+
+
+def _append_summary_csv_row(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "n_runs",
+                "jaccard_mean",
+                "jaccard_min",
+                "spearman_mean",
+                "spearman_min",
+                "runtime_sec",
+                "pass_plan_threshold",
+            ],
+        )
+        writer.writerow(row)
+
+
+def _write_summary_json(
+    path: Path,
+    run_grid: list[int],
+    mc_seeds: list[int],
+    args: argparse.Namespace,
+    n_labeled_nodes: int,
+    rows: list[dict[str, Any]],
+    events_path: Path,
+    text_log_path: Path,
+    summary_csv: Path,
+    *,
+    interrupted: bool,
+) -> dict[str, Any]:
+    pass_rows = [r for r in rows if bool(r.get("pass_plan_threshold"))]
+    best_by_jaccard = max(rows, key=lambda r: (r["jaccard_mean"], r["jaccard_min"])) if rows else None
+    selected = pass_rows[0] if pass_rows else None
+
+    payload = {
+        "timestamp": now_iso(),
+        "interrupted": bool(interrupted),
+        "config": {
+            "run_grid": run_grid,
+            "mc_seeds": mc_seeds,
+            "seed_multiplier": int(args.seed_multiplier),
+            "top_pct": float(args.top_pct),
+            "n_jobs": int(args.n_jobs),
+            "n_labeled_nodes": int(n_labeled_nodes),
+            "max_nodes": int(args.max_nodes),
+            "min_jaccard_mean": float(args.min_jaccard_mean),
+            "min_jaccard_min": float(args.min_jaccard_min),
+            "p_model": str(args.p_model),
+            "hybrid_gamma": float(args.hybrid_gamma),
+            "views_col": str(args.views_col),
+            "views_q_low": float(args.views_q_low),
+            "views_q_high": float(args.views_q_high),
+        },
+        "rows": rows,
+        "selected_first_pass": selected,
+        "best_by_jaccard": best_by_jaccard,
+        "any_pass": bool(len(pass_rows) > 0),
+        "artifacts": {
+            "events_jsonl": str(events_path).replace("\\", "/"),
+            "text_log": str(text_log_path).replace("\\", "/"),
+            "summary_csv": str(summary_csv).replace("\\", "/"),
+            "summary_json": str(path).replace("\\", "/"),
+        },
+    }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    return payload
+
+
 def _top_decile_set(scores: np.ndarray, top_pct: float) -> set[int]:
     thresh = float(np.quantile(scores, 1.0 - top_pct))
     return set(np.where(scores >= thresh)[0].tolist())
@@ -114,6 +229,9 @@ def _simulate_means_for_seed(
     n_runs: int,
     seed_offset: int,
     n_jobs: int,
+    p_model: str,
+    sender_strength: np.ndarray | None,
+    hybrid_gamma: float,
 ) -> np.ndarray:
     def _worker(row: int) -> float:
         mean_score, _ = _simulate_ic_node_summary(
@@ -123,6 +241,9 @@ def _simulate_means_for_seed(
             inv_degrees=inv_degrees,
             n_runs=n_runs,
             worker_seed=seed_offset + int(row),
+            p_model=str(p_model),
+            sender_strength=sender_strength,
+            hybrid_gamma=float(hybrid_gamma),
         )
         return float(mean_score)
 
@@ -148,6 +269,8 @@ def main() -> None:
     for p in [events_path, text_log_path, summary_csv, summary_json]:
         if p.exists():
             p.unlink()
+
+    _init_summary_csv(summary_csv)
 
     csr = load_csr_npz(args.csr)
     df_ic = pd.read_parquet(args.ic)
@@ -180,6 +303,22 @@ def main() -> None:
     mask = degrees > 0
     inv_degrees[mask] = 1.0 / degrees[mask].astype(float)
 
+    sender_strength: np.ndarray | None = None
+    if str(args.p_model) in {"hybrid_degree_views_mult", "hybrid_degree_views_centered"}:
+        raw_strength, _meta = _compute_views_strength_aligned(
+            node_ids=node_ids,
+            node_attrs_path=args.node_attrs,
+            views_col=str(args.views_col),
+            q_low=float(args.views_q_low),
+            q_high=float(args.views_q_high),
+        )
+        if str(args.p_model) == "hybrid_degree_views_centered":
+            sender_strength = (raw_strength - float(raw_strength.mean())).astype(
+                np.float64, copy=False
+            )
+        else:
+            sender_strength = raw_strength
+
     start_event = {
         "timestamp": now_iso(),
         "event": "sweep_started",
@@ -194,102 +333,142 @@ def main() -> None:
             "n_labeled_nodes": int(len(rows)),
             "max_nodes": int(args.max_nodes),
             "worker_seed_rule": "mc_seed * seed_multiplier + node_row",
+            "p_model": str(args.p_model),
+            "hybrid_gamma": float(args.hybrid_gamma),
+            "views_col": str(args.views_col),
+            "views_q_low": float(args.views_q_low),
+            "views_q_high": float(args.views_q_high),
             "split_sha256": _sha256_file(Path(args.split)),
             "ic_scores_sha256": _sha256_file(Path(args.ic)),
         },
     }
     _append_jsonl(events_path, start_event)
-    _append_log(text_log_path, f"[{now_iso()}] sweep_started run_grid={run_grid} nodes={len(rows)}")
+    _print_and_log(
+        text_log_path,
+        f"[{now_iso()}] sweep_started run_grid={run_grid} nodes={len(rows)} p_model={args.p_model} gamma={args.hybrid_gamma}",
+    )
 
     rows_out: list[dict[str, Any]] = []
+    n_labeled_nodes = int(len(rows))
 
-    for n_runs in run_grid:
-        run_start = time.perf_counter()
-        _append_jsonl(
-            events_path,
-            {
-                "timestamp": now_iso(),
-                "event": "run_started",
-                "n_runs": int(n_runs),
-                "mc_seeds": mc_seeds,
-            },
-        )
-        _append_log(text_log_path, f"[{now_iso()}] run_started n_runs={n_runs}")
-
-        scores_by_seed: dict[int, np.ndarray] = {}
-        seed_runtime_sec: dict[str, float] = {}
-
-        for mc_seed in mc_seeds:
-            t0 = time.perf_counter()
-            seed_offset = int(mc_seed) * int(args.seed_multiplier)
-            scores_by_seed[int(mc_seed)] = _simulate_means_for_seed(
-                rows=rows,
-                indptr=csr["indptr"],
-                indices=csr["indices"],
-                inv_degrees=inv_degrees,
-                n_runs=int(n_runs),
-                seed_offset=seed_offset,
-                n_jobs=int(args.n_jobs),
+    interrupted = False
+    try:
+        for n_runs in run_grid:
+            run_start = time.perf_counter()
+            _append_jsonl(
+                events_path,
+                {
+                    "timestamp": now_iso(),
+                    "event": "run_started",
+                    "n_runs": int(n_runs),
+                    "mc_seeds": mc_seeds,
+                },
             )
-            seed_runtime_sec[str(mc_seed)] = float(time.perf_counter() - t0)
+            _print_and_log(text_log_path, f"[{now_iso()}] run_started n_runs={n_runs}")
 
-        pairwise: list[dict[str, float | int]] = []
-        jaccards: list[float] = []
-        spearmans: list[float] = []
+            scores_by_seed: dict[int, np.ndarray] = {}
+            seed_runtime_sec: dict[str, float] = {}
 
-        for i in range(len(mc_seeds)):
-            for j in range(i + 1, len(mc_seeds)):
-                s_i = int(mc_seeds[i])
-                s_j = int(mc_seeds[j])
-                top_i = _top_decile_set(scores_by_seed[s_i], top_pct=float(args.top_pct))
-                top_j = _top_decile_set(scores_by_seed[s_j], top_pct=float(args.top_pct))
-                jac = _jaccard(top_i, top_j)
-                rho = _spearman(scores_by_seed[s_i], scores_by_seed[s_j])
-                pairwise.append(
+            for mc_seed in mc_seeds:
+                seed_offset = int(mc_seed) * int(args.seed_multiplier)
+                _append_jsonl(
+                    events_path,
                     {
-                        "seed_i": s_i,
-                        "seed_j": s_j,
-                        "jaccard_top_decile": float(jac),
-                        "spearman_rank": float(rho),
-                    }
+                        "timestamp": now_iso(),
+                        "event": "seed_started",
+                        "n_runs": int(n_runs),
+                        "mc_seed": int(mc_seed),
+                        "seed_offset": int(seed_offset),
+                    },
                 )
-                jaccards.append(float(jac))
-                spearmans.append(float(rho))
+                _print_and_log(text_log_path, f"[{now_iso()}] seed_started n_runs={n_runs} mc_seed={mc_seed}")
 
-        runtime_sec = float(time.perf_counter() - run_start)
-        j_mean = float(np.mean(jaccards))
-        j_min = float(np.min(jaccards))
-        s_mean = float(np.mean(spearmans))
-        s_min = float(np.min(spearmans))
-        pass_plan = bool(
-            (j_mean >= float(args.min_jaccard_mean)) and (j_min >= float(args.min_jaccard_min))
-        )
+                t0 = time.perf_counter()
+                scores_by_seed[int(mc_seed)] = _simulate_means_for_seed(
+                    rows=rows,
+                    indptr=csr["indptr"],
+                    indices=csr["indices"],
+                    inv_degrees=inv_degrees,
+                    n_runs=int(n_runs),
+                    seed_offset=seed_offset,
+                    n_jobs=int(args.n_jobs),
+                    p_model=str(args.p_model),
+                    sender_strength=sender_strength,
+                    hybrid_gamma=float(args.hybrid_gamma),
+                )
+                seed_elapsed = float(time.perf_counter() - t0)
+                seed_runtime_sec[str(mc_seed)] = seed_elapsed
+                _append_jsonl(
+                    events_path,
+                    {
+                        "timestamp": now_iso(),
+                        "event": "seed_completed",
+                        "n_runs": int(n_runs),
+                        "mc_seed": int(mc_seed),
+                        "runtime_sec": seed_elapsed,
+                    },
+                )
+                _print_and_log(
+                    text_log_path,
+                    f"[{now_iso()}] seed_completed n_runs={n_runs} mc_seed={mc_seed} runtime_sec={seed_elapsed:.2f}",
+                )
 
-        run_payload = {
-            "timestamp": now_iso(),
-            "n_runs": int(n_runs),
-            "n_labeled_nodes": int(len(rows)),
-            "mc_seeds": mc_seeds,
-            "seed_runtime_sec": seed_runtime_sec,
-            "runtime_sec": runtime_sec,
-            "pairwise": pairwise,
-            "summary": {
-                "jaccard_mean": j_mean,
-                "jaccard_min": j_min,
-                "spearman_mean": s_mean,
-                "spearman_min": s_min,
-                "pass_plan_threshold": pass_plan,
-                "threshold_jaccard_mean": float(args.min_jaccard_mean),
-                "threshold_jaccard_min": float(args.min_jaccard_min),
-            },
-        }
+            pairwise: list[dict[str, float | int]] = []
+            jaccards: list[float] = []
+            spearmans: list[float] = []
 
-        per_run_json = Path(out_dir) / f"n_runs_{int(n_runs)}.json"
-        with per_run_json.open("w", encoding="utf-8") as f:
-            json.dump(run_payload, f, indent=2, ensure_ascii=False)
+            for i in range(len(mc_seeds)):
+                for j in range(i + 1, len(mc_seeds)):
+                    s_i = int(mc_seeds[i])
+                    s_j = int(mc_seeds[j])
+                    top_i = _top_decile_set(scores_by_seed[s_i], top_pct=float(args.top_pct))
+                    top_j = _top_decile_set(scores_by_seed[s_j], top_pct=float(args.top_pct))
+                    jac = _jaccard(top_i, top_j)
+                    rho = _spearman(scores_by_seed[s_i], scores_by_seed[s_j])
+                    pairwise.append(
+                        {
+                            "seed_i": s_i,
+                            "seed_j": s_j,
+                            "jaccard_top_decile": float(jac),
+                            "spearman_rank": float(rho),
+                        }
+                    )
+                    jaccards.append(float(jac))
+                    spearmans.append(float(rho))
 
-        rows_out.append(
-            {
+            runtime_sec = float(time.perf_counter() - run_start)
+            j_mean = float(np.mean(jaccards))
+            j_min = float(np.min(jaccards))
+            s_mean = float(np.mean(spearmans))
+            s_min = float(np.min(spearmans))
+            pass_plan = bool(
+                (j_mean >= float(args.min_jaccard_mean)) and (j_min >= float(args.min_jaccard_min))
+            )
+
+            run_payload = {
+                "timestamp": now_iso(),
+                "n_runs": int(n_runs),
+                "n_labeled_nodes": int(len(rows)),
+                "mc_seeds": mc_seeds,
+                "seed_runtime_sec": seed_runtime_sec,
+                "runtime_sec": runtime_sec,
+                "pairwise": pairwise,
+                "summary": {
+                    "jaccard_mean": j_mean,
+                    "jaccard_min": j_min,
+                    "spearman_mean": s_mean,
+                    "spearman_min": s_min,
+                    "pass_plan_threshold": pass_plan,
+                    "threshold_jaccard_mean": float(args.min_jaccard_mean),
+                    "threshold_jaccard_min": float(args.min_jaccard_min),
+                },
+            }
+
+            per_run_json = Path(out_dir) / f"n_runs_{int(n_runs)}.json"
+            with per_run_json.open("w", encoding="utf-8") as f:
+                json.dump(run_payload, f, indent=2, ensure_ascii=False)
+
+            row_out = {
                 "n_runs": int(n_runs),
                 "jaccard_mean": j_mean,
                 "jaccard_min": j_min,
@@ -298,77 +477,89 @@ def main() -> None:
                 "runtime_sec": runtime_sec,
                 "pass_plan_threshold": pass_plan,
             }
-        )
+            rows_out.append(row_out)
 
+            # Write incremental summary artifacts so progress is visible and results are durable.
+            _append_summary_csv_row(summary_csv, row_out)
+            _write_summary_json(
+                summary_json,
+                run_grid=run_grid,
+                mc_seeds=mc_seeds,
+                args=args,
+                n_labeled_nodes=n_labeled_nodes,
+                rows=rows_out,
+                events_path=events_path,
+                text_log_path=text_log_path,
+                summary_csv=summary_csv,
+                interrupted=False,
+            )
+
+            _append_jsonl(
+                events_path,
+                {
+                    "timestamp": now_iso(),
+                    "event": "run_completed",
+                    "n_runs": int(n_runs),
+                    "jaccard_mean": j_mean,
+                    "jaccard_min": j_min,
+                    "spearman_mean": s_mean,
+                    "runtime_sec": runtime_sec,
+                    "pass_plan_threshold": pass_plan,
+                },
+            )
+            _print_and_log(
+                text_log_path,
+                (
+                    f"[{now_iso()}] run_completed n_runs={n_runs} "
+                    f"jaccard_mean={j_mean:.6f} jaccard_min={j_min:.6f} "
+                    f"spearman_mean={s_mean:.6f} runtime_sec={runtime_sec:.2f} pass={pass_plan}"
+                ),
+            )
+
+    except KeyboardInterrupt:
+        interrupted = True
         _append_jsonl(
             events_path,
             {
                 "timestamp": now_iso(),
-                "event": "run_completed",
-                "n_runs": int(n_runs),
-                "jaccard_mean": j_mean,
-                "jaccard_min": j_min,
-                "spearman_mean": s_mean,
-                "runtime_sec": runtime_sec,
-                "pass_plan_threshold": pass_plan,
+                "event": "sweep_interrupted",
+                "completed_runs": int(len(rows_out)),
+                "planned_runs": int(len(run_grid)),
             },
         )
-        _append_log(
+        _print_and_log(
             text_log_path,
-            (
-                f"[{now_iso()}] run_completed n_runs={n_runs} "
-                f"jaccard_mean={j_mean:.6f} jaccard_min={j_min:.6f} "
-                f"spearman_mean={s_mean:.6f} runtime_sec={runtime_sec:.2f} pass={pass_plan}"
-            ),
+            f"[{now_iso()}] sweep_interrupted completed_runs={len(rows_out)}/{len(run_grid)}",
         )
-
-    with summary_csv.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "n_runs",
-                "jaccard_mean",
-                "jaccard_min",
-                "spearman_mean",
-                "spearman_min",
-                "runtime_sec",
-                "pass_plan_threshold",
-            ],
+        _write_summary_json(
+            summary_json,
+            run_grid=run_grid,
+            mc_seeds=mc_seeds,
+            args=args,
+            n_labeled_nodes=n_labeled_nodes,
+            rows=rows_out,
+            events_path=events_path,
+            text_log_path=text_log_path,
+            summary_csv=summary_csv,
+            interrupted=True,
         )
-        writer.writeheader()
-        for row in rows_out:
-            writer.writerow(row)
+        return
 
-    pass_rows = [r for r in rows_out if bool(r["pass_plan_threshold"])]
-    best_by_jaccard = max(rows_out, key=lambda r: (r["jaccard_mean"], r["jaccard_min"])) if rows_out else None
-    selected = pass_rows[0] if pass_rows else None
+    # Final summary write (ensures best_by_jaccard / selected are up-to-date and marked not interrupted).
+    _write_summary_json(
+        summary_json,
+        run_grid=run_grid,
+        mc_seeds=mc_seeds,
+        args=args,
+        n_labeled_nodes=n_labeled_nodes,
+        rows=rows_out,
+        events_path=events_path,
+        text_log_path=text_log_path,
+        summary_csv=summary_csv,
+        interrupted=False,
+    )
 
-    summary_payload = {
-        "timestamp": now_iso(),
-        "config": {
-            "run_grid": run_grid,
-            "mc_seeds": mc_seeds,
-            "seed_multiplier": int(args.seed_multiplier),
-            "top_pct": float(args.top_pct),
-            "n_jobs": int(args.n_jobs),
-            "n_labeled_nodes": int(len(rows)),
-            "min_jaccard_mean": float(args.min_jaccard_mean),
-            "min_jaccard_min": float(args.min_jaccard_min),
-        },
-        "rows": rows_out,
-        "selected_first_pass": selected,
-        "best_by_jaccard": best_by_jaccard,
-        "any_pass": bool(len(pass_rows) > 0),
-        "artifacts": {
-            "events_jsonl": str(events_path).replace("\\", "/"),
-            "text_log": str(text_log_path).replace("\\", "/"),
-            "summary_csv": str(summary_csv).replace("\\", "/"),
-        },
-    }
-
-    with summary_json.open("w", encoding="utf-8") as f:
-        json.dump(summary_payload, f, indent=2, ensure_ascii=False)
-
+    pass_rows = [r for r in rows_out if bool(r.get("pass_plan_threshold"))]
     _append_jsonl(
         events_path,
         {
@@ -379,7 +570,7 @@ def main() -> None:
             "summary_json": str(summary_json).replace("\\", "/"),
         },
     )
-    _append_log(
+    _print_and_log(
         text_log_path,
         f"[{now_iso()}] sweep_completed any_pass={bool(len(pass_rows) > 0)} summary={summary_csv}",
     )
