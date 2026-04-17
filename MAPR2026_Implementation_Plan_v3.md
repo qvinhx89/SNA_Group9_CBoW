@@ -297,7 +297,7 @@ pilot_diagnostics:
 > **Views-independence:**
 >
 > - **A0 (primary) + A1/A2 (structural sensitivity)** phải **views-independent** để giữ construct validity trong main story (labels không “leak” popularity signal).
-> - **Optional:** có thể thêm **I-A attribute-informed operationalization** (dùng `views` trong p(u,v)) như **label set bổ sung**, phải label rõ trong paper và bắt buộc có pilot gate + pre-registration.
+> - **I-A attribute-informed operationalization:** **I-A pilot gate là MUST (unconditional; ~20 phút)** để quyết định có chạy full I-A hay không. **Full I-A là conditional-MUST nếu (và chỉ nếu) pilot pass.** Nếu pilot fail: commit A0-only narrative và bỏ toàn bộ I-A.
 >
 > Cách viết defensible duy nhất: "**robustness to diffusion rule choice**" + "**architectural inductive bias check**".
 
@@ -346,7 +346,7 @@ pilot_diagnostics:
 | Variant                  | Tên                          | Views-indep       | life_time indep | Grounding          | Defensible?                       | Priority          |
 | ------------------------ | ---------------------------- | ----------------- | --------------- | ------------------ | --------------------------------- | ----------------- |
 | A0: `1/deg(v)`           | Weighted Cascade             | ✅                | ✅              | ✅✅ Kempe+DeepIM  | **✅ Primary**                    | 1 — luôn chạy     |
-| **I-A: `w(v)/Σw(N(u))`** | **Attr-Informed (row-norm)** | **❌ dùng views** | ✅              | ✅ Twitch-specific | ✅ (optional; attribute-informed) | **2 — SHOULD DO** |
+| **I-A: `w(v)/Σw(N(u))`** | **Attr-Informed (row-norm)** | **❌ dùng views** | ✅              | ✅ Twitch-specific | ✅ (attr-informed; gated)         | **2 — MUST (pilot); conditional full** |
 | A2: `1/√(deg(u)×deg(v))` | Symmetric                    | ✅                | ✅              | ✅ GCN analogy     | ✅                                | 3 — robustness    |
 | A1: `1/deg(u)`           | Source Budget                | ✅                | ✅              | Marginal           | ✅                                | 4 — if needed     |
 | II-B: `w(v)/deg(v)`      | Views-Density                | ❌ dùng views     | ✅              | Moderate           | ⚠ fallback nếu I-A degenerate     | 5 — fallback      |
@@ -361,6 +361,16 @@ pilot_diagnostics:
 > Nếu A0 only: bỏ qua toàn bộ I-A, II-B, và C2-I-A sections → tiếp tục từ "Framework thử nghiệm".
 
 > **Điều kiện kích hoạt:** Chỉ chạy như **supplemental** label set; bắt buộc có pilot gate + ghi rõ trong paper đây là **attribute-informed operationalization** (không phải sensitivity của A0).
+
+**Code pointers (v3.1):**
+
+- **Pilot gate (MUST, ~20 phút):** `python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1`
+- **Full I-A labels (conditional-MUST nếu pilot pass):** `python src/mapr2026_v3/ic_labels_attribute_ia.py --n-runs 200 --n-jobs -1`
+
+**Outputs:**
+
+- Pilot: `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
+- Full: `outputs/mapr2026_v3_results/ic_scores_ia.parquet` + `data/processed/regression_targets_ia.parquet`
 
 **Formula:**
 

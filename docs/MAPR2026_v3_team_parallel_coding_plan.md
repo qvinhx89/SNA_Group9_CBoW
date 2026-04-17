@@ -80,7 +80,7 @@ python run_all.py --stage 2
 - IC backend: **CSR numpy + joblib (loky)**. Tránh NetworkX BFS trong vòng lặp IC.
 - **Views-independence:**
   - **A0 (primary) + A1/A2 (structural sensitivity)** phải **views-independent** (views chỉ dùng ở evaluation/runtime breakdown, không đi vào p(u,v)).
-  - **I-A Attribute-Informed IC (supplemental, nếu bật):** được phép dùng `views` trong $p(u,v)$ như **label set bổ sung**; bắt buộc label rõ "attribute-informed operationalization" và phải qua pilot decision protocol trước khi chạy full. A0 vẫn là primary.
+    - **I-A Attribute-Informed IC (supplemental):** được phép dùng `views` trong $p(u,v)$ như **label set bổ sung**. **I-A pilot gate là MUST (unconditional; ~20 phút)** để quyết định có activate full I-A hay không. **Full I-A là conditional-MUST nếu (và chỉ nếu) pilot pass.** A0 vẫn là primary.
 - Graph dùng **undirected** (`graph_directed: false`) — MUSAE Twitch chỉ có mutual-follow edges.
 - **Uniform p** — **KHÔNG** report như primary; weighted cascade là bắt buộc.
 
@@ -539,16 +539,28 @@ IC scores + split_masks ──────────────────�
    >
    > **Framing bắt buộc:** "Sensitivity to diffusion rule choice" — không phải "chọn rule giúp GNN thắng degree".
 
-   > 🔵 **[SUPPLEMENTARY TRACK — SKIP nếu không activate I-A]**
-   > Toàn bộ block I-A bên dưới chỉ relevant nếu pilot pass (3 checks bên dưới).
-   > Nếu A0 only: bỏ qua toàn bộ I-A block, C2-I-A, và C4-I-A → tiếp tục sang Person 2.
-
-   > ✦ **[SHOULD DO — nếu bật I-A] I-A: Attribute-Informed IC (Row-Normalized Views)**
-   >
-   > **Điều kiện kích hoạt (PHẢI thỏa TẤT CẢ):**
-   >
-   > 1. Pilot pass: CV > 0.3, ρ(IC-I-A, degree) < 0.75 (kỳ vọng thấp hơn A0 vì one-hop expectation không phụ thuộc degree), ρ(IC-I-A, nbr_views_mean_proxy) < 0.85
-   > 2. C2-A0 (architecture comparison trên primary labels) đã chạy xong để không block critical path
+    > 🟦 **[MUST — v3.1 reviewer-driven; unconditional; ~20 phút] I-A pilot gate (200 nodes × 50 runs)**
+    >
+    > **Mục tiêu:** Đây là pilot bắt buộc để quyết định *có activate full I-A hay không* (Reviewer 2 distinction: **Pilot = MUST unconditional; Full I-A = conditional-MUST nếu pilot pass**). Không dùng pilot như một “option” vì leverage story rất lớn và cost rất nhỏ.
+    >
+    > **Pre-registration (bắt buộc — anti-p-hacking):** Phải ghi hypothesis + decision tree vào `docs/experiment_registry.md` **TRƯỚC KHI** chạy pilot.
+    >
+    > **Command (local CPU):** `python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1`
+    > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
+    >
+    > **Decision tree (thresholds cố định, không đổi sau khi thấy kết quả):**
+    >
+    > - **PASS** nếu (CV > 0.3) AND (|ρ(IC-I-A, degree)| < 0.75) AND (|ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85)
+    >   - → **activate I-A full run** (conditional-MUST) + cho phép chạy C2-I-A nếu còn compute budget
+    > - **FAIL** nếu không đạt
+    >   - → **commit 100% vào A0-only narrative**; SKIP toàn bộ I-A full labeling/C2-I-A/C4-I-A để không tốn thời gian
+    >
+    > 🔵 **[CONDITIONAL-MUST — chỉ nếu pilot PASS] I-A: Attribute-Informed IC (Row-Normalized Views)**
+    >
+    > **Điều kiện chạy FULL (PHẢI thỏa TẤT CẢ):**
+    >
+    > 1. Pilot PASS (decision tree ở trên)
+    > 2. C2-A0 (architecture comparison trên primary labels) đã chạy xong để không block critical path
    >
    > **Lý do cơ học tại sao I-A giúp GNN thắng degree:**
    >
@@ -560,89 +572,21 @@ IC scores + split_masks ──────────────────�
    >   - GNN Layer 2: 2-hop attribute propagation ≈ strong inductive-bias alignment với IC-I-A (neighbor-attribute propagation)
    >   - **Hypothesis (pre-registered):** Spearman(GNN, IC-I-A) sẽ tăng đáng kể so với degree-only baselines; magnitude là kết quả thực nghiệm
    >
-   > **Pre-registration (bắt buộc — anti-p-hacking):** Phải ghi hypothesis vào `docs/experiment_registry.md` TRƯỚC KHI chạy pilot: "H3: Under I-A, GNN will significantly outperform degree because I-A makes one-hop expectation degree-independent and requires neighborhood attribute aggregation." Decision tree với thresholds cố định trước khi thấy kết quả.
-   >
-   > **Bước 1 — Pilot (200 nodes × 50 runs):**
-   >
-   > ```python
-   > # Precompute I-A weights (một lần)
-   > import numpy as np, scipy.sparse as sp
-   > from scipy.stats import spearmanr
-   >
-   > data  = np.load("data/processed/graph_csr.npz", allow_pickle=True)
-   > indptr, indices, degrees, node_ids = data["indptr"], data["indices"], data["degrees"], data["node_ids"].astype(str)
-   > n = len(node_ids)
-   >
-   > import pandas as pd
-   > node_attrs = pd.read_parquet("data/processed/node_attributes.parquet")
-   >
-   > # Map views → CSR row order (IMPORTANT: align by node_id, not by row position in parquet)
-   > views_by_id = node_attrs.set_index("node_id")["views"]
-   > views_raw = views_by_id.reindex(node_ids).fillna(0).to_numpy(dtype=np.float64)
-   > views_log = np.log1p(views_raw)
-   >
-   > # Precompute denominator: Σ log1p(views(v)) for v ∈ N(u)
-   > neighbor_views_sum = np.zeros(n, dtype=np.float64)
-   > for u in range(n):
-   >     nbrs = indices[indptr[u]:indptr[u+1]]
-   >     if len(nbrs) > 0:
-   >         neighbor_views_sum[u] = views_log[nbrs].sum()
-   >
-   > # Run I-A IC pilot (200 nodes × 50 runs):
-   > from src.mapr2026_v3.ic_labels_primary import run_ic_csr_ia
-   > pilot_ids = ...  # same 200 pilot_node_ids từ primary pilot (stratified)
-   > ic_ia = np.array([
-   >     run_ic_csr_ia(u, indptr, indices, views_log, neighbor_views_sum,
-   >                   n_runs=50, worker_seed=42+u).mean()
-   >     for u in pilot_ids
-   > ])
-   > ```
-   >
-   > **Bước 2 — Pilot Decision Protocol (3 checks — phải pass TẤT CẢ):**
-   >
-   > ```python
-   > # CHECK 1: Non-degenerate variance (degree-blind → spread phải có variance)
-   > cv_ia = ic_ia.std() / (ic_ia.mean() + 1e-9)
-   > print(f"CV = {cv_ia:.3f}  (need > 0.3)")
-   >
-   > # CHECK 2: Degree correlation (phải thấp — đây là lý do chính chạy I-A)
-   > deg_pilot = degrees[pilot_ids]
-   > rho_deg_ia, _ = spearmanr(ic_ia, deg_pilot)
-   > print(f"ρ(IC-I-A, degree) = {rho_deg_ia:.3f}  (need < 0.75)")
-   >
-   > # CHECK 3: Neighbor-views-mean proxy (nếu quá cao → GNN chỉ cần 1 hop, không thú vị)
-   > neighbor_views_mean = np.array([
-   >     views_log[indices[indptr[u]:indptr[u+1]]].mean() if indptr[u+1] > indptr[u] else 0.0
-   >     for u in pilot_ids
-   > ])
-   > rho_nbr_ia, _ = spearmanr(ic_ia, neighbor_views_mean)
-   > print(f"ρ(IC-I-A, nbr_views_mean) = {rho_nbr_ia:.3f}  (need < 0.85)")
-   >
-   > # Decision tree:
-   > if cv_ia > 0.3 and rho_deg_ia < 0.75 and rho_nbr_ia < 0.85:
-   >     print("✅ ALL PASS → Run full I-A IC sim (5k nodes × 200 runs)")
-   >     print("   → Run C2-I-A: 4 archs × 5 seeds on I-A labels")
-   >     print("   → Run C4-I-A: Bootstrap CI GNN_best vs degree on I-A labels")
-   > elif cv_ia <= 0.3:
-   >     print("❌ FAIL CHECK 1: IC-I-A degenerate (low variance) → Stay A0 primary, I-A abandoned")
-   > elif rho_deg_ia >= 0.75:
-   >     print("⚠ FAIL CHECK 2: degree still correlates (rho_deg ≥ 0.75)")
-   >     print("  → Fallback: try II-B (views_density) with same checks; if also fail → stay A0")
-   > elif rho_nbr_ia >= 0.85:
-   >     print("⚠ FAIL CHECK 3: 1-hop proxy too strong → GNN not needed for I-A")
-   >     print("  → Report as limitation; stay A0 primary; abandon I-A")
-   >
-   > # Save pilot result:
-   > import json
-   > with open("outputs/mapr2026_v3_results/ic_ia_pilot_decision.json", "w") as f:
-   >     json.dump({
-   >         "cv_ia": float(cv_ia), "rho_deg_ia": float(rho_deg_ia), "rho_nbr_ia": float(rho_nbr_ia),
-   >         "pass_cv": bool(cv_ia > 0.3), "pass_deg": bool(rho_deg_ia < 0.75),
-   >         "pass_proxy": bool(rho_nbr_ia < 0.85),
-   >         "decision": "run_full_ia" if (cv_ia > 0.3 and rho_deg_ia < 0.75 and rho_nbr_ia < 0.85)
-   >                     else "fallback_a0"
-   >     }, f, indent=2)
-   > ```
+    > **Paper framing (bắt buộc):** I-A là **attribute-informed operationalization** (không phải sensitivity của A0). Nếu pilot FAIL, không cố cứu bằng tuning/alpha/hybrid — quay về A0-only story.
+    >
+    > **Pilot implementation (MUST; khuyến nghị dùng script để tránh sai align CSR↔node_attributes):**
+    >
+    > ```powershell
+    > python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1
+    > ```
+    >
+    > **PASS criteria (script tự report + ghi JSON):**
+    >
+    > - CV > 0.3
+    > - |ρ(IC-I-A, degree)| < 0.75
+    > - |ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85
+    >
+    > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
    >
    > **Nếu ALL PASS → Full I-A sim:**
    >
@@ -2404,11 +2348,11 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | 11  | **[M3] Views/IC alignment check**                                                                               | `ic_labels_primary.py`              | cập nhật `docs/day1_decisions.md` Phần 4 (`spearmanr(views, ic_score_mean)`)                                | M3                     |
 | 12  | **[NEW v3.1 — C1] Degree-controlled IC variance test**                                                          | manual/`ic_labels_primary.py`       | `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`                                            | 16/4                   |
 | 13  | **[SHOULD DO] Sensitivity S1 — Symmetric IC (A2)** `p=1/√(deg(u)×deg(v))`                                       | `ic_labels_primary.py` (A2 variant) | `ic_scores_sensitivity_a2.parquet` + `ic_sensitivity_comparison.json` (Spearman A0 vs A2 vs degree)         | Sau C2 xong (≈21/4)    |
-| 14  | **[SHOULD DO — nếu bật I-A] I-A Pilot** (200 nodes × 50 runs) — 3 checks: CV>0.3, ρ_deg<0.75, ρ_proxy<0.85      | `ic_labels_primary.py` (ia variant) | `outputs/mapr2026_v3_results/ic_ia_pilot_decision.json`                                                     | ≈18/4 (sau C2-A0 xong) |
-| 15  | **[SHOULD DO — chỉ khi row 14 pass ALL 3 checks] I-A Full Sim** (5k nodes × 200 runs) + `ic_ia_vs_primary.json` | `ic_labels_primary.py` (ia variant) | `outputs/mapr2026_v3_results/ic_scores_ia.parquet` + `ic_ia_vs_primary.json`                                | ≈19/4                  |
+| 14  | **[MUST — unconditional] I-A Pilot gate** (200 nodes × 50 runs) — 3 checks: CV>0.3, |ρ_deg|<0.75, |ρ_proxy|<0.85 | `ic_pilot_ia.py`                   | `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`                                                     | **17/4**               |
+| 15  | **[CONDITIONAL-MUST — chỉ khi row 14 PASS] I-A Full Sim** (5k nodes × N runs) + `ic_ia_vs_primary.json`         | `ic_labels_attribute_ia.py`         | `outputs/mapr2026_v3_results/ic_scores_ia.parquet` + `data/processed/regression_targets_ia.parquet`         | ≈18–19/4               |
 
 > **Dependency cho row 13:** Chờ C2 (Person 3) xong trước để không block critical path. Nếu A2 labels kịp trước 21/4, Person 3 có thể chạy thêm C2-A2 (4 archs × 5 seeds) để test GCN–A2 alignment hypothesis.
-> **Dependency cho rows 14–15:** Row 14 phải pass trước row 15. Nếu row 14 fail: dừng lại, không tốn compute cho row 15. Ghi lý do vào `docs/experiment_registry.md`.
+> **Dependency cho rows 14–15:** Row 14 là MUST và có thể làm ngay. Row 15 chỉ chạy nếu row 14 PASS; nếu FAIL: dừng lại và commit A0-only narrative. Ghi lý do vào `docs/experiment_registry.md`.
 
 ### Person 2 — Trần Hùng Vĩ
 

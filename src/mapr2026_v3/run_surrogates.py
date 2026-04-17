@@ -35,10 +35,13 @@ from sklearn.preprocessing import MinMaxScaler
 
 try:
     from torch_geometric.data import Data
-    from torch_geometric.nn import SAGEConv
+    from torch_geometric.nn import SAGEConv, GATConv, GCNConv, GINConv
 except Exception:
     Data = None
     SAGEConv = None
+    GATConv = None
+    GCNConv = None
+    GINConv = None
 
 from _shared import PATHS, ensure_dir, now_iso, read_edgelist_pairs, require_columns
 from eval_ranking_harness import (
@@ -67,8 +70,16 @@ class SurrogateDataBundle:
     train_mask: torch.Tensor
     val_mask: torch.Tensor
     test_mask: torch.Tensor
-    scaler: MinMaxScaler
+    scaler: Any
     split_mask_df: pd.DataFrame
+
+
+class IdentityScaler:
+    def fit(self, x: np.ndarray) -> "IdentityScaler":
+        return self
+
+    def transform(self, x: np.ndarray) -> np.ndarray:
+        return x
 
 
 class GraphSAGERegressor(nn.Module):
@@ -95,6 +106,71 @@ class GraphSAGERegressor(nn.Module):
         self.conv1.reset_parameters()
         self.conv2.reset_parameters()
         self.head.reset_parameters()
+
+
+class GNNSurrogateRegressor(nn.Module):
+    def __init__(
+        self,
+        arch: str,
+        in_channels: int,
+        hidden_channels: int = 128,
+        dropout: float = 0.3,
+        gat_heads: int = 4,
+    ) -> None:
+        super().__init__()
+        if Data is None:
+            raise ImportError("torch_geometric is required for GNN surrogates but is not available.")
+
+        self.arch = str(arch).lower()
+        self.dropout = nn.Dropout(dropout)
+
+        if self.arch == "sage":
+            if SAGEConv is None:
+                raise ImportError("torch_geometric is required for GraphSAGE but is not available.")
+            self.conv1 = SAGEConv(in_channels, hidden_channels, aggr="mean")
+            self.conv2 = SAGEConv(hidden_channels, hidden_channels, aggr="mean")
+            self.head = nn.Linear(hidden_channels, 1)
+        elif self.arch == "gcn":
+            if GCNConv is None:
+                raise ImportError("torch_geometric is required for GCN but is not available.")
+            self.conv1 = GCNConv(in_channels, hidden_channels)
+            self.conv2 = GCNConv(hidden_channels, hidden_channels)
+            self.head = nn.Linear(hidden_channels, 1)
+        elif self.arch == "gin":
+            if GINConv is None:
+                raise ImportError("torch_geometric is required for GIN but is not available.")
+            mlp1 = nn.Sequential(nn.Linear(in_channels, hidden_channels), nn.ReLU(), nn.Linear(hidden_channels, hidden_channels))
+            mlp2 = nn.Sequential(nn.Linear(hidden_channels, hidden_channels), nn.ReLU(), nn.Linear(hidden_channels, hidden_channels))
+            self.conv1 = GINConv(mlp1)
+            self.conv2 = GINConv(mlp2)
+            self.head = nn.Linear(hidden_channels, 1)
+        elif self.arch == "gat":
+            if GATConv is None:
+                raise ImportError("torch_geometric is required for GAT but is not available.")
+            heads = int(gat_heads)
+            self.conv1 = GATConv(in_channels, hidden_channels, heads=heads, concat=True, dropout=dropout)
+            self.conv2 = GATConv(hidden_channels * heads, hidden_channels, heads=1, concat=True, dropout=dropout)
+            self.head = nn.Linear(hidden_channels, 1)
+        else:
+            raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat")
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x, edge_index)
+        x = torch.relu(x)
+        x = self.dropout(x)
+        x = self.conv2(x, edge_index)
+        x = torch.relu(x)
+        x = self.dropout(x)
+        out = self.head(x)
+        return out.squeeze(-1)
+
+    def reset_parameters(self) -> None:
+        for mod in [getattr(self, "conv1", None), getattr(self, "conv2", None), getattr(self, "head", None)]:
+            if mod is None:
+                continue
+            reset = getattr(mod, "reset_parameters", None)
+            if callable(reset):
+                reset()
 
 
 def get_loss_function() -> nn.Module:
@@ -186,6 +262,7 @@ def load_surrogate_data_bundle(
     targets_path: str | Path = PATHS.regression_targets,
     split_mask_path: str | Path = PATHS.split_masks,
     edgelist_path: str | Path = PATHS.graph_edgelist,
+    node_scope: str = "all",
 ) -> SurrogateDataBundle:
     if Data is None:
         raise ImportError("torch_geometric is required for surrogate data bundle construction.")
@@ -193,7 +270,29 @@ def load_surrogate_data_bundle(
     node_attributes = pd.read_parquet(resolve_project_path(node_attributes_path))
     node_attributes = _ensure_node_id_str(node_attributes)
     require_columns(node_attributes, ["node_id"], "node_attributes")
-    base_df = node_attributes[["node_id"]].copy()
+
+    split_mask_df = load_shared_split_dataframe(split_mask_path)
+    split = {
+        "train": set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].tolist()),
+        "test": set(split_mask_df.loc[split_mask_df["split"] == "test", "node_id"].tolist()),
+        "val": set(),
+    }
+    if split["train"]:
+        train_sorted = sorted(split["train"])
+        n_val = max(1, int(0.1 * len(train_sorted)))
+        split["val"] = set(train_sorted[:n_val])
+        split["train"] = set(train_sorted[n_val:])
+
+    node_scope = str(node_scope).lower().strip()
+    if node_scope not in {"all", "labeled"}:
+        raise ValueError("node_scope must be one of: all, labeled")
+
+    if node_scope == "labeled":
+        # Fast local sanity checks: build graph on labeled nodes only.
+        labeled_ids = sorted(set(split_mask_df["node_id"].astype(str).tolist()))
+        base_df = pd.DataFrame({"node_id": labeled_ids})
+    else:
+        base_df = node_attributes[["node_id"]].copy()
 
     targets = pd.read_parquet(resolve_project_path(targets_path))
     targets = _ensure_node_id_str(targets)
@@ -204,7 +303,10 @@ def load_surrogate_data_bundle(
     raw_features_df = _derive_features(node_attributes)
     merged = base_df.merge(y_df, on="node_id", how="left")
 
-    if feature_mode == "raw_attr":
+    if feature_mode == "constant":
+        merged["const_1"] = 1.0
+        feature_cols = ["const_1"]
+    elif feature_mode == "raw_attr":
         merged = merged.merge(raw_features_df, on="node_id", how="left")
         feature_cols = ["views_log", "views_per_day", "life_time"]
     elif feature_mode == "random":
@@ -254,18 +356,6 @@ def load_surrogate_data_bundle(
     else:
         raise ValueError(f"Unsupported feature_mode={feature_mode}")
 
-    split_mask_df = load_shared_split_dataframe(split_mask_path)
-    split = {
-        "train": set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].tolist()),
-        "test": set(split_mask_df.loc[split_mask_df["split"] == "test", "node_id"].tolist()),
-        "val": set(),
-    }
-    if split["train"]:
-        train_sorted = sorted(split["train"])
-        n_val = max(1, int(0.1 * len(train_sorted)))
-        split["val"] = set(train_sorted[:n_val])
-        split["train"] = set(train_sorted[n_val:])
-
     node_ids = merged["node_id"].astype(str)
 
     train_mask_np = node_ids.isin(split["train"]).to_numpy(dtype=bool)
@@ -276,12 +366,18 @@ def load_surrogate_data_bundle(
     merged[feature_cols] = merged[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     x_raw = merged[feature_cols].to_numpy(dtype=np.float32)
 
-    scaler = MinMaxScaler()
-    if train_mask_np.any():
-        scaler.fit(x_raw[train_mask_np])
+    if feature_mode == "constant":
+        # Do NOT scale constant features to all-zeros; keep x=1 so GIN/sum-style
+        # aggregators can still reflect structural degree information.
+        scaler: Any = IdentityScaler().fit(x_raw)
+        x_scaled = x_raw
     else:
-        scaler.fit(x_raw)
-    x_scaled = scaler.transform(x_raw)
+        scaler = MinMaxScaler()
+        if train_mask_np.any():
+            scaler.fit(x_raw[train_mask_np])
+        else:
+            scaler.fit(x_raw)
+        x_scaled = scaler.transform(x_raw)
 
     y_tensor = torch.tensor(merged["y"].to_numpy(dtype=np.float32), dtype=torch.float32)
     edge_index = _build_edge_index(node_ids=node_ids, edgelist_path=edgelist_path)
@@ -340,6 +436,10 @@ def train_surrogate_5seeds(
     max_epochs: int = MAX_EPOCHS,
     model_name: str = "gnn_raw_attr",
     randomize_train_target: bool = False,
+    arch: str = "sage",
+    early_stop: bool = False,
+    patience: int = 20,
+    seeds: list[int] | None = None,
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -349,13 +449,17 @@ def train_surrogate_5seeds(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data = bundle.graph_data.to(device)
 
-    for seed in TRAINING_SEEDS:
+    training_seeds = TRAINING_SEEDS if seeds is None else list(seeds)
+    if len(training_seeds) == 0:
+        raise ValueError("seeds list is empty")
+
+    for seed in training_seeds:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
 
-        model = GraphSAGERegressor(in_channels=data.x.shape[1], hidden_channels=128, dropout=0.3).to(device)
+        model = GNNSurrogateRegressor(arch=arch, in_channels=data.x.shape[1], hidden_channels=128, dropout=0.3).to(device)
         model.reset_parameters()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_fn = get_loss_function()
@@ -367,6 +471,10 @@ def train_surrogate_5seeds(
                 perm = train_idx[torch.randperm(train_idx.numel(), device=device)]
                 y_train_target[train_idx] = data.y[perm]
 
+        best_state = None
+        best_val = float("inf")
+        no_improve = 0
+
         t_train_0 = time.time()
         for _ in range(max_epochs):
             model.train()
@@ -375,7 +483,24 @@ def train_surrogate_5seeds(
             loss = loss_fn(pred[data.train_mask], y_train_target[data.train_mask])
             loss.backward()
             optimizer.step()
+
+            if early_stop and bool(data.val_mask.any()):
+                model.eval()
+                with torch.no_grad():
+                    val_pred = model(data.x, data.edge_index)
+                    val_loss = loss_fn(val_pred[data.val_mask], y_train_target[data.val_mask]).item()
+                if val_loss + 1e-12 < best_val:
+                    best_val = float(val_loss)
+                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    no_improve = 0
+                else:
+                    no_improve += 1
+                    if no_improve >= int(patience):
+                        break
         t_train_1 = time.time()
+
+        if early_stop and best_state is not None:
+            model.load_state_dict(best_state)
 
         model.eval()
         with torch.no_grad():
@@ -523,11 +648,49 @@ def parse_args() -> argparse.Namespace:
         "--per-group-error-csv",
         default=str(Path(PATHS.results_dir) / "per_group_prediction_error.csv"),
     )
+    p.add_argument(
+        "--targets-path",
+        default=PATHS.regression_targets,
+        help="Regression targets parquet (default: primary A0 targets). Use for A2 reruns.",
+    )
+    p.add_argument(
+        "--split-mask-path",
+        default=PATHS.split_masks,
+        help="Shared split mask parquet (M0-locked).",
+    )
+    p.add_argument(
+        "--node-scope",
+        default="all",
+        choices=["all", "labeled"],
+        help="Graph scope: 'all' uses full graph; 'labeled' builds induced subgraph on labeled nodes (fast local sanity check).",
+    )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
     p.add_argument("--run-random-sanity", action="store_true")
     p.add_argument("--only-random", action="store_true")
     p.add_argument("--skip-gnn-full", action="store_true")
+    p.add_argument(
+        "--include-c2-arch",
+        action="store_true",
+        help="Also run GCN/GIN/GAT on raw_attr features (C2 architecture comparison).",
+    )
+    p.add_argument(
+        "--include-edge-only",
+        action="store_true",
+        help="Also run edge-only (x=1 constant) variants to match 'graph-only' requirement.",
+    )
+    p.add_argument(
+        "--only-edge-only",
+        action="store_true",
+        help="Run only edge-only variants (x=1) for quick 'graph-only strict' checks.",
+    )
+    p.add_argument("--early-stop", action="store_true", help="Enable early stopping on val loss (10% of train).")
+    p.add_argument("--patience", type=int, default=20)
+    p.add_argument(
+        "--seeds",
+        default="",
+        help="Comma-separated training seeds (e.g. '42,123'). Default uses [42,123,456,789,1024].",
+    )
     return p.parse_args()
 
 
@@ -556,29 +719,66 @@ def main() -> None:
         print(f"[OK] Wrote dry-run surrogate metrics header: {out_csv} (timestamp={now_iso()})")
         return
 
+    seed_list: list[int] | None = None
+    if str(args.seeds).strip():
+        parts = [p.strip() for p in str(args.seeds).split(",") if p.strip()]
+        seed_list = [int(p) for p in parts]
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Training device: {device}")
 
-    model_specs: list[tuple[str, str, bool]] = [
-        ("gnn_raw_attr", "raw_attr", False),
-        ("gnn_graph_only", "graph_only", False),
-        ("gnn_centrality", "centrality", False),
-        ("gnn_full", "full", False),
-    ]
+    if args.only_edge_only:
+        model_specs: list[tuple[str, str, bool, str]] = [
+            ("sage_edge_only", "constant", False, "sage"),
+            ("gcn_edge_only", "constant", False, "gcn"),
+            ("gin_edge_only", "constant", False, "gin"),
+            ("gat_edge_only", "constant", False, "gat"),
+        ]
+    else:
+        model_specs = [
+            ("gnn_raw_attr", "raw_attr", False, "sage"),
+            ("gnn_graph_only", "graph_only", False, "sage"),
+            ("gnn_centrality", "centrality", False, "sage"),
+            ("gnn_full", "full", False, "sage"),
+        ]
     if args.skip_gnn_full:
         model_specs = [spec for spec in model_specs if spec[0] != "gnn_full"]
     if args.run_random_sanity:
-        model_specs.append(("gnn_random", "random", False))
+        model_specs.append(("gnn_random", "random", False, "sage"))
     if args.only_random:
-        model_specs = [("gnn_random", "random", False)]
+        model_specs = [("gnn_random", "random", False, "sage")]
+
+    if args.include_c2_arch:
+        model_specs.extend(
+            [
+                ("gcn_raw_attr", "raw_attr", False, "gcn"),
+                ("gin_raw_attr", "raw_attr", False, "gin"),
+                ("gat_raw_attr", "raw_attr", False, "gat"),
+            ]
+        )
+
+    if args.include_edge_only:
+        model_specs.extend(
+            [
+                ("sage_edge_only", "constant", False, "sage"),
+                ("gcn_edge_only", "constant", False, "gcn"),
+                ("gin_edge_only", "constant", False, "gin"),
+                ("gat_edge_only", "constant", False, "gat"),
+            ]
+        )
 
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
     base_bundle: SurrogateDataBundle | None = None
 
-    for model_name, feature_mode, randomize_train_target in model_specs:
+    for model_name, feature_mode, randomize_train_target, arch in model_specs:
         try:
-            bundle = load_surrogate_data_bundle(feature_mode=feature_mode)
+            bundle = load_surrogate_data_bundle(
+                feature_mode=feature_mode,
+                targets_path=args.targets_path,
+                split_mask_path=args.split_mask_path,
+                node_scope=args.node_scope,
+            )
             if base_bundle is None:
                 base_bundle = bundle
             row, pred = train_surrogate_5seeds(
@@ -586,6 +786,10 @@ def main() -> None:
                 max_epochs=args.max_epochs,
                 model_name=model_name,
                 randomize_train_target=randomize_train_target,
+                arch=arch,
+                early_stop=bool(args.early_stop),
+                patience=int(args.patience),
+                seeds=seed_list,
             )
             results_list.append(row)
             predictions_by_model[model_name] = pred
@@ -608,7 +812,8 @@ def main() -> None:
             out_path=per_group_path,
         )
 
-    print("[OK] Surrogate training/evaluation completed with 5 seeds.")
+    effective_seeds = TRAINING_SEEDS if seed_list is None else list(seed_list)
+    print(f"[OK] Surrogate training/evaluation completed with {len(effective_seeds)} seed(s).")
     print(f" - models_written={len(results_list)}")
     print(f" - n_nodes={base_bundle.graph_data.x.shape[0]}, n_edges={base_bundle.graph_data.edge_index.shape[1]}")
     print(f" - output={out_csv}")
