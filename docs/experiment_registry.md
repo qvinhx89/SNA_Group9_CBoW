@@ -16,6 +16,40 @@
 
 ## Registry Entries
 
+### [2026-04-18 12:46] - Enable CUDA torch + I-A labeling CUDA-only implementation
+
+- **Config hash**: n/a (environment + implementation change)
+- **Parameter changed**: `runtime_dependency`, `ia_labeling_backend`
+- **Old value**: torch (cpu) or absent; I-A labeling CPU-only (`ic_labels_attribute_ia.py`)
+- **New value**: CUDA-enabled torch (cu126); I-A labeling can run CUDA-only via `src/mapr2026_v3/ic_labels_attribute_ia_cuda.py`
+- **Rationale**: User requirement “chỉ chạy bằng GPU CUDA” for full I-A labeling.
+- **Impact**: Generates the same contract artifacts but requires `torch.cuda.is_available()==True`.
+- **Install note (Windows)**: torch CUDA wheel installed from PyTorch CUDA index (e.g. cu126). Also requires import order `import torch` before `numpy/pandas` to avoid WinError 1114.
+- **Author**: Person 1
+
+### [2026-04-18 09:00] - MAPR2026 v3.1 Pre-registration: H-IA (Attribute-Informed IC branch)
+
+- **Config hash**: n/a (hypothesis pre-registration)
+- **Parameter changed**: `hypothesis_registry`
+- **Old value**: not recorded
+- **New value**: `H-IA: Under I-A labels, GATv2 sẽ outperform degree (degree blind to row-norm IC); FAIL → A0-only narrative.`
+- **Rationale**: Prevent HARKing; lock the I-A branch interpretation before producing full I-A labels.
+- **Impact**:
+   - If I-A pilot PASS → run full I-A labeling and allow I-A surrogate experiments.
+   - If I-A pilot FAIL → skip full I-A; commit A0-only narrative.
+- **Evidence**: `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json` (current run shows `pass=true`).
+- **Author**: Person 1
+
+### [2026-04-18 09:05] - MAPR2026 v3.1 Construct-validity config lock (no calibration target)
+
+- **Config hash**: n/a (paper-facing lock)
+- **Parameter changed**: `src/config/experiment.yaml::mapr2026_v3_1`
+- **Old value**: missing/unspecified
+- **New value**: `graph_directed=false`, `calibration_mode=variance_check`, `p_primary=weighted_cascade`, `ic_backend=csr_numpy`, `ic_parallel=joblib_loky`
+- **Rationale**: Align repo configuration record with MAPR2026 v3.1 plan flow and master plan constraints.
+- **Impact**: Stabilizes construct-validity statements across reruns and handoffs.
+- **Author**: Person 1
+
 ### [2026-04-07 19:30] - Task 6 Comparator Lock + IF PROBLEM Fallback Activated
 
 - **Config hash**: n/a (analysis/protocol lock for MAPR2026 v3 Track B)

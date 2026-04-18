@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-04-17T16:43:32",
+  "config": {
+    "p_model": "ia_row_norm_views",
+    "w_transform": "log1p(max(views,0))",
+    "n_pilot_nodes": 200,
+    "n_pilot_runs": 50,
+    "seed": 42,
+    "worker_seed_rule": "seed + csr_row",
+    "thresholds": {
+      "cv_gt": 0.3,
+      "abs_rho_deg_lt": 0.75,
+      "abs_rho_proxy_lt": 0.85
+    }
+  },
+  "summary": {
+    "mean_reach": 27.740299999999998,
+    "median_reach": 25.65,
+    "iqr_reach": 16.665000000000003,
+    "top10_to_median_ratio": 2.147797270871431,
+    "cv_across_nodes": 0.4797339828281059,
+    "spearman_ic_vs_degree": -0.0029998301298993684,
+    "spearman_ic_vs_nbr_views_mean_proxy": 0.11772876714831755,
+    "pass": true,
+    "pass_checks": {
+      "cv": true,
+      "degree": true,
+      "proxy": true
+    },
+    "elapsed_sec": 102.0666253566742
+  }
+}

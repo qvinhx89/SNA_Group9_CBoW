@@ -76,6 +76,9 @@ def collect_required_paths() -> list[Path]:
     ]
 
     optional_if_exists = [
+        # Optional I-A branch artifacts (v3.1)
+        Path("outputs/mapr2026_v3_results/ic_scores_ia.parquet"),
+        Path("data/processed/regression_targets_ia.parquet"),
         Path("data/processed/classification_labels_consensus.parquet"),
         Path("data/processed/ic_scores_primary_with_ci_consensus.parquet"),
         Path(f"{PATHS.day1_dir}/ic_label_uncertainty_consensus.json"),

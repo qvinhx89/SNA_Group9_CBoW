@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-17T21:49:45",
+  "timestamp": "2026-04-18T11:45:52",
   "n_rows": 5000,
   "n_bands": 5,
   "bands": [
@@ -13,7 +13,16 @@
       "ic_mean_in_band": 2.506389671361503,
       "ic_std_in_band": 5.728601585161056,
       "cv_within_band": 2.2855989436188535,
-      "interpretation": "Within-band variability summary (see top-level interpretation)."
+      "interpretation": "Within-band variability summary (see top-level interpretation).",
+      "tier2_one_hop_regression": {
+        "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+        "n": 1065,
+        "beta0": 0.9261909004951147,
+        "beta1": 0.8308436837418558,
+        "r2": 0.045932107215964524,
+        "rmse": 0.49124341001201965,
+        "residual_std": 0.4914742032641282
+      }
     },
     {
       "degree_band": "q2",
@@ -25,7 +34,16 @@
       "ic_mean_in_band": 7.4570884773662565,
       "ic_std_in_band": 14.056866157113468,
       "cv_within_band": 1.8850341121442835,
-      "interpretation": "Within-band variability summary (see top-level interpretation)."
+      "interpretation": "Within-band variability summary (see top-level interpretation).",
+      "tier2_one_hop_regression": {
+        "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+        "n": 972,
+        "beta0": 1.4532674743587226,
+        "beta1": 0.7073957365749327,
+        "r2": 0.018797671533548055,
+        "rmse": 0.8459084822766768,
+        "residual_std": 0.8463439564276718
+      }
     },
     {
       "degree_band": "q3",
@@ -37,7 +55,16 @@
       "ic_mean_in_band": 13.101001031991743,
       "ic_std_in_band": 18.897835548232948,
       "cv_within_band": 1.4424726402269363,
-      "interpretation": "Within-band variability summary (see top-level interpretation)."
+      "interpretation": "Within-band variability summary (see top-level interpretation).",
+      "tier2_one_hop_regression": {
+        "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+        "n": 969,
+        "beta0": 1.8823625387737575,
+        "beta1": 0.7738026515942972,
+        "r2": 0.026804370598304428,
+        "rmse": 0.9160245591143549,
+        "residual_std": 0.9164975901601418
+      }
     },
     {
       "degree_band": "q4",
@@ -49,7 +76,16 @@
       "ic_mean_in_band": 24.296773226773226,
       "ic_std_in_band": 27.20483697759504,
       "cv_within_band": 1.1196892988085079,
-      "interpretation": "Within-band variability summary (see top-level interpretation)."
+      "interpretation": "Within-band variability summary (see top-level interpretation).",
+      "tier2_one_hop_regression": {
+        "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+        "n": 1001,
+        "beta0": 2.5994163597135143,
+        "beta1": 0.4078946585185874,
+        "r2": 0.013409291999024076,
+        "rmse": 0.9116649022593201,
+        "residual_std": 0.9121206208092804
+      }
     },
     {
       "degree_band": "q5",
@@ -61,8 +97,23 @@
       "ic_mean_in_band": 109.31278449144008,
       "ic_std_in_band": 176.597207294794,
       "cv_within_band": 1.6155219914704737,
-      "interpretation": "Within-band variability summary (see top-level interpretation)."
+      "interpretation": "Within-band variability summary (see top-level interpretation).",
+      "tier2_one_hop_regression": {
+        "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+        "n": 993,
+        "beta0": 3.1430764018178947,
+        "beta1": 0.9227662132964507,
+        "r2": 0.45716447467204957,
+        "rmse": 0.7298458845797186,
+        "residual_std": 0.7302136577875284
+      }
     }
   ],
-  "interpretation": "Median within-band CV ≥ 0.30: IC variability remains substantial even after conditioning on degree; supports 'IC is not solely degree'."
+  "interpretation": "Median within-band CV ≥ 0.30: IC variability remains substantial even after conditioning on degree; supports 'IC is not solely degree'.",
+  "tier2": {
+    "enabled": true,
+    "mode": "optional_one_hop_residual",
+    "proxies_path": "data\\processed\\diffusion_proxies.parquet",
+    "note": "enabled"
+  }
 }

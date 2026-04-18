@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-09T19:31:17",
+  "timestamp": "2026-04-18T15:15:30",
   "split_path": "data/processed/split_masks.parquet",
   "sha256": "005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104",
   "size_bytes": 35759,
@@ -9,5 +9,5 @@
     "seed": 42
   },
   "consumer_rule": "Consumers must load this split artifact; no local re-splitting.",
-  "versioned_handoff_dir": "outputs/handoffs/person1_day1_20260409_p1_day1_v3i_optionB_lockstep"
+  "versioned_handoff_dir": "outputs/handoffs/person1_day1_20260418_p1_day1_v3i_ia_cuda"
 }

@@ -14,6 +14,8 @@ Inputs
 ------
 - data/processed/ic_scores_primary.parquet (labeled subset)
 - data/processed/graph_csr.npz (degree lookup; deterministic mapping)
+Optional:
+- data/processed/diffusion_proxies.parquet (one_hop_spread) for tier-2 residual evidence
 
 Output (contract)
 -----------------
@@ -26,6 +28,9 @@ Notes
 -----
 - Degree bands are quintiles computed on the labeled subset degrees.
 - CV is computed as std/mean, with guard for mean==0.
+ - If diffusion proxies are available, we also report a tier-2 residual test:
+     regress log1p(ic_score_mean) on log1p(one_hop_spread) within each band and
+     summarize R^2 and residual scale.
 """
 
 from __future__ import annotations
@@ -45,10 +50,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ic", default=PATHS.ic_scores)
     p.add_argument("--csr", default=PATHS.csr_npz)
     p.add_argument(
+        "--proxies",
+        default=PATHS.proxies,
+        help="Optional diffusion proxies parquet (uses one_hop_spread if present)",
+    )
+    p.add_argument(
         "--out",
         default="outputs/mapr2026_v3_results/degree_controlled_ic_variance.json",
     )
     p.add_argument("--n-bands", type=int, default=5, help="Number of degree bands (default quintiles=5)")
+    p.add_argument(
+        "--disable-tier2",
+        action="store_true",
+        help="Disable tier-2 one-hop regression residual evidence even if proxies exist",
+    )
     return p.parse_args()
 
 
@@ -81,6 +96,46 @@ def _interpret_bandwise(band_rows: list[dict[str, Any]]) -> str:
     )
 
 
+def _ols_simple(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
+    """Fit y ~ a + b x via least squares and return compact diagnostics."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x.ndim != 1 or y.ndim != 1 or x.shape[0] != y.shape[0]:
+        raise ValueError("x and y must be 1-D arrays of the same length")
+
+    n = int(x.shape[0])
+    if n < 3:
+        return {
+            "n": float(n),
+            "beta0": float("nan"),
+            "beta1": float("nan"),
+            "r2": float("nan"),
+            "rmse": float("nan"),
+            "residual_std": float("nan"),
+        }
+
+    X = np.column_stack([np.ones(n, dtype=float), x])
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    y_hat = X @ beta
+    resid = y - y_hat
+
+    sse = float(np.sum(resid ** 2))
+    sst = float(np.sum((y - float(np.mean(y))) ** 2))
+    r2 = float(1.0 - (sse / sst)) if sst > 0 else float("nan")
+
+    rmse = float(np.sqrt(sse / n))
+    residual_std = float(np.std(resid, ddof=1))
+
+    return {
+        "n": float(n),
+        "beta0": float(beta[0]),
+        "beta1": float(beta[1]),
+        "r2": r2,
+        "rmse": rmse,
+        "residual_std": residual_std,
+    }
+
+
 def main() -> None:
     args = parse_args()
 
@@ -108,6 +163,28 @@ def main() -> None:
         raise ValueError(f"Degree lookup failed for {missing} labeled nodes (CSR mapping missing node_id)")
     df["degree"] = pd.to_numeric(df["degree"], errors="coerce").astype(int)
 
+    # Optional tier-2: merge one-hop proxy for residual evidence.
+    tier2_enabled = False
+    tier2_note = "disabled"
+    if not bool(args.disable_tier2):
+        proxies_path = Path(args.proxies)
+        if proxies_path.exists():
+            df_p = pd.read_parquet(proxies_path)
+            require_columns(df_p, ["node_id", "one_hop_spread"], "diffusion_proxies")
+            df_p = df_p[["node_id", "one_hop_spread"]].copy()
+            df_p["node_id"] = df_p["node_id"].astype(str)
+            df_p["one_hop_spread"] = pd.to_numeric(df_p["one_hop_spread"], errors="coerce")
+            df = df.merge(df_p, on="node_id", how="left")
+
+            n_missing_proxy = int(df["one_hop_spread"].isna().sum())
+            if n_missing_proxy == 0:
+                tier2_enabled = True
+                tier2_note = "enabled"
+            else:
+                tier2_note = f"proxies_missing_for_{n_missing_proxy}_labeled_nodes"
+        else:
+            tier2_note = "proxies_file_missing"
+
     n_bands = int(args.n_bands)
     if n_bands < 2:
         raise ValueError("--n-bands must be >= 2")
@@ -128,17 +205,32 @@ def main() -> None:
         deg_min = int(band_df["degree"].min()) if n else None
         deg_max = int(band_df["degree"].max()) if n else None
 
-        band_rows.append(
-            {
-                "degree_band": f"q{int(band_idx) + 1}",
-                "degree_range": [deg_min, deg_max],
-                "n_nodes_in_band": n,
-                "ic_mean_in_band": mean,
-                "ic_std_in_band": std,
-                "cv_within_band": cv,
-                "interpretation": "Within-band variability summary (see top-level interpretation).",
+        row: dict[str, Any] = {
+            "degree_band": f"q{int(band_idx) + 1}",
+            "degree_range": [deg_min, deg_max],
+            "n_nodes_in_band": n,
+            "ic_mean_in_band": mean,
+            "ic_std_in_band": std,
+            "cv_within_band": cv,
+            "interpretation": "Within-band variability summary (see top-level interpretation).",
+        }
+
+        if tier2_enabled and n >= 3:
+            x = band_df["one_hop_spread"].astype(float).to_numpy()
+            y = band_df["ic_score_mean"].astype(float).to_numpy()
+            # Plan-aligned residual evidence (robust to heavy tails): log1p(y) ~ a + b*log1p(x)
+            diag = _ols_simple(np.log1p(x), np.log1p(y))
+            row["tier2_one_hop_regression"] = {
+                "model": "log1p(ic_score_mean) ~ beta0 + beta1*log1p(one_hop_spread)",
+                "n": int(diag["n"]),
+                "beta0": float(diag["beta0"]),
+                "beta1": float(diag["beta1"]),
+                "r2": float(diag["r2"]),
+                "rmse": float(diag["rmse"]),
+                "residual_std": float(diag["residual_std"]),
             }
-        )
+
+        band_rows.append(row)
 
     payload: dict[str, Any] = {
         "timestamp": now_iso(),
@@ -146,6 +238,12 @@ def main() -> None:
         "n_bands": int(len(band_rows)),
         "bands": band_rows,
         "interpretation": _interpret_bandwise(band_rows),
+        "tier2": {
+            "enabled": bool(tier2_enabled),
+            "mode": "optional_one_hop_residual",
+            "proxies_path": str(Path(args.proxies)),
+            "note": str(tier2_note),
+        },
     }
 
     out_path = Path(args.out)
