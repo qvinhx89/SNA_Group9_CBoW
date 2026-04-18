@@ -41,14 +41,25 @@ def _dcg(rels: np.ndarray) -> float:
     return float(np.sum((2.0 ** rels - 1.0) / denom))
 
 
+def _argsort_desc_stable(x: np.ndarray) -> np.ndarray:
+    """Deterministic descending argsort.
+
+    Uses a stable sort so ties break by original order. Upstream, we enforce
+    stable ordering by `node_id` after masking, so this yields deterministic
+    top-k membership for NDCG/Precision when there are ties.
+    """
+    x = np.asarray(x).ravel()
+    return np.argsort(-x, kind="mergesort")
+
+
 def ndcg_at_k(y_true: np.ndarray, y_pred: np.ndarray, k: int) -> float:
     if k <= 0:
         return float("nan")
-    order = np.argsort(-y_pred)
+    order = _argsort_desc_stable(y_pred)
     topk = order[:k]
     rels = y_true[topk]
 
-    ideal_order = np.argsort(-y_true)
+    ideal_order = _argsort_desc_stable(y_true)
     ideal_topk = ideal_order[:k]
     ideal_rels = y_true[ideal_topk]
 
@@ -61,8 +72,8 @@ def precision_at_k(y_true: np.ndarray, y_pred: np.ndarray, k: int) -> float:
     if k <= 0:
         return float("nan")
 
-    pred_top = set(np.argsort(-y_pred)[:k].tolist())
-    true_top = set(np.argsort(-y_true)[:k].tolist())
+    pred_top = set(_argsort_desc_stable(y_pred)[:k].tolist())
+    true_top = set(_argsort_desc_stable(y_true)[:k].tolist())
     return float(len(pred_top & true_top) / k)
 
 
@@ -154,11 +165,23 @@ def apply_test_mask(
                 "Run diffusion_proxies.py real mode before evaluation/runtime."
             )
 
-    test_ids = set(mask.loc[mask["split"] == "test", "node_id"].astype(str))
-    filtered = df[df[node_id_col].astype(str).isin(test_ids)].copy()
+    df_local = df.copy()
+    df_local[node_id_col] = (
+        df_local[node_id_col].astype(str).str.replace(r"\.0$", "", regex=True)
+    )
+
+    mask_local = mask.copy()
+    mask_local["node_id"] = mask_local["node_id"].astype(str).str.replace(r"\.0$", "", regex=True)
+
+    test_ids = set(mask_local.loc[mask_local["split"] == "test", "node_id"].tolist())
+    filtered = df_local[df_local[node_id_col].isin(test_ids)].copy()
     if len(filtered) == 0:
         raise ValueError(
             "apply_test_mask: no rows remain after filtering. "
             "Check that node_id types match between df and split mask."
         )
+
+    # Deterministic row order for downstream metric computations and for
+    # tie-breaking in top-k membership.
+    filtered = filtered.sort_values(node_id_col, kind="mergesort").reset_index(drop=True)
     return filtered

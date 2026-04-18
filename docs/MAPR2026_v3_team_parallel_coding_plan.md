@@ -1,35 +1,38 @@
 # MAPR2026 v3 — Team 3 người: Kế hoạch coding song song (không bao gồm viết paper)
 
-Mục tiêu của tài liệu này là thiết kế các đầu việc **có thể triển khai song song tối đa** cho team 3 người để migrate từ pipeline hiện tại (SIS-based, stage 0–3 đã ổn) sang MAPR2026 v3.1 — **Linear pipeline**: [1] MC-IC as metric → [2] MC-IC đắt → [3] Regression nature → [4] GNN surrogate (GCN/GIN/GAT/SAGE).
+Mục tiêu của tài liệu này là thiết kế các đầu việc **có thể triển khai song song tối đa** cho team 3 người để migrate từ pipeline hiện tại (SIS-based, stage 0–3 đã ổn) sang MAPR2026 v3.1 — **Linear pipeline**: [1] MC-IC as metric → [2] MC-IC đắt → [3] Regression nature → [4] GNN surrogate (SAGE/GCN/GIN/GAT/APPNP).
 
 Phạm vi:
 
 - **Chỉ phần thực thi code + tạo artifacts + chạy pipeline**.
 - Không bao gồm viết paper/narrative (đã có người khác phụ trách).
+- **Có một số “paper-facing handoff checks”** (protocol statements, figures/tables checklist, pre-submission sweep) để đảm bảo defensibility/construct-validity; mục tiêu là **đảm bảo các điều kiện/đoạn bắt buộc có mặt**, không phải viết narrative mới.
 
 **Scope bridge:** Tài liệu này là execution plan cho team 3 người coding. `MAPR2026_Implementation_Plan_v3.md` là strategic master plan (research + narrative + publication framing). Nếu khác biệt ở thao tác thực thi hằng ngày, ưu tiên file này; nếu khác biệt về framing nghiên cứu/paper, ưu tiên master plan. **v3.1 override:** Framing research/paper theo linear pipeline [1]→[4].
 
 ---
 
-## Cách đọc file này — 5 mức độ task
+## Cách đọc file này — Tier System [⚪ REF]
 
-> **Đọc phần này trước.** File plan có 5 loại nội dung với mức độ ưu tiên khác nhau:
+> **Đọc phần này trước.** File plan dùng 4-tier labeling system + một số section **MIXED**. Nhìn vào section header để biết tier ngay:
 
-| Loại                  | Ký hiệu                                                        | Ý nghĩa                                                                                 | Khi nào thực thi                                                  |
-| --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **MUST**              | _(không có marker — body text thường; hoặc `[MUST]` explicit)_ | Bắt buộc cho paper defensible                                                           | Luôn làm theo đúng thứ tự                                         |
-| **APPENDIX support**  | `**[APPENDIX support — v3.1 demoted]**`                        | Phần hỗ trợ/secondary; KHÔNG block main submission; cắt **đầu tiên** nếu tight deadline | Chỉ sau khi xong hoàn toàn tất cả MUST; làm nếu có thời gian thừa |
-| **Dự phòng**          | `> ⚠ [IF PROBLEM: <điều kiện>]`                                | Phương án thay thế khi gặp vấn đề cụ thể                                                | CHỈ khi điều kiện trigger xảy ra                                  |
-| **Nếu còn thời gian** | `> ✦ [IF TIME]`                                                | Tăng thêm chất lượng/robustness                                                         | Sau khi hoàn thành tất cả MUST trước deadline                     |
-| **Tham khảo**         | `> 📋 [REFERENCE — không phải task thêm]`                      | Chỉ để align narrative/decision, không phát sinh task mới                               | Đọc để thống nhất ngữ cảnh, KHÔNG đưa vào task list               |
+| Tier                 | Tag                                         | Nghĩa                                               | Khi thực thi                                |
+| -------------------- | ------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| 🔴 **MAPR-MUST**     | `[🔴 MAPR-MUST]` hoặc body text bình thường | Bắt buộc cho submission defensible — thiếu = reject | Luôn làm; ưu tiên tuyệt đối                 |
+| 🔴/🟡 **MIXED**      | `[🔴/🟡 MIXED]`                             | Một section có cả MUST và BOOST tasks               | Làm phần 🔴 trước; phần 🟡 sau nếu còn time |
+| 🟡 **BOOST**         | `[🟡 BOOST]`                                | Cải thiện paper; không block submission             | Sau khi xong hết 🔴 trước 30/4              |
+| 🔵 **FUTURE[Venue]** | `[🔵 FUTURE:Venue]`                         | Valuable cho venue khác; không kịp MAPR             | Skip MAPR; giữ code; revisit sau 30/4       |
+| ⚪ **REF**           | `[⚪ REF]`                                  | Chỉ đọc để align; không phát sinh task              | Đọc 1 lần khi onboard; skip khi đang chạy   |
+| **APPENDIX support** | `[APPENDIX support — v3.1 demoted]`         | Secondary/optional; cắt đầu tiên khi tight          | Sau khi Task A + C xong hoàn toàn           |
+| **IF PROBLEM**       | `> ⚠ [IF PROBLEM: điều kiện]`               | Phương án thay thế khi vấn đề cụ thể xảy ra         | CHỈ khi trigger condition xảy ra            |
 
-> **Quy tắc vàng:** Lần đọc đầu — đọc body text bình thường, **bỏ qua toàn bộ các block `⚠ [IF PROBLEM]`, `✦ [IF TIME]`, và `[APPENDIX support]`**. Quay lại các block đó khi và chỉ khi: điều kiện trigger xảy ra (IF PROBLEM), hoặc còn thời gian thừa sau khi done MUST (IF TIME), hoặc main story hoàn chỉnh và còn budget (APPENDIX support). Không để chúng làm phình scope hoặc trễ timeline.
->
-> **⚠ Chú ý đặc biệt cho `[APPENDIX support]`:** Đây KHÔNG phải MUST dù không có marker `[IF TIME]`. Tất cả deliverables mang nhãn `[APPENDIX support — v3.1 demoted]` là **optional** và phải được cắt trước mọi thứ khác khi tight deadline. Chỉ làm sau khi Task A (IC/labels) và Task C (GNN surrogate) đã xong hoàn toàn.
+> **Quy tắc vàng (v3.1):** Lần đọc đầu → chỉ đọc 🔴 sections. Xong 🔴 → đọc 🟡. Không kịp deadline → dừng ở 🔴; 🔵 giữ cho tương lai.
+> Trong Section 3 (Workstreams): Person 1 = 🔴 primary; Person 2 = 🔴/🟡 MIXED (proxies + correlation = 🔴; community = 🟡); Person 3 **C1/C2/C4 = 🔴**, C3 = 🟡, C5 = 🔵.
+> **⚠ APPENDIX support = cắt TRƯỚC MỌI THỨ KHÁC khi tight deadline.**
 
 ---
 
-## 0) Quickstart (để ai cũng chạy được trong 10 phút)
+## 0) Quickstart (để ai cũng chạy được trong 10 phút) [🔴 MAPR-MUST]
 
 Mục tiêu: trước khi chia việc, cả team xác nhận **environment đúng** và **Stage 0 artifacts đã có**.
 
@@ -43,6 +46,16 @@ conda activate sna_group9_cbow_py312
 python --version
 pip install -r requirements.txt
 ```
+
+- **PyG ≥ 2.3 bắt buộc** cho APPNP (C2 — H3 architecture). Verify:
+
+```python
+import torch_geometric as pyg
+from torch_geometric.nn import APPNP
+print(f"PyG version: {pyg.__version__}")  # Must be ≥ 2.3
+```
+
+> ⚠ Nếu `ImportError: cannot import name 'APPNP'` → `pip install torch_geometric --upgrade`
 
 ### 0.2 Base artifacts phải tồn tại (đầu vào chung)
 
@@ -64,7 +77,7 @@ python run_all.py --stage 1
 python run_all.py --stage 2
 ```
 
-## 1) Nguyên tắc để “song song thật”
+## 1) Nguyên tắc để “song song thật” [⚪ REF]
 
 1. **Chia theo artifact contract**, không chia theo “ý tưởng”. Ai sở hữu artifact nào thì chịu trách nhiệm schema + reproducibility của artifact đó.
 2. **Không sửa đè Stage 0–3 đang chạy ổn** trừ khi bắt buộc. Nếu cần đổi logic theo MAPR2026 v3, ưu tiên tạo script mới để tránh phá pipeline cũ.
@@ -84,7 +97,7 @@ python run_all.py --stage 2
 - Graph dùng **undirected** (`graph_directed: false`) — MUSAE Twitch chỉ có mutual-follow edges.
 - **Uniform p** — **KHÔNG** report như primary; weighted cascade là bắt buộc.
 
-> ✦ **[SHOULD DO] Sensitivity S1 — Symmetric p**: `p(u,v) = 1/√(deg(u)×deg(v))` — parameter-free, views-independent, không vi phạm independence nào. Lý do ưu tiên: structurally analogous to GCN's `D^{-1/2}AD^{-1/2}` normalization → tạo testable "GCN–A2 alignment hypothesis". Output: `ic_scores_sensitivity_a2.parquet`. Chạy sau khi primary IC và C2 xong. Framing: "robustness to diffusion rule choice." Xem Section 4.1b của Implementation Plan.
+> 🟡 **[BOOST — A2 sensitivity] Sensitivity S1 — Symmetric p**: `p(u,v) = 1/√(deg(u)×deg(v))` — parameter-free, views-independent. Tạo testable "GCN–A2 alignment hypothesis" (GCN's `D^{-1/2}AD^{-1/2}` structurally analogous). Output: `ic_scores_sensitivity_a2.parquet`. Chạy sau khi primary IC và C2 xong. Xem Section 4.1b của Implementation Plan.
 >
 > ✦ **[IF TIME] Sensitivity S2 — Source Budget p**: `p(u,v) = 1/deg(u)` — mọi node có one-hop spread = 1.0, IC score thuần 2+ hop. Chỉ làm nếu `Spearman(IC-A0, degree) > 0.85` và cần tăng "IC ≠ degree" evidence. Output: `ic_scores_sensitivity_a1.parquet`.
 >
@@ -120,7 +133,7 @@ python run_all.py --stage 2
 
 ---
 
-## 1b) Bảng hằng số chung (Shared Constants)
+## 1b) Bảng hằng số chung (Shared Constants) [🔴 MAPR-MUST]
 
 > ⚠ **Đây là single source of truth cho toàn team.** Mọi thay đổi phải cập nhật bảng này trước, sau đó propagate sang code/config/artifacts. Không được hard-code khác đi ở bất kỳ chỗ nào.
 
@@ -144,7 +157,7 @@ python run_all.py --stage 2
 | Experiments locked                   | **21/4**                                      | Data generation + model training xong                                                                |
 | Submit deadline                      | **30/4**                                      | Hard deadline                                                                                        |
 | C1 — degree variance test            | **16/4**                                      | Person 1/3                                                                                           |
-| C2 — arch comparison done            | **18/4**                                      | Person 3                                                                                             |
+| C2 — arch comparison done            | **19/4** _(+1 ngày cho APPNP)_                | Person 3                                                                                             |
 | C3 — ranking loss done               | **20/4**                                      | Person 3 (sau C2)                                                                                    |
 | C4 — bootstrap CI done               | **20/4**                                      | Person 3 (sau C2)                                                                                    |
 | All v3.1 experiments locked          | **21/4**                                      | Toàn team                                                                                            |
@@ -156,7 +169,7 @@ python run_all.py --stage 2
 
 ---
 
-## 2) Artifact contracts (đóng băng giao diện giữa 3 người)
+## 2) Artifact contracts (đóng băng giao diện giữa 3 người) [🔴 MAPR-MUST]
 
 > Các schema dưới đây bám theo `docs/MAPR2026_v3_migration_checklist.md`. Nếu cần đổi tên/format, phải đổi đồng bộ và ghi vào `docs/experiment_registry.md`.
 
@@ -355,7 +368,7 @@ python run_surrogates.py --dry-run
 
 ---
 
-## 3) Workstreams song song (3 người)
+## 3) Workstreams song song (3 người) [🔴 MAPR-MUST — Track A + C; Track B = 🔴/🟡 MIXED]
 
 ### Map theo team
 
@@ -401,7 +414,10 @@ IC scores + split_masks ──────────────────�
 - `diffusion_proxies.parquet` (Person 2) → Person 3 mới có Group 3 baseline
 - Day-1 ρ result (Person 1) → quyết định toàn bộ GNN narrative cho cả team
 
-### Person 1 — Track A: IC core (CSR + weighted-cascade IC + Day-1 decisions)
+### Person 1 — Track A: IC core (CSR + weighted-cascade IC + Day-1 decisions) [🔴 MAPR-MUST]
+
+> 🔴 **[MAPR-MUST — Track A là primary gating track cho toàn bộ pipeline]**
+> I-A pilot (~20 phút) = MUST unconditional. Full I-A = 🟡 BOOST nếu pilot pass 3 checks.
 
 **Mục tiêu:** tạo “grounding” cho toàn bộ plan v3: CSR backend + IC labels + stability.
 
@@ -539,28 +555,28 @@ IC scores + split_masks ──────────────────�
    >
    > **Framing bắt buộc:** "Sensitivity to diffusion rule choice" — không phải "chọn rule giúp GNN thắng degree".
 
-    > 🟦 **[MUST — v3.1 reviewer-driven; unconditional; ~20 phút] I-A pilot gate (200 nodes × 50 runs)**
-    >
-    > **Mục tiêu:** Đây là pilot bắt buộc để quyết định *có activate full I-A hay không* (Reviewer 2 distinction: **Pilot = MUST unconditional; Full I-A = conditional-MUST nếu pilot pass**). Không dùng pilot như một “option” vì leverage story rất lớn và cost rất nhỏ.
-    >
-    > **Pre-registration (bắt buộc — anti-p-hacking):** Phải ghi hypothesis + decision tree vào `docs/experiment_registry.md` **TRƯỚC KHI** chạy pilot.
-    >
-    > **Command (local CPU):** `python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1`
-    > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
-    >
-    > **Decision tree (thresholds cố định, không đổi sau khi thấy kết quả):**
-    >
-    > - **PASS** nếu (CV > 0.3) AND (|ρ(IC-I-A, degree)| < 0.75) AND (|ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85)
-    >   - → **activate I-A full run** (conditional-MUST) + cho phép chạy C2-I-A nếu còn compute budget
-    > - **FAIL** nếu không đạt
-    >   - → **commit 100% vào A0-only narrative**; SKIP toàn bộ I-A full labeling/C2-I-A/C4-I-A để không tốn thời gian
-    >
-    > 🔵 **[CONDITIONAL-MUST — chỉ nếu pilot PASS] I-A: Attribute-Informed IC (Row-Normalized Views)**
-    >
-    > **Điều kiện chạy FULL (PHẢI thỏa TẤT CẢ):**
-    >
-    > 1. Pilot PASS (decision tree ở trên)
-    > 2. C2-A0 (architecture comparison trên primary labels) đã chạy xong để không block critical path
+   > 🟦 **[MUST — v3.1 reviewer-driven; unconditional; ~20 phút] I-A pilot gate (200 nodes × 50 runs)**
+   >
+   > **Mục tiêu:** Đây là pilot bắt buộc để quyết định _có activate full I-A hay không_ (Reviewer 2 distinction: **Pilot = MUST unconditional; Full I-A = conditional-MUST nếu pilot pass**). Không dùng pilot như một “option” vì leverage story rất lớn và cost rất nhỏ.
+   >
+   > **Pre-registration (bắt buộc — anti-p-hacking):** Phải ghi hypothesis + decision tree vào `docs/experiment_registry.md` **TRƯỚC KHI** chạy pilot.
+   >
+   > **Command (local CPU):** `python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1`
+   > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
+   >
+   > **Decision tree (thresholds cố định, không đổi sau khi thấy kết quả):**
+   >
+   > - **PASS** nếu (CV > 0.3) AND (|ρ(IC-I-A, degree)| < 0.75) AND (|ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85)
+   >   - → **activate I-A full run** (conditional-MUST) + cho phép chạy C2-I-A nếu còn compute budget
+   > - **FAIL** nếu không đạt
+   >   - → **commit 100% vào A0-only narrative**; SKIP toàn bộ I-A full labeling/C2-I-A/C4-I-A để không tốn thời gian
+   >
+   > 🔵 **[CONDITIONAL-MUST — chỉ nếu pilot PASS] I-A: Attribute-Informed IC (Row-Normalized Views)**
+   >
+   > **Điều kiện chạy FULL (PHẢI thỏa TẤT CẢ):**
+   >
+   > 1. Pilot PASS (decision tree ở trên)
+   > 2. C2-A0 (architecture comparison trên primary labels) đã chạy xong để không block critical path
    >
    > **Lý do cơ học tại sao I-A giúp GNN thắng degree:**
    >
@@ -572,21 +588,21 @@ IC scores + split_masks ──────────────────�
    >   - GNN Layer 2: 2-hop attribute propagation ≈ strong inductive-bias alignment với IC-I-A (neighbor-attribute propagation)
    >   - **Hypothesis (pre-registered):** Spearman(GNN, IC-I-A) sẽ tăng đáng kể so với degree-only baselines; magnitude là kết quả thực nghiệm
    >
-    > **Paper framing (bắt buộc):** I-A là **attribute-informed operationalization** (không phải sensitivity của A0). Nếu pilot FAIL, không cố cứu bằng tuning/alpha/hybrid — quay về A0-only story.
-    >
-    > **Pilot implementation (MUST; khuyến nghị dùng script để tránh sai align CSR↔node_attributes):**
-    >
-    > ```powershell
-    > python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1
-    > ```
-    >
-    > **PASS criteria (script tự report + ghi JSON):**
-    >
-    > - CV > 0.3
-    > - |ρ(IC-I-A, degree)| < 0.75
-    > - |ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85
-    >
-    > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
+   > **Paper framing (bắt buộc):** I-A là **attribute-informed operationalization** (không phải sensitivity của A0). Nếu pilot FAIL, không cố cứu bằng tuning/alpha/hybrid — quay về A0-only story.
+   >
+   > **Pilot implementation (MUST; khuyến nghị dùng script để tránh sai align CSR↔node_attributes):**
+   >
+   > ```powershell
+   > python src/mapr2026_v3/ic_pilot_ia.py --n-pilot-nodes 200 --n-pilot-runs 50 --n-jobs -1
+   > ```
+   >
+   > **PASS criteria (script tự report + ghi JSON):**
+   >
+   > - CV > 0.3
+   > - |ρ(IC-I-A, degree)| < 0.75
+   > - |ρ(IC-I-A, nbr_views_mean_proxy)| < 0.85
+   >
+   > **Output:** `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`
    >
    > **Nếu ALL PASS → Full I-A sim:**
    >
@@ -610,13 +626,13 @@ IC scores + split_masks ──────────────────�
 
    > **H4 — GATv2 cho C2-I-A (quan trọng — đọc trước khi implement):**
    >
-   > | | GAT v1 | GATv2 |
-   > |---|---|---|
-   > | Attention | Static: `e(i,j) = a_src·(W·h_i) + a_tgt·(W·h_j)` | Dynamic: `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])` |
-   > | Tính chất | Ranking của j KHÔNG đổi theo i | Ranking của j PHỤ THUỘC ngữ cảnh i |
-   > | I-A formula | `p(u,v) = views(v)/Σviews(N(u))` — denominator phụ thuộc u | ← Cần dynamic attention để model |
-   > | Verdict A0 | ✅ OK (static `1/deg(v)` chỉ cần target node) | Overkill cho A0 |
-   > | Verdict I-A | ❌ Cannot model row-normalization | **✅ H4: GATv2 là correct arch** |
+   > |             | GAT v1                                                     | GATv2                                               |
+   > | ----------- | ---------------------------------------------------------- | --------------------------------------------------- |
+   > | Attention   | Static: `e(i,j) = a_src·(W·h_i) + a_tgt·(W·h_j)`           | Dynamic: `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])` |
+   > | Tính chất   | Ranking của j KHÔNG đổi theo i                             | Ranking của j PHỤ THUỘC ngữ cảnh i                  |
+   > | I-A formula | `p(u,v) = views(v)/Σviews(N(u))` — denominator phụ thuộc u | ← Cần dynamic attention để model                    |
+   > | Verdict A0  | ✅ OK (static `1/deg(v)` chỉ cần target node)              | Overkill cho A0                                     |
+   > | Verdict I-A | ❌ Cannot model row-normalization                          | **✅ H4: GATv2 là correct arch**                    |
    >
    > **GATv2 implementation (thêm vào `run_surrogates.py`):**
    >
@@ -1034,7 +1050,11 @@ def run_c1_degree_variance_test(ic_scores_path, centrality_path,
 
 ---
 
-### Person 2 — Track B: Structure + diffusion proxies (community + baselines + correlation matrix)
+### Person 2 — Track B: Structure + diffusion proxies (community + baselines + correlation matrix) [🔴/🟡 MIXED]
+
+> 🔴 **[MAPR-MUST]** Diffusion proxies (Group 3) + metric correlation matrix là baseline-completeness + reviewer-defensibility items.
+> 🟡 **[BOOST]** Community detection features hỗ trợ diễn giải cấu trúc; làm sau MUST nếu còn thời gian.
+> Deliverables marked **[APPENDIX support]** = cắt đầu tiên nếu tight deadline.
 
 **Mục tiêu:** Community detection (support structural interpretation) + Diffusion proxies (Group 3 baseline) + Metric correlation matrix (multicollinearity evidence).
 
@@ -1042,7 +1062,7 @@ def run_c1_degree_variance_test(ic_scores_path, centrality_path,
 
 **Deliverables (theo thứ tự dependency):**
 
-1. **[MUST] Community detection + cross-community features** (v3 Section 6)
+1. 🟡 **[BOOST] Community detection + cross-community features** (v3 Section 6)
    - Input: `data/processed/graph_active.edgelist` (hoặc graph_csr.npz)
    - Script: `src/graph/community.py` (đã có sẵn) — Louvain seed sweep (`n_runs=10`, `seed_start=0`, `resolution=1.0`) + chọn **best run** theo modularity
    - **Library:** `python-louvain` only — KHÔNG fallback sang NetworkX Louvain
@@ -1083,7 +1103,7 @@ def run_c1_degree_variance_test(ic_scores_path, centrality_path,
 
    - **Lý do bắt buộc:** dùng để mô tả cấu trúc network (bridge-ness/cross-community mixing) và làm input cho các bảng tương quan/proxy; không có thì thiếu bằng chứng định lượng.
 
-2. Diffusion proxies (Group 3) — **scope: FULL active graph** (M0-locked)
+2. 🔴 **[MAPR-MUST] Diffusion proxies (Group 3)** — **scope: FULL active graph** (M0-locked)
    - Input: `graph_csr.npz`
    - Output: `data/processed/diffusion_proxies.parquet` (ALL active nodes)
 
@@ -1111,7 +1131,7 @@ def two_hop(node, G_neighbors, degrees):
     return total
 ```
 
-3. **[MUST — ~2–3h; tất cả parquet artifacts đã tồn tại; Person 2 có thể chạy ngay hôm nay]** Metric correlation matrix (full pairwise Spearman) _(MUST — phục vụ Section 4.3 multicollinearity claim)_
+3. 🔴 **[MAPR-MUST — ~2–3h; tất cả parquet artifacts đã tồn tại; Person 2 có thể chạy ngay hôm nay]** Metric correlation matrix (full pairwise Spearman) _(phục vụ Section 4.3 multicollinearity claim)_
 
 - **Tại sao MUST:** Reviewer sẽ hỏi "how do IC scores relate to simpler metrics?" — không có Table này thì phải trả lời verbal trong rebuttal. Tất cả data đã có sẵn: `ic_scores_primary.parquet`, `diffusion_proxies.parquet`, `node_attributes.parquet`, `centrality_table.parquet`. Zero new computation needed.
 - **Mục tiêu:** Trả lời RQ2b — khi nào degree/pagerank/views fail làm proxy cho IC? Provide số liệu định lượng cho Table trong Section 4.3 paper.
@@ -1191,17 +1211,21 @@ def two_hop(node, G_neighbors, degrees):
 
 **DoD Track B — MUST (không cắt):**
 
-- [ ] `data/processed/community_features.parquet` (file riêng, KHÔNG ghi vào `node_attributes.parquet`), phủ 100% active nodes; có `node_id`, `community_id`, `cross_community_edge_fraction`.
 - [ ] Proxies (one-hop + two-hop) trên FULL active graph, missing = 0; `runtime_breakdown.csv` có `inference_sec_full_graph`.
-- [ ] **[MUST — ~2–3h; chạy được ngay hôm nay]** `metric_correlation_matrix.json` tồn tại với 8×8 `rho_matrix` và `p_matrix_corrected` (global matrix — 8 metrics: ic_score_mean, views, degree, pagerank, kshell, betweenness_approx, one_hop_spread, two_hop_spread — bắt buộc). `rho_by_degree_quintile` là **[✦ IF TIME]** — sign-off không phụ thuộc vào phần này.
+- [ ] `metric_correlation_matrix.json` tồn tại với 8×8 `rho_matrix` và `p_matrix_corrected` (global matrix — 8 metrics: ic_score_mean, views, degree, pagerank, kshell, betweenness_approx, one_hop_spread, two_hop_spread — bắt buộc). `rho_by_degree_quintile` là **[✦ IF TIME]** — sign-off không phụ thuộc vào phần này.
 
 > ✦ **[IF TIME] Soft DoD:**
 >
+> - [ ] `data/processed/community_features.parquet` (file riêng, KHÔNG ghi vào `node_attributes.parquet`), phủ 100% active nodes; có `node_id`, `community_id`, `cross_community_edge_fraction`.
 > - [ ] Louvain resolution sensitivity: `louvain_resolution_sensitivity.json` cho {0.5, 1.0, 2.0}
 
 ---
 
-### Person 3 — Track C: Surrogate learning + evaluation harness (metrics/runtimes)
+### Person 3 — Track C: Surrogate learning + evaluation harness (metrics/runtimes) [🔴 MAPR-MUST — C1+C2+C4]
+
+> 🔴 **[MAPR-MUST — C1 (degree variance), C2 (architecture comparison), C4 (bootstrap CI) là blocking]**
+> C3 Ranking Loss = 🟡 BOOST (làm sau khi C2 xong nếu còn thời gian).
+> C5 GINE = 🔵 FUTURE:TKDE/WWW2027 (không làm cho MAPR).
 
 **Mục tiêu:** Task C (surrogate learning) và quan trọng nhất là **evaluation harness** (Spearman/NDCG@10%/P@10% + runtime table).
 
@@ -1283,6 +1307,7 @@ def two_hop(node, G_neighbors, degrees):
    | `gcn_raw_attr` | 5 | GCN raw-attr ← **NEW v3.1 (C2)** |
    | `gin_raw_attr` | 5 | GIN raw-attr ← **NEW v3.1 (C2)** |
    | `gat_raw_attr` | 5 | GAT raw-attr ← **NEW v3.1 (C2)** |
+   | `appnp_raw_attr` | 5 | APPNP raw-attr ← **NEW v3.1 (C2)** |
    | `best_arch_raw_attr_rankloss` | 5 | Best arch + ranking loss ← **NEW v3.1 (C3)** |
 
 2. Baselines (tất cả filter qua test mask trước khi tính metrics):
@@ -1388,7 +1413,7 @@ Chạy với `raw_attr` features, 5 seeds mỗi arch — **5 architectures total
 
 > **Context:** Xem bảng real numbers trong **ablation story** bên dưới để hiểu structural constraint của A0 (tại sao GNN khó beat degree, H3 rationale, và outcome interpretations).
 
-**[NEW v3.1 — MUST] Ranking Loss (C3):**
+**[NEW v3.1 — 🟡 BOOST] Ranking Loss (C3):**
 Sau khi C2 xong → train best arch với combined α·Huber + (1-α)·pairwise-margin-loss.
 CSV name: `best_arch_raw_attr_rankloss`
 
@@ -1397,22 +1422,26 @@ CSV name: `best_arch_raw_attr_rankloss`
 
 > **⚠ C4 Protocol spec (bắt buộc — để tránh lệch triển khai):**
 >
-> | Tham số             | Giá trị locked                                                                                                                         |
-> | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-> | **Metric được CI**  | Spearman ρ **only** (không phải NDCG hay P@10% — Spearman là primary ranking metric)                                                   |
-> | **Đơn vị resample** | Nodes trong **test set** (resample with replacement, size = n_test; không resample training set)                                       |
-> | **Δ definition**    | `Δ = Spearman(GNN_best, y_true) − Spearman(degree, y_true)` trên **cùng test set**                                                     |
-> | **"GNN_best"**      | Architecture có **mean Spearman cao nhất** qua 5 seeds từ C2 (nếu C2 chưa xong: dùng SAGE); predictions = mean predictions qua 5 seeds |
-> | **"degree"**        | `rank(degree)` trên toàn active graph, đã filter về test nodes (cùng y_true vector)                                                    |
-> | **n_bootstrap**     | 1,000                                                                                                                                  |
-> | **seed**            | 42                                                                                                                                     |
-> | **CI**              | 95% → percentile(2.5) và percentile(97.5)                                                                                              |
+> | Tham số                                          | Giá trị locked                                                                                                                                                                            |
+> | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------- |
+> | **Metric được CI**                               | **Spearman ρ (primary) + NDCG@10% (secondary)** — compute cả hai trong cùng 1 resampling loop, zero extra cost; Spearman và NDCG có thể diverge (observed: gnn_graph_only 0.470 vs 0.835) |
+> | **Đơn vị resample**                              | Nodes trong **test set** (resample with replacement, size = n_test; không resample training set)                                                                                          |
+> | **Δ definition**                                 | `Δ_spearman = Spearman(GNN_best) − Spearman(degree)` và `Δ_ndcg = NDCG@10%(GNN_best) − NDCG@10%(degree)` trên **cùng test set**                                                           |
+> | **"GNN_best"**                                   | Architecture có **mean Spearman cao nhất** qua 5 seeds từ C2 (nếu C2 chưa xong: dùng SAGE); predictions = mean predictions qua 5 seeds                                                    |
+> | **"degree"**                                     | `rank(degree)` trên toàn active graph, đã filter về test nodes (cùng y_true vector)                                                                                                       |
+> | **n_bootstrap**                                  | 1,000                                                                                                                                                                                     |
+> | **seed**                                         | 42                                                                                                                                                                                        |
+> | **CI**                                           | 95% → percentile(2.5) và percentile(97.5)                                                                                                                                                 |
+> | **Practical equivalence bound (pre-registered)** | `                                                                                                                                                                                         | Δ_spearman | ≤ 0.02` = practically equivalent (SESOI). Pre-register **trước khi xem kết quả**. |
 >
-> **Diễn giải output (quyết định paper claim):**
+> **Diễn giải output (quyết định paper claim) — 4-tier:**
 >
-> - `ci_95_lower > 0` → GNN significantly better → claim "GNN surpasses degree"
-> - `ci_95_lower ≤ 0 ≤ ci_95_upper` → statistically equivalent → claim "GNN achieves statistically equivalent Spearman ρ to degree while requiring no precomputed graph statistics"
-> - `ci_95_upper < 0` → GNN significantly worse → focus on "+0.099 message passing story" (GNN vs MLP), không claim GNN vs degree superiority
+> | CI outcome                                         | Interpretation             | Paper claim                                                                                                |
+> | -------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+> | `ci_95_lower > 0`                                  | GNN significantly better   | "GNN surpasses degree under IC-A0"                                                                         |
+> | CI chứa 0 **và** toàn bộ CI trong `[-0.02, +0.02]` | **Practically equivalent** | "GNN achieves statistically equivalent Spearman to degree while requiring no precomputed graph statistics" |
+> | CI chứa 0 **nhưng** rộng hơn `[-0.02, +0.02]`      | No clear superiority       | "No significant difference; GNN provides learnable alternative with +0.099 over MLP"                       |
+> | `ci_95_upper < 0`                                  | GNN significantly worse    | "GNN competitive; focus on +0.099 without-structural-summaries story vs MLP"                               |
 
 ---
 
@@ -1717,10 +1746,10 @@ class GINESurrogate(nn.Module):
     """
     GINE + IC edge features — explicit IC mechanism encoding (C5 supplemental).
     edge_attr = IC propagation probability per edge (shape: E × 1).
-    
+
     ⚠ Không phải feature-agnostic. Không đưa vào C2 fair comparison.
     Dùng: C5 supplemental — upper bound analysis (sau khi C2/C3/C4 xong).
-    
+
     Ref: Hu et al., NeurIPS 2019.
     """
     def __init__(self, in_dim=3, hidden_dim=128, edge_dim=1, dropout=0.3):
@@ -1748,10 +1777,10 @@ class GINESurrogate(nn.Module):
 def compute_ic_edge_features(edge_index, degrees, rule='a0'):
     """
     Tạo IC probability làm edge feature cho mỗi directed edge (u, v).
-    
+
     rule='a0': p(u,v) = 1/deg(v)               — IC primary (Weighted Cascade)
     rule='a2': p(u,v) = 1/sqrt(deg(u)*deg(v))  — IC symmetric (A2 sensitivity)
-    
+
     Returns: edge_attr tensor shape (E, 1)
     """
     src, dst = edge_index[0], edge_index[1]
@@ -1770,10 +1799,10 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 
 > **C5 experiment variants (nếu có thời gian):**
 >
-> | Variant | Edge features | Node features | CSV model_name |
-> |---|---|---|---|
-> | GINE-IC-A0 (primary) | `1/deg(v)` | `raw_attr` | `gine_ic_a0_raw_attr` |
-> | GINE-IC-A2 | `1/√(deg(u)×deg(v))` | `raw_attr` | `gine_ic_a2_raw_attr` |
+> | Variant              | Edge features        | Node features | CSV model_name        |
+> | -------------------- | -------------------- | ------------- | --------------------- |
+> | GINE-IC-A0 (primary) | `1/deg(v)`           | `raw_attr`    | `gine_ic_a0_raw_attr` |
+> | GINE-IC-A2           | `1/√(deg(u)×deg(v))` | `raw_attr`    | `gine_ic_a2_raw_attr` |
 >
 > **Paper framing C5:** "As supplemental upper-bound analysis, we encode IC propagation probabilities directly as edge features (GINE; Hu et al., 2019). Comparing GINE-IC-A0 against GNN-raw-attr (no edge features) quantifies the information gain from explicit IC mechanism encoding."
 
@@ -1783,20 +1812,21 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 
 > **Mục đích:** Khi reviewer hỏi "why not try X?", team có documented rationale sẵn. Cũng là checklist để không waste time implement architectures không phù hợp với project này.
 
-| Architecture | Verdict | Dùng ở đâu | Lý do chi tiết |
-|---|---|---|---|
-| **SAGE** (mean agg.) | ✅ **Trong C2-A0** (baseline) | C2-A0 row `gnn_raw_attr` | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr). |
-| **GCN** | ✅ **MUST C2-A0** (H2) | C2-A0 `gcn_raw_attr` | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2. |
-| **GIN** | ✅ **MUST C2-A0** | C2-A0 `gin_raw_attr` | Sum agg. — highest WL expressiveness; preserves hop counts. |
-| **GAT v1** | ✅ **MUST C2-A0** (H1) | C2-A0 `gat_raw_attr` | H1: static attention có thể học 1/deg(v). Static = đúng cho A0. |
-| **APPNP** | ✅ **MUST C2-A0** (H3) | C2-A0 `appnp_raw_attr` | H3: K-step PPR ≈ IC cascade. Expected best arch. |
-| **GATv2** | ✅ **MUST C2-I-A** (H4) | C2-I-A `gatv2_raw_attr_ia` | H4: dynamic attention khớp I-A row-normalization. **KHÔNG dùng trong C2-A0** (static GAT phù hợp hơn cho A0). |
-| **GINE + IC edge feat** | ✅ **C5 [IF TIME]** | `gine_ic_a0_raw_attr` | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment. |
-| **GCNII** | ❌ **Skip C2** | — | Advantage chỉ tại L=16–64. Tại `n_layers=2` (C2 locked) ≈ GCN + residual. Cần separate L=16 experiment → phá fair comparison. |
-| **HGT** | ❌ **Loại hoàn toàn** | — | Designed cho **heterogeneous graphs** (many node/edge types). Twitch = **homogeneous** (1 type). Type matrices collapse → complex GAT variant, không có lợi. |
-| **GraphGPS** | ❌ **Loại — scale** | — | MPNN + Transformer O(N²) với N=168k = 28 tỷ pairs. LapPE eigendecomposition 168k×168k tốn 30–60 phút. Overkill cho 3-feature node regression. |
+| Architecture            | Verdict                       | Dùng ở đâu                 | Lý do chi tiết                                                                                                                                               |
+| ----------------------- | ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **SAGE** (mean agg.)    | ✅ **Trong C2-A0** (baseline) | C2-A0 row `gnn_raw_attr`   | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr).                                                                           |
+| **GCN**                 | ✅ **MUST C2-A0** (H2)        | C2-A0 `gcn_raw_attr`       | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2.                                                                                             |
+| **GIN**                 | ✅ **MUST C2-A0**             | C2-A0 `gin_raw_attr`       | Sum agg. — highest WL expressiveness; preserves hop counts.                                                                                                  |
+| **GAT v1**              | ✅ **MUST C2-A0** (H1)        | C2-A0 `gat_raw_attr`       | H1: static attention có thể học 1/deg(v). Static = đúng cho A0.                                                                                              |
+| **APPNP**               | ✅ **MUST C2-A0** (H3)        | C2-A0 `appnp_raw_attr`     | H3: K-step PPR ≈ IC cascade. Expected best arch.                                                                                                             |
+| **GATv2**               | ✅ **MUST C2-I-A** (H4)       | C2-I-A `gatv2_raw_attr_ia` | H4: dynamic attention khớp I-A row-normalization. **KHÔNG dùng trong C2-A0** (static GAT phù hợp hơn cho A0).                                                |
+| **GINE + IC edge feat** | ✅ **C5 [IF TIME]**           | `gine_ic_a0_raw_attr`      | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment.                                                        |
+| **GCNII**               | ❌ **Skip C2**                | —                          | Advantage chỉ tại L=16–64. Tại `n_layers=2` (C2 locked) ≈ GCN + residual. Cần separate L=16 experiment → phá fair comparison.                                |
+| **HGT**                 | ❌ **Loại hoàn toàn**         | —                          | Designed cho **heterogeneous graphs** (many node/edge types). Twitch = **homogeneous** (1 type). Type matrices collapse → complex GAT variant, không có lợi. |
+| **GraphGPS**            | ❌ **Loại — scale**           | —                          | MPNN + Transformer O(N²) với N=168k = 28 tỷ pairs. LapPE eigendecomposition 168k×168k tốn 30–60 phút. Overkill cho 3-feature node regression.                |
 
 > **Quick rule cho future architectures:**
+>
 > - Graph homogeneous? → Loại HGT, DGI heterogeneous variants
 > - Scale O(N²)? → Loại nếu không có efficient approx + benchmark trước
 > - Advantage chỉ tại L >> 2? → Không đưa vào C2, test riêng
@@ -1809,6 +1839,7 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 ```python
 import torch.nn.functional as F
 
+# Standard pairwise loss (baseline — random pairs)
 def pairwise_ranking_loss(pred, target, margin=0.1, n_pairs=512):
     """Sample pairs (i,j) where target_i > target_j, penalize if pred_i < pred_j."""
     n = len(pred)
@@ -1821,13 +1852,29 @@ def pairwise_ranking_loss(pred, target, margin=0.1, n_pairs=512):
     return F.margin_ranking_loss(pred[i], pred[j],
                                   torch.ones(len(i), device=pred.device), margin=margin)
 
+# ⭐ Top-k focused loss (RECOMMENDED — better NDCG gradient signal)
+# Lý do: IC heavy-tailed → random pairs mostly (low,low) → weak gradient for NDCG@10%.
+# Top-k sampling ensures gradient focuses on nodes that matter for evaluation.
+def pairwise_ranking_loss_topk_focused(pred, target, margin=0.1, n_pairs=512, top_frac=0.2):
+    n = len(pred)
+    top_k = max(1, int(n * top_frac))
+    top_idx = torch.argsort(target, descending=True)[:top_k]
+    top_sample  = top_idx[torch.randint(top_k, (n_pairs,))]
+    rest_sample = torch.randint(n, (n_pairs,), device=pred.device)
+    mask = target[top_sample] > target[rest_sample]
+    i, j = top_sample[mask], rest_sample[mask]
+    if len(i) == 0:
+        return torch.tensor(0.0, requires_grad=True)
+    return F.margin_ranking_loss(pred[i], pred[j],
+                                  torch.ones(len(i), device=pred.device), margin=margin)
+
 def combined_loss(pred, target, alpha=0.5, margin=0.1):
-    """Combined Huber + pairwise ranking loss. alpha=0.5 default."""
+    """Combined Huber + top-k focused ranking loss. alpha=0.5 default."""
     huber = F.huber_loss(pred, target, delta=1.0)
-    rank  = pairwise_ranking_loss(pred, target, margin=margin)
+    rank  = pairwise_ranking_loss_topk_focused(pred, target, margin=margin)  # ← top-k version
     return alpha * huber + (1 - alpha) * rank
 
-# CSV name: best_arch_raw_attr_rankloss (e.g., gat_raw_attr_rankloss nếu GAT wins C2)
+# CSV name: best_arch_raw_attr_rankloss (e.g., appnp_raw_attr_rankloss nếu APPNP wins C2)
 # Variant: alpha=0.5; sweep [0.25, 0.5, 0.75] nếu còn time
 ```
 
@@ -1854,19 +1901,35 @@ def bootstrap_spearman_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, seed=42)
 # Output: outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci.json
 # {
 #   "n_bootstrap": 1000,
-#   "comparator_a": "gnn_best_architecture",   # e.g., "gat_raw_attr"
+#   "comparator_a": "gnn_best_architecture",
 #   "comparator_b": "degree",
-#   "delta_mean": <float>,
-#   "ci_95_lower": <float>,
-#   "ci_95_upper": <float>,
-#   "interpretation": "equivalent | significantly_lower | significantly_higher"
+#   "equivalence_bound": 0.02,           # pre-registered SESOI
+#   "spearman": {
+#     "delta_mean": <float>,
+#     "ci_95_lower": <float>,
+#     "ci_95_upper": <float>,
+#     "interpretation": "practically_equivalent | no_clear_superiority | gnn_better | degree_better"
+#   },
+#   "ndcg_at_10pct": {                   # zero extra cost — same resample loop
+#     "delta_mean": <float>,
+#     "ci_95_lower": <float>,
+#     "ci_95_upper": <float>,
+#     "interpretation": "practically_equivalent | no_clear_superiority | gnn_better | degree_better"
+#   }
 # }
-# Decision: CI bao gồm 0 → "statistically equivalent to degree"
 #           CI entirely negative → focus on +0.099 message passing story
 # Thời gian: ~10 phút (resample existing predictions, không cần retrain)
 ```
 
 Ablation story:
+
+> **📐 Paper section budget (revised per reviewer feedback — xem Implementation Plan Section 14):**
+> | Section | Content | Budget |
+> |---|---|---|
+> | Section 3 (MC-IC as Metric) | Discriminativeness + C1 enhanced 2-tier variance test + Stability + Regression justification | **1.0 trang** (tăng từ 0.75) |
+> | Section 4 (GNN Surrogate) | Architecture comparison (ceiling finding) + Ablation + Ranking loss + Runtime | **2.0 trang** (giảm từ 2.5) |
+> | Section 5 (Discussion) | Ceiling analysis + When GNN adds value + Construct validity | 0.5 trang |
+> Lý do: Section 3 (stability + structural analysis) là strongest original finding → deserves more space. Section 4 framed như "empirical ceiling characterization" không phải architecture search.
 
 > **📊 Real numbers từ existing artifacts (bắt buộc hiểu trước khi chạy C2):**
 >
@@ -1884,7 +1947,7 @@ Ablation story:
 > **Key insight:** IC-A0 dùng `p=1/deg(v)` → IC score degree-coupled (tương quan rất cao với degree) → `degree` là baseline rất mạnh. Đây là **structural constraint của A0**, không phải implementation bug.
 
 - **Architecture comparison (C2 primary — A0 labels):** 5 archs (SAGE / GCN / GIN / GAT / **APPNP**) trên `raw_attr` → _which message passing best captures IC's multi-hop dynamics?_
-  - **H3 (APPNP — STRONGEST, expected best):** APPNP K-step PPR propagation `x^(k) = (1-α)·Â·x^(k-1) + α·x^(0)` là structural analogy/inductive bias cho target diffusion-like (`K=10, alpha=0.15` là starting point). IC là multi-hop process (two_hop 0.804 > one_hop 0.688) → APPNP's depth-aware propagation expected to capture this better than SAGE mean.
+  - **H3 (APPNP — STRONGEST, expected best):** APPNP **decouples feature transformation from propagation** → K=10 PPR steps `x^(k) = (1-α)·Â·x^(k-1) + α·x^(0)` without oversmoothing (`K=10, alpha=0.15` là starting point). IC là multi-hop process (two_hop 0.804 > one_hop 0.688) → APPNP's deeper receptive field expected to capture multi-hop composition better than SAGE mean. **Framing trong paper:** "plausible deeper-propagation inductive bias for IC reach" — không claim APPNP mimics IC mechanics (IC stochastic; APPNP deterministic).
   - **H1 (GAT–A0):** _(hypothesis — to be confirmed by C2)_ weighted cascade `p=1/deg(v)` → GAT attention **có thể** học inversely-proportional-to-degree weighting tự động
   - **H2 (GCN–A2):** _(hypothesis — chỉ testable nếu Sensitivity S1 chạy được)_ GCN's `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric IC rule
   - **GIN:** sum aggregation → có thể capture two-hop count tốt hơn SAGE mean (vì sum preserves hop counts, không smooth out)
@@ -2006,7 +2069,7 @@ print(metrics)
 - `load_split_mask()` + `apply_test_mask()` chạy không lỗi với mock artifacts (M1).
 - `baseline_ranking_metrics.csv` có đủ **Group 1–4** rows với real IC labels (M4): Group 1 (views/views_day/degree), Group 2 (PR/kshell/betweenness), Group 3 (one-hop/two-hop), Group 4 (Node2Vec+LR, MLP raw attr).
 - GNN-raw-attr chạy được 5 seeds, `surrogate_ranking_metrics.csv` có `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `runtime_sec` (M5).
-- **[v3.1 MUST — C2, deadline 18/4]** `surrogate_ranking_metrics.csv` có rows `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr` (5 seeds each, mean±std).
+- **[v3.1 MUST — C2, deadline 19/4]** `surrogate_ranking_metrics.csv` có rows `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, **`appnp_raw_attr`** (5 seeds each, mean±std).
 - **[v3.1 MUST — C3, deadline 20/4]** `surrogate_ranking_metrics.csv` có row `best_arch_raw_attr_rankloss` (best arch từ C2 + combined_loss α=0.5).
 - **[v3.1 MUST — C4, deadline 20/4]** `gnn_vs_degree_bootstrap_ci.json` tồn tại với `n_bootstrap=1000`, `ci_95_lower`, `ci_95_upper`, `interpretation`.
 - Runtime table có `Speedup: MC IC vs GNN inference` được tính (M5).
@@ -2016,13 +2079,14 @@ print(metrics)
 
 ---
 
-## 4) Nhịp tích hợp (deadline 30/4/2026 — **📍 Hôm nay: 17/4/2026, còn 13 ngày**)
+## 4) Nhịp tích hợp (deadline 30/4/2026 — **📍 Hôm nay: 17/4/2026, còn 13 ngày**) [🔴 MAPR-MUST]
 
 > 📍 **Execution status (17/4/2026):**
+>
 > - M0–M3: ✅ Hoàn thành (IC labels, split mask, baselines Group 1–3 done)
 > - M4: 🔄 Đang chạy — C1 (16/4 done), C2 (19/4), C3/C4 (21/4)
 > - M5: ⏳ Pending — 22–27/4
-> _(Update dòng này mỗi ngày khi milestone mới complete)_
+>   _(Update dòng này mỗi ngày khi milestone mới complete)_
 
 ### Milestone M0 — Kick-off (6/4, buổi sáng, ~1 giờ)
 
@@ -2182,7 +2246,7 @@ Agenda bắt buộc:
 
 ---
 
-## 4b) Risk Management (v3 Section 19)
+## 4b) Risk Management (v3 Section 19) [⚪ REF]
 
 | Rủi ro                                                                                      | Xác suất             | Impact       | Action                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------------------------- | -------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2209,31 +2273,34 @@ Agenda bắt buộc:
 | **I-A pilot fail CHECK 2 (ρ_deg ≥ 0.75 — degree vẫn correlate mạnh)**                       | Trung bình           | Thấp         | Thử II-B fallback (views_density): `p(u,v)=clip(views_norm[v]/deg(v), max=0.5)` với cùng 3 checks; nếu II-B cũng fail → stay A0                                                                                                                                                                                             |
 | **I-A pilot pass nhưng C2-I-A: GNN không vượt degree trên I-A labels**                      | Thấp                 | Trung bình   | Vẫn là positive finding: "GNN advantage requires attribute-informed diffusion; under structural A0, degree captures most variance." Báo cáo trung thực cả hai outcomes.                                                                                                                                                     |
 
-## 4c) Scope Reduction — Cắt khi cần (v3 Section 16)
+## 4c) Scope Reduction — Cắt khi cần (v3 Section 16) [⚪ REF]
 
 Nếu timeline tight, cắt theo thứ tự này (an toàn nhất trước):
 
-| Cắt được (theo thứ tự ưu tiên CẮT ĐẦU TIÊN)           | Giữ bắt buộc (KHÔNG cắt)                                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| ~~Uniform-p sensitivity~~ (đã cắt — không làm)        | Label stability (Jaccard + structural cause)                                   |
-| **Sensitivity S2 (A1 source budget)** — cắt nếu tight | **Sensitivity S1 (A2 symmetric)** ← SHOULD DO sau primary C2                   |
-| **I-A Attribute-Informed IC** — cắt nếu pilot fail    | **I-A** ← SHOULD DO nếu pilot pass + không block C2-A0                         |
-| Graph perturbation test                               | **Degree-controlled IC variance test** ← v3.1 NEW MUST                         |
-| 5% / 15% thresholds (chỉ giữ 10%)                     | **Architecture comparison (GCN/GIN/GAT/APPNP/SAGE)** ← v3.1 NEW MUST — 5 archs |
-| Eigenvector/betweenness trong GNN features            | **Bootstrap CI GNN vs degree (A0 labels)** ← v3.1 NEW MUST                     |
-| Detailed betweenness profiling                        | One-hop + two-hop proxies (Group 3)                                            |
-| GNN-full variant                                      | Community detection (stability explanation only)                               |
-| Ranking loss α sweep (chỉ dùng 1 α tốt nhất)          | GNN-raw-attr (primary) + GNN-graph-only (ablation)                             |
-| Inductive generalization test (9.1c)                  | Runtime comparison table                                                       |
-| **C5 GINE + IC edge features** ← cắt đầu tiên nếu tight sau C4 | C2-I-A + GATv2 ← SHOULD DO nếu I-A pilot pass |
-| **C2-I-A GATv2** ← cắt nếu I-A pilot fail (không có I-A labels) | Bootstrap CI (A0 labels) ← MUST regardless |
-| Secondary metrics (P@10%)                             | BH-FDR correction cho correlation matrix p-values                              |
+| Cắt được (thứ tự ưu tiên CẮT ĐẦU TIÊN)                         | Giữ bắt buộc (KHÔNG cắt)                                                                     | Future Work Venue (nếu cắt)               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| ~~Uniform-p sensitivity~~ (đã cắt)                             | Label stability (Jaccard + structural cause)                                                 | —                                         |
+| **A1 source budget** `p=1/deg(u)` — cắt nếu tight              | **Sensitivity S1 (A2 symmetric)** ← SHOULD DO                                                | SNA journal sensitivity study             |
+| **I-A Full Sim** — cắt nếu pilot fail                          | **I-A Pilot ← MUST unconditional (20 min)** / **Full I-A ← CONDITIONAL-MUST nếu pilot pass** | — (pilot is free)                         |
+| Graph perturbation test                                        | **Degree-controlled IC variance test** ← v3.1 NEW MUST (enhanced 2-tier)                     | —                                         |
+| 5% / 15% thresholds (chỉ giữ 10%)                              | **Architecture comparison (GCN/GIN/GAT/APPNP/SAGE)** ← v3.1 NEW MUST — 5 archs               | —                                         |
+| Eigenvector/betweenness trong GNN features                     | **Bootstrap CI GNN vs degree (Spearman + NDCG)** ← v3.1 NEW MUST                             | —                                         |
+| Detailed betweenness profiling                                 | One-hop + two-hop proxies (Group 3)                                                          | —                                         |
+| GNN-full variant                                               | Community detection (stability explanation only)                                             | —                                         |
+| Ranking loss α sweep (chỉ dùng α=0.5)                          | GNN-raw-attr (primary) + GNN-graph-only (ablation)                                           | —                                         |
+| **Inductive generalization test (9.1c)**                       | Runtime comparison table                                                                     | **ICLR/NeurIPS 2027** (cần dataset thứ 2) |
+| **C5 GINE + IC edge features** — cắt đầu tiên nếu tight sau C4 | C2-I-A + GATv2 ← SHOULD DO nếu I-A pilot pass                                                | **TKDE / TNNLS / WWW 2027 workshop**      |
+| **C2-I-A GATv2** — cắt nếu I-A pilot fail                      | Bootstrap CI (A0 labels) ← MUST regardless                                                   | Journal extension sau MAPR                |
+| **Per-group prediction error** — cắt                           | BH-FDR correction cho correlation matrix p-values                                            | **FAccT / AIES 2027 fairness track**      |
+| Secondary metrics (P@10%)                                      | —                                                                                            | —                                         |
+| **II-B views-density fallback**                                | —                                                                                            | Archive (minimal venue value)             |
 
-**Quy tắc:** Không cắt bất kỳ mục nào ở cột phải mà không thảo luận cả team + ghi vào `docs/experiment_registry.md`.
+**Quy tắc:** Không cắt bất kỳ mục nào ở cột giữa mà không thảo luận cả team + ghi vào `docs/experiment_registry.md`.
+**Items cột phải ("Future Work"):** Giữ documentation trong plan file; không implement cho MAPR; có thể submit venue khác sau 30/4.
 
 ---
 
-## 5) Cách tích hợp vào runner mà vẫn giữ song song
+## 5) Cách tích hợp vào runner mà vẫn giữ song song [🔴 MAPR-MUST]
 
 Để tránh 3 người cùng sửa `run_all.py` và gây conflict, khuyến nghị làm theo 2 bước:
 
@@ -2287,7 +2354,7 @@ Repo đang có pipeline SIS-based (Stage 0–3). Tất cả script MAPR2026 v3 m
 
 ---
 
-## 6) Giảm phụ thuộc bằng test nhỏ + smoke runs
+## 6) Giảm phụ thuộc bằng test nhỏ + smoke runs [🔴 MAPR-MUST]
 
 - Mỗi track có 1 chế độ `--dry-run` hoặc “small graph mode” (subgraph vài nghìn nodes) để:
   - test correctness
@@ -2301,7 +2368,7 @@ Repo đang có pipeline SIS-based (Stage 0–3). Tất cả script MAPR2026 v3 m
 
 ---
 
-## 7) PR strategy (để merge nhanh mà ít conflict)
+## 7) PR strategy (để merge nhanh mà ít conflict) [⚪ REF]
 
 - Mỗi người làm 1 branch riêng theo pattern:
   - `feature/mapr-ic-core-*` (Person 1)
@@ -2329,72 +2396,81 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 
 ---
 
-## 8) Checklist nhanh theo người (tóm tắt 1 trang)
+## 8) Checklist nhanh theo người (tóm tắt 1 trang) [🔴 MAPR-MUST]
 
 ### Person 1 — Phạm Quốc Vĩnh
 
-| #   | Việc                                                                                                            | Script                              | Artifact output                                                                                             | Deadline               |
-| --- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | CSR export                                                                                                      | `export_csr.py`                     | `graph_csr.npz`                                                                                             | M1 (6/4)               |
-| 2   | **Dead account audit**                                                                                          | `src/data/dead_account_audit.py`    | `outputs/stage0_data_quality/dead_account_report.json`                                                      | M0 (6/4)               |
-| 3   | **LCC check**                                                                                                   | `src/data/lcc_audit.py`             | `outputs/stage0_data_quality/lcc_report.json`                                                               | M0 (6/4)               |
-| 4   | Day-1 benchmark                                                                                                 | `day1_benchmark.py`                 | `ic_runtime_benchmark.json`                                                                                 | M2 (7/4)               |
-| 5   | One-hop ρ check                                                                                                 | `day1_benchmark.py`                 | `one_hop_correlation.json`                                                                                  | M2 (7/4)               |
-| 6   | **IC pilot + stability (gate fail)**                                                                            | `ic_labels_primary.py`              | `outputs/day1_benchmark/ic_pilot_diagnostics.json` (`jaccard_stability`, `cv_score`, per-quintile CV table) | 9/4                    |
-| 7   | IC labels (full N×R)                                                                                            | `ic_labels_primary.py`              | `ic_scores_primary.parquet`, `regression_targets.parquet`, `classification_labels.parquet`                  | 10/4                   |
-| 8   | **[MUST khi Jaccard < 0.85] Stability explanation**                                                             | manual/script (extract phase1/2)    | `outputs/day1_benchmark/stability_explanation.json`                                                         | 10/4                   |
-| 9   | **Split mask** [M0-locked]                                                                                      | `ic_labels_primary.py`              | `split_masks.parquet` (cùng lúc #7)                                                                         | 10/4                   |
-| 10  | Ghi `day1_decisions.md`                                                                                         | manual                              | `docs/day1_decisions.md`                                                                                    | M2 (7/4)               |
-| 11  | **[M3] Views/IC alignment check**                                                                               | `ic_labels_primary.py`              | cập nhật `docs/day1_decisions.md` Phần 4 (`spearmanr(views, ic_score_mean)`)                                | M3                     |
-| 12  | **[NEW v3.1 — C1] Degree-controlled IC variance test**                                                          | manual/`ic_labels_primary.py`       | `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`                                            | 16/4                   |
-| 13  | **[SHOULD DO] Sensitivity S1 — Symmetric IC (A2)** `p=1/√(deg(u)×deg(v))`                                       | `ic_labels_primary.py` (A2 variant) | `ic_scores_sensitivity_a2.parquet` + `ic_sensitivity_comparison.json` (Spearman A0 vs A2 vs degree)         | Sau C2 xong (≈21/4)    |
-| 14  | **[MUST — unconditional] I-A Pilot gate** (200 nodes × 50 runs) — 3 checks: CV>0.3, |ρ_deg|<0.75, |ρ_proxy|<0.85 | `ic_pilot_ia.py`                   | `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`                                                     | **17/4**               |
-| 15  | **[CONDITIONAL-MUST — chỉ khi row 14 PASS] I-A Full Sim** (5k nodes × N runs) + `ic_ia_vs_primary.json`         | `ic_labels_attribute_ia.py`         | `outputs/mapr2026_v3_results/ic_scores_ia.parquet` + `data/processed/regression_targets_ia.parquet`         | ≈18–19/4               |
+| #   | Việc                                                                                                                                                          | Script                                                                     | Artifact output                                                                                                                                                                    | Deadline            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 1   | CSR export                                                                                                                                                    | `python src/mapr2026_v3/export_csr.py --run`                               | `data/processed/graph_csr.npz`                                                                                                                                                     | M1 (6/4)            |
+| 2   | **Dead account audit**                                                                                                                                        | `src/data/dead_account_audit.py`                                           | `outputs/stage0_data_quality/dead_account_report.json`                                                                                                                             | M0 (6/4)            |
+| 3   | **LCC check**                                                                                                                                                 | `src/data/lcc_audit.py`                                                    | `outputs/stage0_data_quality/lcc_report.json`                                                                                                                                      | M0 (6/4)            |
+| 4   | Day-1 benchmark                                                                                                                                               | `python src/mapr2026_v3/day1_benchmark.py`                                 | `outputs/day1_benchmark/ic_runtime_benchmark.json`                                                                                                                                 | M2 (7/4)            |
+| 5   | One-hop ρ check                                                                                                                                               | `python src/mapr2026_v3/day1_benchmark.py`                                 | `outputs/day1_benchmark/one_hop_correlation.json`                                                                                                                                  | M2 (7/4)            |
+| 6   | **IC pilot + stability (gate fail)**                                                                                                                          | `python src/mapr2026_v3/ic_pilot_diagnostics.py`                           | `outputs/day1_benchmark/ic_pilot_diagnostics.json` (`jaccard_stability`, `cv_score`, per-quintile CV table)                                                                        | 9/4                 |
+| 7   | IC labels (full N×R)                                                                                                                                          | `python src/mapr2026_v3/ic_labels_primary.py --n-runs 200 --n-sample 5000` | `data/processed/ic_scores_primary.parquet`, `data/processed/regression_targets.parquet`, `data/processed/classification_labels.parquet`                                            | 10/4                |
+| 8   | 🔴 **[MAPR-MUST — Jaccard < 0.85 triggered] Stability explanation**                                                                                           | `python src/mapr2026_v3/ic_feasibility_protocol.py` + manual extract       | `outputs/day1_benchmark/stability_explanation.json`                                                                                                                                | 10/4                |
+| 9   | **Split mask** [M0-locked]                                                                                                                                    | `python src/mapr2026_v3/ic_labels_primary.py --n-runs 200 --n-sample 5000` | `data/processed/split_masks.parquet` (cùng lúc #7)                                                                                                                                 | 10/4                |
+| 10  | Ghi `day1_decisions.md`                                                                                                                                       | manual                                                                     | `docs/day1_decisions.md`                                                                                                                                                           | M2 (7/4)            |
+| 11  | **[M3] Views/IC alignment check**                                                                                                                             | `python src/mapr2026_v3/ic_labels_primary.py --update-m3-only`             | cập nhật `docs/day1_decisions.md` Phần 4 (`spearmanr(views, ic_score_mean)`)                                                                                                       | M3                  |
+| 12  | 🔴 **[MAPR-MUST — C1] Degree-controlled IC variance test**                                                                                                    | `python src/mapr2026_v3/degree_controlled_variance.py`                     | `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`                                                                                                                   | 16/4                |
+| 13  | 🟡 **[BOOST — A2 sensitivity] Symmetric IC** `p=1/√(deg(u)×deg(v))` — test GCN-A2 alignment hypothesis                                                        | `ic_labels_primary.py` (A2 variant)                                        | `ic_scores_sensitivity_a2.parquet` + `ic_sensitivity_comparison.json` (Spearman A0 vs A2 vs degree)                                                                                | Sau C2 xong (≈21/4) |
+| 14  | 🔴 **[MAPR-MUST — unconditional] I-A Pilot gate** (200 nodes × 50 runs) — 3 checks: CV>0.3; ρ_deg<0.75; ρ_proxy<0.85. **⚠ Pre-register TRƯỚC KHI chạy:** ghi vào `docs/experiment_registry.md` → `"H-IA: Under I-A labels, GATv2 sẽ outperform degree (degree blind to row-norm IC); FAIL → A0-only narrative"` | `ic_pilot_ia.py`                                                           | `outputs/mapr2026_v3_results/ia_pilot_diagnostics.json`                                                                                                                            | **17/4**            |
+| 15  | 🟡 **[BOOST — chỉ khi row 14 PASS] I-A Full Sim** (5k nodes × N runs) + `ic_ia_vs_primary.json`                                                               | `ic_labels_attribute_ia.py`                                                | `outputs/mapr2026_v3_results/ic_scores_ia.parquet` + `data/processed/regression_targets_ia.parquet` + `ic_ia_vs_primary.json` (Spearman I-A vs A0 + I-A vs degree — confirm differentiation) | ≈18–19/4            |
+| 16  | 🔴 **[MAPR-MUST — master plan §1/§15] Lock config v3.1 (construct validity + no calibration target)**                                                         | manual edit `src/config/experiment.yaml`                                   | `src/config/experiment.yaml` (graph_directed=false + note; `calibration_mode: variance_check`; `p_primary: weighted_cascade`; `ic_backend: csr_numpy`; `ic_parallel: joblib_loky`) | 18/4                |
+| 17  | 🔴 **[MAPR-MUST — master plan §1/§8] Paper protocol statements** (construct validity + transductive setting + evaluation scope + runtime-table wording)       | manual edit                                                                | `reports/final_report.md` (update sections/paragraphs per master plan)                                                                                                             | 24/4                |
+| 18  | 🔴 **[MAPR-MUST — master plan §14] Paper structure + figures checklist** (Fig.1 reach distribution; Fig.2 arch comparison w/ degree line + CI; 6-page budget) | manual                                                                     | `reports/final_report.md` + figures/tables under `reports/figures/` / `reports/tables/`                                                                                            | 26/4                |
+| 19  | 🔴 **[MAPR-MUST — master plan §18] Pre-submission blocker sweep** (tick all blockers; update registry/decisions)                                              | manual + `run_all.ps1`/`run_all.py`                                        | `docs/experiment_registry.md` + `docs/day1_decisions.md` + final outputs present in `outputs/mapr2026_v3_results/`                                                                 | 29–30/4             |
+| 20  | 🟡 **[BOOST — Strongly Recommended] IC Bootstrap CI** — CI cho mean IC reach per node (đo MC simulation noise của label — **KHÁC** với C4 GNN vs degree CI ở Person 3 row 14) | `bootstrap_ci_ic()` (inline trong `ic_labels_primary.py` hoặc standalone) | `outputs/mapr2026_v3_results/ic_bootstrap_ci.json` (`mean`, `ci_lower`, `ci_upper` per node; `n_bootstrap=1000`, `alpha=0.05`) — dùng trong Section 3.4 paper để show label reliability | ≈15/4               |
 
-> **Dependency cho row 13:** Chờ C2 (Person 3) xong trước để không block critical path. Nếu A2 labels kịp trước 21/4, Person 3 có thể chạy thêm C2-A2 (4 archs × 5 seeds) để test GCN–A2 alignment hypothesis.
+> **Dependency cho row 12 (C1):** Cần `diffusion_proxies.parquet` từ Person 2 row 3 (deadline 15/4) — `degree_controlled_variance.py` dùng `one_hop_spread` từ proxies cho tier 2 (regression residual test). **Không chạy C1 trước khi P2 row 3 xong.**
+> **Dependency cho row 13:** Chờ C2 (Person 3) xong trước để không block critical path. Nếu A2 labels kịp trước 21/4, Person 3 có thể chạy thêm C2-A2 (5 archs × 5 seeds: GCN/GIN/GAT/APPNP + SAGE baseline) để test GCN–A2 alignment hypothesis.
 > **Dependency cho rows 14–15:** Row 14 là MUST và có thể làm ngay. Row 15 chỉ chạy nếu row 14 PASS; nếu FAIL: dừng lại và commit A0-only narrative. Ghi lý do vào `docs/experiment_registry.md`.
 
 ### Person 2 — Trần Hùng Vĩ
 
-| #   | Việc                                              | Script                           | Artifact output                                                                                                                                                                 | Deadline |
-| --- | ------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | Proxies skeleton (dry-run)                        | `diffusion_proxies.py --dry-run` | dry-run header cho `data/processed/diffusion_proxies.parquet` (schema only; KHÔNG dùng cho evaluation/runtime)                                                                  | M1 (7/4) |
-| 2   | **[MUST] Community detection**                    | `src/graph/community.py`         | `data/processed/community_features.parquet` (columns: `node_id`, `community_id`, `cross_community_edge_fraction`; scope=ALL active nodes, coverage=100%, `node_id` kiểu string) | 10/4     |
-| 3   | **[MUST] Proxies thật (full graph)**              | `diffusion_proxies.py`           | `data/processed/diffusion_proxies.parquet` + `outputs/mapr2026_v3_results/runtime_breakdown.csv`                                                                                | 15/4     |
-| 4   | **[MUST] Metric correlation matrix (global 8×8)** | manual/script                    | `outputs/mapr2026_v3_results/metric_correlation_matrix.json` (`rho_matrix`, `p_matrix_corrected`; `rho_by_degree_quintile` là ✦ IF TIME)                                        | 18/4     |
+| #   | Việc                                                      | Script                                                  | Artifact output                                                                                                                                                                 | Deadline |
+| --- | --------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | Proxies skeleton (dry-run)                                | `python src/mapr2026_v3/diffusion_proxies.py --dry-run` | dry-run header cho `data/processed/diffusion_proxies.parquet` (schema only; KHÔNG dùng cho evaluation/runtime)                                                                  | M1 (7/4) |
+| 2   | 🟡 **[BOOST] Community detection**                        | `src/graph/community.py`                                | `data/processed/community_features.parquet` (columns: `node_id`, `community_id`, `cross_community_edge_fraction`; scope=ALL active nodes, coverage=100%, `node_id` kiểu string) | 10/4     |
+| 3   | 🔴 **[MAPR-MUST] Proxies thật (full graph)**              | `python src/mapr2026_v3/diffusion_proxies.py`           | `data/processed/diffusion_proxies.parquet` (proxy timing log → bổ sung vào `runtime_breakdown.csv`; P3 row 9 mới assemble IC+GNN timing để hoàn thiện file)                     | 15/4     |
+| 4   | 🔴 **[MAPR-MUST] Metric correlation matrix (global 8×8)** | `python src/mapr2026_v3/metric_correlation_matrix.py`   | `outputs/mapr2026_v3_results/metric_correlation_matrix.json` (`rho_matrix`, `p_matrix_corrected`; `rho_by_degree_quintile` là ✦ IF TIME)                                        | 18/4     |
+| 5   | ✦ [IF TIME] **Louvain resolution sensitivity** — sanity-check partition stability ở {0.5, 1.0, 2.0}; signal: `n_communities<20` hoặc `pct_top3>50%` → báo team re-lock resolution | `src/graph/community.py` (resolution sweep)             | `outputs/mapr2026_v3_results/louvain_resolution_sensitivity.json` (fields: `resolution`, `modularity`, `n_communities`, `pct_top3_nodes`)                                        | ≈12/4    |
 
 > Chú ý: **Bước 4 cần `ic_scores_primary.parquet` + `diffusion_proxies.parquet`**. Trong khi chờ: dùng `sis_table.parquet` làm mock `ic_score_mean` để test I/O.
 > **Bước 2 không phụ thuộc IC labels** — có thể làm ngay từ đầu song song với bước 1.
 
 ### Person 3 — Trần Quốc Hải
 
-| #   | Việc                                                                                                                                                                                   | Script                                   | Artifact output                                                                                                     | Deadline                           |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| 1   | Harness skeleton                                                                                                                                                                       | `eval_ranking_harness.py`                | `load_split_mask()` + `compute_metrics()` OK                                                                        | M1 (7/4)                           |
-| 2   | Baselines Group 1–2 (mock labels)                                                                                                                                                      | `run_baselines.py`                       | `baseline_ranking_metrics.csv` (mock)                                                                               | 9/4                                |
-| 3   | **Baselines Group 1–2 (real IC)**                                                                                                                                                      | `run_baselines.py`                       | CSV real (Group 1: views/views_day/degree, Group 2: PR/kshell/betweenness)                                          | 12/4                               |
-| 4   | Baselines Group 3 (proxies)                                                                                                                                                            | `run_baselines.py`                       | CSV + one-hop/two-hop rows                                                                                          | 15/4                               |
-| 5   | **Group 4 — Node2Vec + LR** (`dim=64, walks=20`)                                                                                                                                       | `run_baselines.py`                       | `baseline_ranking_metrics.csv` (thêm rows Group 4)                                                                  | 18/4                               |
-| 6   | **Group 4 — MLP raw attr** (`views_log, views/day, life_time`)                                                                                                                         | `run_baselines.py`                       | cập nhật `baseline_ranking_metrics.csv`                                                                             | 18/4                               |
-| 7   | **[MUST — v3.1 unconditional] Group 5 — GNN-raw-attr** (SAGE, 5 seeds) — base variant trước khi C2 xác định best arch                                                                  | `run_surrogates.py`                      | `surrogate_ranking_metrics.csv` (mean±std)                                                                          | 22/4                               |
-| 8   | **[MUST — v3.1 unconditional] Group 5 — GNN ablation**: graph-only + centrality (dùng best arch từ C2); ✦ [IF TIME] + GNN-full                                                         | `run_surrogates.py`                      | cập nhật `surrogate_ranking_metrics.csv`                                                                            | 22/4                               |
-| 9   | Runtime table + Speedup MC vs GNN                                                                                                                                                      | manual/script                            | `outputs/mapr2026_v3_results/runtime_breakdown.csv` hoàn chỉnh                                                      | 22/4                               |
-| 10  | ✦ [IF TIME] GNN-random sanity-check (message passing value baseline)                                                                                                                   | `run_surrogates.py`                      | thêm `gnn_random` row trong `surrogate_ranking_metrics.csv`                                                         | 22/4                               |
-| 11  | ✦ [IF TIME; nâng thành MUST nếu predictions đủ trước 25/4] Per-group prediction error                                                                                                  | `run_baselines.py`/`run_surrogates.py`   | `outputs/mapr2026_v3_results/per_group_prediction_error.csv`                                                        | 25/4                               |
-| 12  | **[NEW v3.1 — C2] Architecture comparison** — 5 archs (GCN/GIN/GAT/APPNP + SAGE baseline) × raw_attr, 5 seeds each; dùng `get_model(arch, ...)` factory; **APPNP là H3 expected best** | `run_surrogates.py` (dùng `get_model()`) | rows `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, **`appnp_raw_attr`** trong `surrogate_ranking_metrics.csv`     | **19/4** (1 ngày thêm cho APPNP)   |
-| 13  | **[NEW v3.1 — C3] Ranking loss** best arch (kết quả C2) + combined α·Huber + (1-α)·pairwise-margin; UPDATE model_name với tên arch thực tế (e.g., `appnp_raw_attr_rankloss`)           | `run_surrogates.py`                      | row `best_arch_raw_attr_rankloss` (tên thực: e.g., `appnp_raw_attr_rankloss`) trong `surrogate_ranking_metrics.csv` | 21/4 (sau C2)                      |
-| 14  | **[NEW v3.1 — C4] Bootstrap CI** GNN best (mean preds qua 5 seeds) vs degree (1000 resamplings) → xem 3 outcome interpretations                                                        | `run_surrogates.py` / standalone         | `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci.json`                                                       | 21/4 (song song C3)                |
-| 15  | **[SHOULD DO, phụ thuộc Person 1 row 13] C2-A2** — GCN/GIN/GAT/APPNP/SAGE trên A2 labels (test H2: GCN–A2 alignment hypothesis)                                                        | `run_surrogates.py` (p_rule='symmetric') | rows `gcn_a2_raw_attr`, `gin_a2_raw_attr`, `appnp_a2_raw_attr`, etc. trong `surrogate_ranking_metrics.csv`          | Sau A2 labels + C2-A0 xong (≈22/4) |
-| 16  | **[SHOULD DO — chỉ khi Person 1 row 15 pass] C2-I-A + C4-I-A** — **5 archs**: APPNP + **GATv2** (H4!) + GIN + GCN + SAGE × 5 seeds trên I-A labels + Bootstrap CI; dùng `GATv2Surrogate` | `run_surrogates.py` (p_rule='ia')        | `surrogate_ranking_metrics_ia.csv` (model_name: `appnp_raw_attr_ia`, `gatv2_raw_attr_ia`, ...) + `gnn_vs_degree_bootstrap_ci_ia.json` | ≈23/4 (sau Person 1 row 15 xong)   |
-| 17  | **✦ [IF TIME — C5] GINE + IC edge features** — upper bound experiment sau khi C2+C3+C4 done; `edge_attr = 1/deg(v)` per edge; dùng `GINESurrogate`; **KHÔNG** đưa vào C2 fair comparison | `run_surrogates.py` + `GINESurrogate`    | rows `gine_ic_a0_raw_attr`, `gine_ic_a2_raw_attr` trong `surrogate_ranking_metrics.csv`                             | ≈25/4 (sau C2/C3/C4 xong)          |
+| #   | Việc                                                                                                                                                                                     | Script                                                                         | Artifact output                                                                                                                       | Deadline                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1   | 🔴 **[MAPR-MUST — master plan §18] Determinism + ordering contract fixes** (stable argsort + stable node ordering after mask)                                                            | `src/mapr2026_v3/eval_ranking_harness.py` + `src/mapr2026_v3/run_baselines.py` | `compute_metrics()` deterministic; `apply_test_mask()` always followed by `sort_values("node_id")`                                    | M1 (7/4)                           |
+| 2   | Baselines Group 1–2 (mock labels)                                                                                                                                                        | `python src/mapr2026_v3/run_baselines.py`                                      | `baseline_ranking_metrics.csv` (mock)                                                                                                 | 9/4                                |
+| 3   | **Baselines Group 1–2 (real IC)**                                                                                                                                                        | `python src/mapr2026_v3/run_baselines.py`                                      | CSV real (Group 1: views/views_day/degree, Group 2: PR/kshell/betweenness)                                                            | 12/4                               |
+| 4   | Baselines Group 3 (proxies)                                                                                                                                                              | `python src/mapr2026_v3/run_baselines.py`                                      | CSV + one-hop/two-hop rows                                                                                                            | 15/4                               |
+| 5   | 🟡 **Group 4 — Node2Vec + LR** (`dim=64, walks=20`)                                                                                                                                      | `python src/mapr2026_v3/run_baselines.py`                                      | `baseline_ranking_metrics.csv` (thêm rows Group 4)                                                                                    | 18/4                               |
+| 6   | 🟡 **Group 4 — MLP raw attr** (`views_log, views/day, life_time`)                                                                                                                        | `python src/mapr2026_v3/run_baselines.py`                                      | cập nhật `baseline_ranking_metrics.csv`                                                                                               | 18/4                               |
+| 7   | 🔴 **[MAPR-MUST] Group 5 — GNN-raw-attr** (SAGE, 5 seeds) — base variant trước khi C2 xác định best arch                                                                                 | `python src/mapr2026_v3/run_surrogates.py`                                     | `surrogate_ranking_metrics.csv` (mean±std); row `sage_raw_attr`                                                                       | **17/4** _(trước C2 row 12)_       |
+| 8   | 🔴 **[MAPR-MUST] Group 5 — GNN ablation**: graph-only + centrality (dùng best arch từ C2); 🟡 [BOOST] + GNN-full. **Phụ thuộc row 12 (C2) xong trước**                                    | `python src/mapr2026_v3/run_surrogates.py`                                     | cập nhật `surrogate_ranking_metrics.csv`: 🔴 rows `{best_arch}_graph_only`, `{best_arch}_centrality_only`; 🟡 `{best_arch}_full_feat` | 22/4                               |
+| 9   | 🔴 **[MAPR-MUST — master plan §8/§18] Runtime table + Speedup MC vs GNN**                                                                                                                | manual/script                                                                  | `outputs/mapr2026_v3_results/runtime_breakdown.csv` hoàn chỉnh                                                                        | 22/4                               |
+| 10  | ✦ [IF TIME] GNN-random sanity-check (message passing value baseline)                                                                                                                     | `run_surrogates.py`                                                            | thêm `gnn_random` row trong `surrogate_ranking_metrics.csv`                                                                           | 22/4                               |
+| 11  | ✦ [IF TIME; nâng thành MUST nếu predictions đủ trước 25/4] Per-group prediction error                                                                                                    | `run_baselines.py`/`run_surrogates.py`                                         | `outputs/mapr2026_v3_results/per_group_prediction_error.csv`                                                                          | 25/4                               |
+| 12  | 🔴 **[C2 MAPR-MUST] Architecture comparison** — 5 archs (GCN/GIN/GAT/APPNP + SAGE baseline) × raw_attr, 5 seeds each; dùng `get_model(arch, ...)` factory; **APPNP là H3 expected best** | `run_surrogates.py` (dùng `get_model()`)                                       | rows **`sage_raw_attr`**, `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, **`appnp_raw_attr`** trong `surrogate_ranking_metrics.csv`   | **19/4** (1 ngày thêm cho APPNP)   |
+| 13  | 🟡 **[C3 BOOST] Ranking loss** best arch (kết quả C2) + combined α·Huber + (1-α)·pairwise-margin; UPDATE model_name với tên arch thực tế (e.g., `appnp_raw_attr_rankloss`)               | `run_surrogates.py`                                                            | row `best_arch_raw_attr_rankloss` (tên thực: e.g., `appnp_raw_attr_rankloss`) trong `surrogate_ranking_metrics.csv`                   | 21/4 (sau C2)                      |
+| 14  | 🔴 **[C4 MAPR-MUST] Bootstrap CI** GNN best (mean preds qua 5 seeds) vs degree (1000 resamplings) → xem 3 outcome interpretations                                                        | `run_surrogates.py` / standalone                                               | `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci.json`                                                                         | 21/4 (song song C3)                |
+| 15  | 🟡 **[BOOST — C2-A2, phụ thuộc Person 1 row 13]** GCN/GIN/GAT/APPNP/SAGE trên A2 labels (test H2: GCN–A2 alignment hypothesis)                                                           | `run_surrogates.py` (p_rule='symmetric')                                       | rows `gcn_a2_raw_attr`, `gin_a2_raw_attr`, `appnp_a2_raw_attr`, etc. trong `surrogate_ranking_metrics.csv`                            | Sau A2 labels + C2-A0 xong (≈22/4) |
+| 16  | 🟡 **[BOOST — C2-I-A + C4-I-A, chỉ khi Person 1 row 15 pass]** 5 archs: APPNP + **GATv2** (H4!) + GIN + GCN + SAGE × 5 seeds trên I-A labels + Bootstrap CI; dùng `GATv2Surrogate`       | `run_surrogates.py` (p_rule='ia')                                              | `surrogate_ranking_metrics_ia.csv` (model_name: `appnp_raw_attr_ia`, `gatv2_raw_attr_ia`, ...) + `gnn_vs_degree_bootstrap_ci_ia.json` | ≈23/4 (sau Person 1 row 15 xong)   |
+| 17  | 🔵 **[FUTURE:TKDE/WWW2027 — C5] GINE + IC edge features** — upper bound sau C2+C3+C4; `edge_attr = 1/deg(v)` per edge; dùng `GINESurrogate`; **KHÔNG** đưa vào C2 fair comparison        | `run_surrogates.py` + `GINESurrogate`                                          | rows `gine_ic_a0_raw_attr`, `gine_ic_a2_raw_attr` trong `surrogate_ranking_metrics.csv`                                               | ≈25/4 (sau C2/C3/C4 xong)          |
 
 > **Các bước có tính metrics (2–8, 10, 11):** load `split_masks.parquet` → `apply_test_mask()` → `compute_metrics()`. Không tự tạo split.
 > **Group 4 vs Group 5:** Node2Vec+LR và MLP vào `baseline_ranking_metrics.csv` (comparable với Group 1–3). GNN variants vào `surrogate_ranking_metrics.csv` (với mean±std vì 5 seeds).
 > **BH-FDR:** Chỉ cần nếu chạy nhiều MWU tests (multiple comparisons); nếu không thì report mean±std là đủ.
+> **⚠ Execution order cho GNN track (quan trọng):** Row 7 SAGE validate (**17/4**) → Row 12/C2 full 5-arch sweep (**19/4**) → Rows 13+14 C3+C4 song song (**21/4**) → Row 8 ablation (**22/4**, dùng `best_arch` xác định từ C2) → Row 9 runtime assembly (**22/4**). **Rows 8 và 9 phụ thuộc Row 12 hoàn thành trước.**
+> **Figure 2 data handoff:** Sau khi rows 12 (C2) + 14 (C4) xong, Person 3 export `surrogate_ranking_metrics.csv` + `gnn_vs_degree_bootstrap_ci.json` cho Person 1 để generate Fig.2 (architecture comparison bar chart + degree reference line + 95% CI error bars). Verify data format: mỗi row có `model_name`, `spearman_rho`, `std`, `ndcg_at_10pct`.
 
 ---
 
-## 8b) Minimal handoff package giữa teammates
+## 8b) Minimal handoff package giữa teammates [⚪ REF]
 
 Nếu Person 1 đã chạy IC labels, Person 2/3 cần tất cả các file dưới đây để không phải rerun:
 
@@ -2425,4 +2501,4 @@ Active handoff version: `person1_day1_20260409_p1_day1_v3i_optionB_lockstep`
 4. Binary metrics phải khai báo uncertainty: loại `is_uncertain=1` hoặc `vote_count=1` khi claim strict binary performance; ghi rõ evaluation scope (all nodes vs non-uncertain subset).
 5. Regression là PRIMARY objective — dùng `regression_targets.parquet` (`y = log1p(ic_score_mean)`) cho toàn bộ surrogate ranking pipeline.
 6. Nếu cần thay đổi artifacts: tạo version tag mới (`freeze_day1_handoff.py --version-tag <new_tag>`) — không overwrite handoff directory đã có.
-22
+   22

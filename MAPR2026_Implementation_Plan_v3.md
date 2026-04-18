@@ -2,7 +2,7 @@
 
 ## Operationalizing Influence Potential via Weighted-Cascade IC Simulation and GNN Surrogate Learning on Twitch
 
-**Deadline submit:** 30/4/2026 | **Bắt đầu thực thi:** 6/4/2026 | **📍 Hôm nay: 16/4/2026 — còn 14 ngày**
+**Deadline submit:** 30/4/2026 | **Bắt đầu thực thi:** 6/4/2026 | **📍 Hôm nay: 17/4/2026 — còn 13 ngày**
 **Conference:** MAPR 2026, Hue City, 13–14/8/2026 — IEEE Xplore Track 1: Graph Learning
 **Dataset:** Twitch Gamers Social Network (Rozemberczki et al., 2021) — 168,114 nodes, 6,797,557 edges
 **Document version:** 3.1 — tích hợp Professor's Framing (linear pipeline: IC metric → GNN surrogate)
@@ -11,7 +11,14 @@
 
 ---
 
-## 0. Nền tảng tư duy — Đọc kỹ trước khi implement
+> **TIER LEGEND — đọc phần này trước:**
+> 🔴 **MAPR-MUST** — Bắt buộc cho defensible submission. Thiếu = paper bị reject.
+> 🟡 **BOOST** — Tăng chất lượng; làm sau khi xong hết 🔴 trước deadline 30/4.
+> 🔵 **FUTURE[Venue]** — Không kịp MAPR nhưng valuable; giữ lại; submit venue khác sau 30/4.
+> ⚪ **REF** — Chỉ đọc để align context; không phát sinh task mới.
+> **First-pass protocol:** Đọc chỉ 🔴 + Section 0. Skip tất cả 🟡 và 🔵 cho đến khi xong MUST.
+
+## 0. Nền tảng tư duy — Đọc kỹ trước khi implement [⚪ REF]
 
 ### 0.1 Reframe cốt lõi
 
@@ -55,9 +62,9 @@ IC score = OPERATIONALIZATION của influence potential
 **Scope note (v3.1):** Main contribution = linear pipeline [1]→[2]→[3]→[4]. Additional analyses are limited to continuous correlation summaries (e.g., views vs IC Spearman) and do not introduce categorical grouping.
 
 > **Tension cốt lõi cần resolve:** `gnn_centrality` Spearman 0.817 < `degree` 0.826.
-> Defense strategy: (a) bootstrap CI để test statistical equivalence, (b) architecture search (GAT **có thể** phù hợp
-> với weighted cascade — _hypothesis; C2 quyết định_ — vì attention **có thể** học pattern gần 1/degree(v)), (c) feature-agnostic story (gnn_raw_attr 0.534 vs
-> mlp_raw_attr 0.435, +0.099 từ message passing). KHÔNG claim "very good margin" trừ khi có significance test.
+> Defense strategy: (a) bootstrap CI để test practical equivalence (pre-registered bound ±0.02), (b) architecture search (GAT **có thể** phù hợp
+> với weighted cascade — _hypothesis; C2 quyết định_ — vì attention **có thể** học pattern gần 1/degree(v)), (c) **"without precomputed structural summaries" story** (gnn_raw_attr 0.534 vs
+> mlp_raw_attr 0.435, +0.099 từ message passing — GNN learns from raw user metadata without hand-crafted centrality). KHÔNG claim "very good margin" trừ khi có significance test.
 
 ---
 
@@ -86,7 +93,7 @@ IC score = OPERATIONALIZATION của influence potential
 
 ---
 
-## 1. Construct Validity — Phải Address Trong Paper
+## 1. Construct Validity — Phải Address Trong Paper [🔴 MAPR-MUST]
 
 > **Gap #1 gây rejection.** Reviewer SNA sẽ hỏi ngay: "Why should IC simulation on follower graph tell us anything about real Twitch influence?"
 
@@ -111,7 +118,7 @@ graph_direction_note: >
 
 ---
 
-## 2. Quyết định kỹ thuật cốt lõi — ngày 6/4
+## 2. Quyết định kỹ thuật cốt lõi — ngày 6/4 [⚪ REF — decisions locked & completed]
 
 > **HAI task quan trọng nhất của ngày đầu tiên, phải làm trước mọi thứ khác.**
 
@@ -217,7 +224,7 @@ print(f"One-hop vs IC pilot: ρ={rho:.3f}, Jaccard@10%={jaccard_10:.3f}, NDCG@10
 
 ---
 
-## 3. Technical Stack
+## 3. Technical Stack [⚪ REF]
 
 ```
 IC Simulation Backend:   igraph (C) + CSR numpy arrays — TUYỆT ĐỐI KHÔNG dùng NetworkX BFS
@@ -252,7 +259,7 @@ GPU:    ≥ 8 GB VRAM (RTX 3080 / A100)
 
 ---
 
-## 4. IC Simulation — Kỹ thuật đúng
+## 4. IC Simulation — Kỹ thuật đúng [🔴 MAPR-MUST]
 
 ### 4.1 Calibration — Weighted Cascade KHÔNG cần target reach
 
@@ -290,7 +297,7 @@ pilot_diagnostics:
 
 ---
 
-### 4.1b Diffusion Rule Variants — Sensitivity Analysis (robustness to p(u,v) choice)
+### 4.1b Diffusion Rule Variants — Sensitivity Analysis (robustness to p(u,v) choice) [🔴/🟡/🔵 MIXED — xem tier banners inline]
 
 > **Framing bắt buộc:** Các variant dưới đây là **sensitivity analysis về diffusion rule choice**, không phải "tune p để GNN đẹp hơn". Primary label source luôn là **A0 (weighted cascade)**.
 >
@@ -343,22 +350,22 @@ pilot_diagnostics:
 
 #### Phân loại defensibility (cập nhật)
 
-| Variant                  | Tên                          | Views-indep       | life_time indep | Grounding          | Defensible?                       | Priority          |
-| ------------------------ | ---------------------------- | ----------------- | --------------- | ------------------ | --------------------------------- | ----------------- |
-| A0: `1/deg(v)`           | Weighted Cascade             | ✅                | ✅              | ✅✅ Kempe+DeepIM  | **✅ Primary**                    | 1 — luôn chạy     |
-| **I-A: `w(v)/Σw(N(u))`** | **Attr-Informed (row-norm)** | **❌ dùng views** | ✅              | ✅ Twitch-specific | ✅ (attr-informed; gated)         | **2 — MUST (pilot); conditional full** |
-| A2: `1/√(deg(u)×deg(v))` | Symmetric                    | ✅                | ✅              | ✅ GCN analogy     | ✅                                | 3 — robustness    |
-| A1: `1/deg(u)`           | Source Budget                | ✅                | ✅              | Marginal           | ✅                                | 4 — if needed     |
-| II-B: `w(v)/deg(v)`      | Views-Density                | ❌ dùng views     | ✅              | Moderate           | ⚠ fallback nếu I-A degenerate     | 5 — fallback      |
-| B3: life_time-based      | Tenure Amp.                  | ✅                | ❌              | None               | ⚠ mất external val                | Low               |
+| Variant                  | Tên                          | Views-indep       | life_time indep | Grounding          | Defensible?                   | Priority                               |
+| ------------------------ | ---------------------------- | ----------------- | --------------- | ------------------ | ----------------------------- | -------------------------------------- |
+| A0: `1/deg(v)`           | Weighted Cascade             | ✅                | ✅              | ✅✅ Kempe+DeepIM  | **✅ Primary**                | 1 — luôn chạy                          |
+| **I-A: `w(v)/Σw(N(u))`** | **Attr-Informed (row-norm)** | **❌ dùng views** | ✅              | ✅ Twitch-specific | ✅ (attr-informed; gated)     | **2 — MUST (pilot); conditional full** |
+| A2: `1/√(deg(u)×deg(v))` | Symmetric                    | ✅                | ✅              | ✅ GCN analogy     | ✅                            | 3 — robustness                         |
+| A1: `1/deg(u)`           | Source Budget                | ✅                | ✅              | Marginal           | ✅                            | 4 — if needed                          |
+| II-B: `w(v)/deg(v)`      | Views-Density                | ❌ dùng views     | ✅              | Moderate           | ⚠ fallback nếu I-A degenerate | 5 — fallback                           |
+| B3: life_time-based      | Tenure Amp.                  | ✅                | ❌              | None               | ⚠ mất external val            | Low                                    |
 
 ---
 
 #### I-A — Attribute-Informed IC (Row-Normalized Views Attention)
 
-> 🔵 **[SUPPLEMENTARY TRACK — SKIP nếu không activate I-A]**
-> Toàn bộ block này chỉ relevant nếu I-A pilot pass (3 checks bên dưới).
-> Nếu A0 only: bỏ qua toàn bộ I-A, II-B, và C2-I-A sections → tiếp tục từ "Framework thử nghiệm".
+> 🔴 **[MAPR-MUST — Pilot gate (~20 phút), unconditional]** `ic_pilot_ia.py` → quyết định gate cho toàn bộ I-A track.
+> 🟡 **[BOOST — Full I-A: conditional-MUST nếu pilot pass 3 checks]** `ic_labels_attribute_ia.py` → bổ sung second operationalization; skip nếu pilot fail.
+> **SKIP toàn bộ block này nếu không activate I-A** (A0-only narrative: bỏ qua I-A, II-B, C2-I-A → tiếp tục từ "Framework thử nghiệm").
 
 > **Điều kiện kích hoạt:** Chỉ chạy như **supplemental** label set; bắt buộc có pilot gate + ghi rõ trong paper đây là **attribute-informed operationalization** (không phải sensitivity của A0).
 
@@ -422,7 +429,7 @@ p(u,v) = log1p(views(v)) / Σ_{x∈N(u)} log1p(views(x))
 
 ---
 
-#### II-B — Views-Density Cascade (Fallback nếu I-A degenerate)
+#### II-B — Views-Density Cascade [🔵 FUTURE:Archive — Fallback nếu I-A degenerate; không làm cho MAPR chính]
 
 **Formula:**
 
@@ -571,13 +578,13 @@ ANY FAIL → Fallback theo thứ tự: II-B → A2 → A0 only
 
 > **Lý thuyết alignment quan trọng (pre-register trước C2-I-A):**
 >
-> | | GAT v1 | GATv2 |
-> |---|---|---|
-> | Attention formula | `e(i,j) = a^T [W·h_i \|\| W·h_j]` | `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])` |
-> | Attention type | **Static** — ranking của j không thay đổi theo i | **Dynamic** — ranking của j phụ thuộc i |
-> | I-A formula | `p(u,v) = views(v) / Σviews(N(u))` | Row-normalize: denominator phụ thuộc u |
-> | Alignment | GAT v1 attention KHÔNG dynamic → không thể học I-A row-normalization | **GATv2 dynamic attention khớp trực tiếp với I-A: trọng số của v phụ thuộc u** |
-> | A0 alignment | OK (static 1/deg(v) chỉ cần target-node info) | Overkill cho A0, fine nhưng no advantage |
+> |                   | GAT v1                                                               | GATv2                                                                          |
+> | ----------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+> | Attention formula | `e(i,j) = a^T [W·h_i \|\| W·h_j]`                                    | `e(i,j) = a^T LeakyReLU(W·[h_i \|\| h_j])`                                     |
+> | Attention type    | **Static** — ranking của j không thay đổi theo i                     | **Dynamic** — ranking của j phụ thuộc i                                        |
+> | I-A formula       | `p(u,v) = views(v) / Σviews(N(u))`                                   | Row-normalize: denominator phụ thuộc u                                         |
+> | Alignment         | GAT v1 attention KHÔNG dynamic → không thể học I-A row-normalization | **GATv2 dynamic attention khớp trực tiếp với I-A: trọng số của v phụ thuộc u** |
+> | A0 alignment      | OK (static 1/deg(v) chỉ cần target-node info)                        | Overkill cho A0, fine nhưng no advantage                                       |
 >
 > **Kết luận:** Trong C2-A0, GAT v1 là đúng choice (static attention ≈ A0 static p(u,v)). Trong C2-I-A, **GATv2 là correct architecture** — dynamic attention cho phép model học row-normalized views weighting.
 
@@ -589,17 +596,17 @@ from torch_geometric.nn import GATv2Conv
 class GATv2Surrogate(nn.Module):
     """
     GATv2 surrogate — Dynamic attention (Brody et al., ICLR 2022).
-    
+
     Alignment với I-A IC (H4):
     I-A formula: p(u,v) = log1p(views(v)) / Σ_{w∈N(u)} log1p(views(w))
     → Attention weight của v PHỤ THUỘC ngữ cảnh u (row-normalized per source)
     → GATv2 dynamic attention: e(i,j) = a^T LeakyReLU(W·[h_i || h_j])
       → ranking của j thay đổi theo i (dynamic) → có thể học I-A normalization
-    
+
     Tại sao GAT v1 không đủ cho I-A:
     GAT v1: e(i,j) = a_src^T(W·h_i) + a_tgt^T(W·h_j)  [separable]
     → ranking của j KHÔNG thay đổi theo i → cannot model row-normalization
-    
+
     Ref: Brody et al., "How Attentive are Graph Attention Networks?", ICLR 2022
     """
     def __init__(self, in_dim=3, hidden_dim=128, heads=4, dropout=0.3):
@@ -630,14 +637,14 @@ C2_IA_ARCHITECTURES = ['appnp', 'gatv2', 'gin', 'gcn', 'sage']
 
 > **C2-I-A vs C2-A0 arch list comparison:**
 >
-> | Arch | C2-A0 | C2-I-A | Lý do khác biệt |
-> |---|---|---|---|
-> | APPNP | ✅ MUST (H3) | ✅ MUST (H3 still valid) | PPR propagation phù hợp cả 2 |
-> | GAT v1 | ✅ MUST (H1) | ❌ Replaced by GATv2 | Static attention không model I-A |
-> | **GATv2** | ❌ Not in C2-A0 | ✅ MUST (H4) | Dynamic attention = I-A alignment |
-> | GIN | ✅ MUST | ✅ MUST | Sum agg. reference |
-> | GCN | ✅ MUST (H2) | ✅ MUST | Baseline comparison |
-> | SAGE | ✅ Done (baseline) | ✅ Done (baseline) | Mean agg. baseline |
+> | Arch      | C2-A0              | C2-I-A                   | Lý do khác biệt                   |
+> | --------- | ------------------ | ------------------------ | --------------------------------- |
+> | APPNP     | ✅ MUST (H3)       | ✅ MUST (H3 still valid) | PPR propagation phù hợp cả 2      |
+> | GAT v1    | ✅ MUST (H1)       | ❌ Replaced by GATv2     | Static attention không model I-A  |
+> | **GATv2** | ❌ Not in C2-A0    | ✅ MUST (H4)             | Dynamic attention = I-A alignment |
+> | GIN       | ✅ MUST            | ✅ MUST                  | Sum agg. reference                |
+> | GCN       | ✅ MUST (H2)       | ✅ MUST                  | Baseline comparison               |
+> | SAGE      | ✅ Done (baseline) | ✅ Done (baseline)       | Mean agg. baseline                |
 
 **Output C2-I-A:** `surrogate_ranking_metrics_ia.csv` — same schema as primary CSV, với model_name: `appnp_raw_attr_ia`, `gatv2_raw_attr_ia`, `gin_raw_attr_ia`, `gcn_raw_attr_ia`, `gnn_raw_attr_ia` (SAGE).
 
@@ -715,7 +722,7 @@ def run_ic_csr(seed_node, indptr, indices, degrees, n_runs=200, worker_seed=None
 
     return np.array(sizes, dtype=np.int32)
 
-# ── Sensitivity S1: A2 Symmetric variant ───────────────────────────────────────
+# ── Sensitivity S1: A2 Symmetric variant [🟡 BOOST — sau khi primary IC xong] ──
 # Chỉ thay 1 dòng so với run_ic_csr (A0): p = 1/sqrt(deg(u)*deg(v))
 # Output: outputs/mapr2026_v3_results/ic_scores_sensitivity_a2.parquet
 
@@ -865,7 +872,7 @@ def run_ic_csr_iib(seed_node, indptr, indices, p_iib, n_runs=200, worker_seed=No
         sizes.append(len(activated))
     return np.array(sizes, dtype=np.int32)
 
-# ── Sensitivity S2: A1 Source Budget variant (nếu cần "IC ≠ degree" stronger) ──
+# ── Sensitivity S2: A1 Source Budget variant [🔵 FUTURE:SNA-Journal — không làm cho MAPR] ──
 # Chỉ thay 1 dòng: p = 1.0/deg_node (thay vì degrees[nb]) — mọi node 1-hop spread = 1.0
 # def run_ic_csr_a1(seed_node, ...): p = 1.0/deg_node if deg_node > 0 else 0.0
 # Output: outputs/mapr2026_v3_results/ic_scores_sensitivity_a1.parquet
@@ -985,7 +992,7 @@ def stratified_sample_with_ks_check(df, n_sample=5000, seed=42):
 
 ---
 
-## 6. Community Detection — Bắt buộc cho Stability Explanation _(Task A support)_
+## 6. Community Detection — Stability Explanation Support [🟡 BOOST]
 
 > **v3.1 note:** Louvain community detection phục vụ 2 mục đích:
 > (1) **Stability explanation**: tính `pct_communities_spanning_boundary` để giải thích tại sao Jaccard < 0.85 (structural cause, not MC noise)
@@ -1032,7 +1039,7 @@ def compute_community_features(G_nx, resolution=1.0, n_runs=10, seed_start=0):
 
 ---
 
-## 7. Baseline Hierarchy — Đầy đủ và Không Redundant
+## 7. Baseline Hierarchy — Đầy đủ và Không Redundant [🔴 MAPR-MUST — Groups 1–3 + 5; Group 4 = 🟡]
 
 ### Group 1: Raw Feature Baselines (O(1))
 
@@ -1079,7 +1086,7 @@ def two_hop_expected_spread(node, G, degrees):
 | One-hop spread     | `Σ 1/deg(v)` for v in N(u)  | O(deg(u))        |
 | **Two-hop spread** | `Σ p(u,v) × (1 + Σ p(v,w))` | O(deg²) per node |
 
-### Group 4: Shallow Embedding Baselines
+### Group 4: Shallow Embedding Baselines [🟡 BOOST]
 
 | Baseline              | Config                                                             |
 | --------------------- | ------------------------------------------------------------------ |
@@ -1088,24 +1095,26 @@ def two_hop_expected_spread(node, G, degrees):
 
 ### Group 5: GNN — Architecture × Feature Ablation (v3.1)
 
-> **v3.1 update:** Mở rộng từ GraphSAGE duy nhất → 4 architectures per instructor recommendation.
+> **v3.1 update:** Mở rộng từ GraphSAGE duy nhất → 5 architectures (thêm APPNP) để kiểm tra inductive bias cho IC multi-hop.
 > Primary feature set vẫn là raw attributes để story "GNN learns beyond hand-crafted features" defensible.
 
 **Architecture Comparison (MUST — per instructor: "GCN/GIN/GAT..."):**
 
-| Architecture | PyG Class  | Aggregation           | Lý do test                                                                                                                                       |
-| ------------ | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GraphSAGE    | `SAGEConv` | Mean (baseline)       | Hiện tại đang dùng; reference point                                                                                                              |
-| **GCN**      | `GCNConv`  | **Sym. norm. sum**    | Spectral baseline; **`D^{-1/2}AD^{-1/2}` structurally analogous to A2 diffusion rule** — additional inductive bias check nếu chạy A2 sensitivity |
-| GIN          | `GINConv`  | Sum + MLP             | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics                                |
-| **GAT**      | `GATConv`  | **Learned attention** | **Hypothesis (confirm via C2):** p(u,v)=1/degree(v) → attention **có thể** học weighting này                                                     |
+| Architecture | PyG Class  | Aggregation           | Lý do test                                                                                                                                        |
+| ------------ | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GraphSAGE    | `SAGEConv` | Mean (baseline)       | Hiện tại đang dùng; reference point                                                                                                               |
+| **GCN**      | `GCNConv`  | **Sym. norm. sum**    | Spectral baseline; **`D^{-1/2}AD^{-1/2}` structurally analogous to A2 diffusion rule** — additional inductive bias check nếu chạy A2 sensitivity  |
+| GIN          | `GINConv`  | Sum + MLP             | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics                                 |
+| **GAT**      | `GATConv`  | **Learned attention** | **Hypothesis (confirm via C2):** p(u,v)=1/degree(v) → attention **có thể** học weighting này                                                      |
+| **APPNP**    | `APPNP`    | **K-step PPR**        | **H3:** embed-then-propagate với teleport/restart là structural analogy/inductive bias cho IC multi-hop; test như ứng viên “deep receptive field” |
 
-> **Hai inductive bias hypotheses (cả hai to be confirmed by C2):**
+> **Ba inductive bias hypotheses (to be confirmed by C2):**
 >
 > 1. **GAT–A0 hypothesis:** Dưới IC primary (A0: `p=1/deg(v)`), GAT có thể học attention weight tỷ lệ nghịch với degree của neighbor → potentially best aligned with A0. _(hypothesis/intuition — C2 decides)_
 > 2. **GCN–A2 hypothesis:** `GCNConv` aggregates với weight `1/√(d̃_u×d̃_v)` — structurally analogous to A2 symmetric rule. Nếu chạy A2 sensitivity IC labels, GCN expected to be best arch. _(testable via sensitivity experiment — see Section 4.1b)_
+> 3. **APPNP–multi-hop hypothesis (H3):** APPNP's K-step PPR propagation với teleport/restart weight là structural analogy/inductive bias cho target diffusion-like; hypothesized to outperform conv-stack baselines trên A0 labels. _(hypothesis — C2 decides; see Section 9.1)_
 >
-> ⚠ Không kết luận arch nào “best” trước khi có kết quả C2; nếu C2 cho arch khác tốt hơn thì dùng kết quả thực nghiệm. Cả hai hypotheses có prepared narratives cho mọi outcome.
+> ⚠ Không kết luận arch nào “best” trước khi có kết quả C2; nếu C2 cho arch khác tốt hơn thì dùng kết quả thực nghiệm. Cả ba hypotheses có prepared narratives cho mọi outcome.
 
 **Feature Ablation (giữ nguyên từ v3.0):**
 
@@ -1124,9 +1133,10 @@ def two_hop_expected_spread(node, G, degrees):
 | **GCN**       | **MUST** | [IF TIME]  | [IF TIME]  |
 | **GIN**       | **MUST** | [IF TIME]  | [IF TIME]  |
 | **GAT**       | **MUST** | [IF TIME]  | [IF TIME]  |
+| **APPNP**     | **MUST** | [IF TIME]  | [IF TIME]  |
 
 **Naming convention cho surrogate_ranking_metrics.csv (artifact names):**
-`gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr` (+ `best_arch_raw_attr_rankloss` sau C2)
+`gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, `appnp_raw_attr` (+ `best_arch_raw_attr_rankloss` sau C2)
 
 > **Lưu ý phân biệt:** Tên trong CSV artifact (`gcn_raw_attr`) khác với tên display trong paper table (`gnn_raw_attr (GCN)`).
 > Quy ước: CSV dùng snake*case prefix (`gcn*`, `gin*`, `gat*`); paper table dùng `gnn_raw_attr (Architecture)` để nhất quán với G5 group labeling.
@@ -1140,7 +1150,7 @@ def two_hop_expected_spread(node, G, degrees):
 
 ---
 
-## 8. Evaluation Metrics và Protocol
+## 8. Evaluation Metrics và Protocol [🔴 MAPR-MUST]
 
 ### 8.1 Transductive Setting — Phải Nói Rõ
 
@@ -1168,19 +1178,40 @@ Accuracy, F1-macro  — misleading với 95/5 class imbalance
 
 ### 8.4 Degree-Controlled IC Variance Test (v3.1 — MUST, justify "why not just degree?")
 
-**Mục tiêu:** Chứng minh IC capture higher-order diffusion effects ngoài degree. Trả lời câu hỏi
-reviewer: _"Why not just use degree as power user metric?"_
+**Mục tiêu:** Chứng minh IC capture higher-order diffusion effects ngoài degree **và** one-hop structure. Trả lời câu hỏi reviewer: _"Why not just use degree as power user metric?"_
+
+> **⚠ Enhancement (per reviewer feedback):** Degree-band-only test có weakness: variance trong band [75–85] có thể chủ yếu phản ánh one-hop spread variance (vì p=1/deg(v) → IC ≈ analytical one-hop). Test cần **2 tầng kiểm soát** để claim genuine higher-order effect:
+>
+> 1. **Tầng 1:** Control degree → check IC variance còn không (test hiện tại)
+> 2. **Tầng 2:** Control degree + one-hop spread → check IC variance còn không (new)
+>    Nếu variance collapse sau tầng 2: IC ≈ degree + local structure (still honest finding). Nếu variance vẫn còn: genuine 2nd-order IC signal.
 
 ```python
-# Filter nodes với degree trong narrow band quanh mean (degree_mean ≈ 81)
-degree_band = (75, 85)  # ±5 quanh mean
-band_nodes = [n for n in labeled_nodes if degree_band[0] <= degree[n] <= degree_band[1]]
+import numpy as np
+from scipy.stats import spearmanr
+from scipy import stats
 
-ic_in_band = ic_scores[band_nodes]
-cv_within_band = ic_in_band.std() / ic_in_band.mean()
+# ── TIER 1: Degree-band variance (original test) ──────────────────────────────
+degree_band = (75, 85)  # ±5 quanh mean (≈81 trên Twitch)
+band_mask = (degree >= degree_band[0]) & (degree <= degree_band[1])
+band_ic   = ic_scores[band_mask]
 
-# If cv_within_band > 0.3 → IC adds information beyond degree
-# Expected: nodes same degree but different community positions → different IC scores
+cv_tier1 = band_ic.std() / band_ic.mean() if band_ic.mean() > 0 else 0.0
+
+# ── TIER 2: Degree + one-hop-spread controlled residual variance ───────────────
+# 2a. Lấy nodes trong degree band
+band_one_hop = one_hop_spread[band_mask]   # one_hop_spread từ diffusion_proxies.parquet
+
+# 2b. Regress IC on one-hop spread (linear, controls first-order info)
+slope, intercept, *_ = stats.linregress(band_one_hop, band_ic)
+ic_residual = band_ic - (slope * band_one_hop + intercept)   # residuals after one-hop control
+
+cv_tier2 = ic_residual.std() / abs(band_ic.mean()) if abs(band_ic.mean()) > 0 else 0.0
+
+# ── INTERPRETATION ─────────────────────────────────────────────────────────────
+# cv_tier1 > 0.3:  IC adds info beyond degree  (basic test passes)
+# cv_tier2 > 0.15: IC adds info beyond degree + one-hop  (strong higher-order evidence)
+# cv_tier2 ≤ 0.15: IC ≈ degree + local neighborhood → honest "IC is degree + one-hop" finding
 ```
 
 **Output:** `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`
@@ -1190,13 +1221,21 @@ cv_within_band = ic_in_band.std() / ic_in_band.mean()
   "degree_band": "75-85",
   "n_nodes_in_band": "<N>",
   "ic_mean_in_band": "<float>",
-  "ic_std_in_band": "<float>",
-  "cv_within_band": "<float>",
-  "interpretation": "IC adds info beyond degree" | "IC ≈ degree at this scale"
+  "cv_tier1_degree_only": "<float>",
+  "cv_tier2_degree_plus_onehop": "<float>",
+  "interpretation_tier1": "IC adds info beyond degree | IC ≈ degree",
+  "interpretation_tier2": "IC adds genuine higher-order signal | IC ≈ degree + local structure"
 }
 ```
 
-**Thời gian:** ~30 phút (filter + compute từ existing IC scores, không cần rerun simulation).
+**Paper narrative tương ứng:**
+
+| Tier 2 result     | Paper narrative                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cv_tier2 > 0.15` | "Even controlling for both degree and one-hop spread, IC scores retain substantial variance (CV=X within the degree band), demonstrating that IC captures multi-hop cascade composition — second-order neighborhood structure — beyond local connectivity."                                                        |
+| `cv_tier2 ≤ 0.15` | "Within narrow degree bands, IC scores are well-explained by degree and one-hop spread (residual CV=X after one-hop control), suggesting that at Twitch scale, IC is primarily determined by local structure. This motivates framing IC as a learnable structural summary rather than a fundamentally new metric." |
+
+**Thời gian:** ~45 phút (filter + regression + compute từ existing IC scores và proxies — không cần rerun simulation).
 
 **Paper narrative nếu cv > 0.3:** "Within the same degree band (degree 75–85), IC scores vary substantially
 (CV = X), demonstrating that IC captures higher-order structural information beyond local connectivity."
@@ -1227,6 +1266,26 @@ def bootstrap_spearman_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, seed=42)
     ci_upper = np.percentile(deltas, 97.5)
     return float(np.mean(deltas)), ci_lower, ci_upper
 
+def ndcg_at_k(y_true, y_pred, k=None):
+    """NDCG@k for a single sample. k=None → full ranking."""
+    from sklearn.metrics import ndcg_score
+    return float(ndcg_score(y_true.reshape(1, -1), y_pred.reshape(1, -1), k=k))
+
+def bootstrap_spearman_ndcg_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, seed=42, ndcg_k=None):
+    """Bootstrap CI for Spearman AND NDCG simultaneously — same resample loop."""
+    rng = np.random.default_rng(seed)
+    n = len(y_true)
+    deltas_sp, deltas_ndcg = [], []
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        yt, ya, yb = y_true[idx], y_pred_a[idx], y_pred_b[idx]
+        deltas_sp.append(spearmanr(yt, ya).correlation - spearmanr(yt, yb).correlation)
+        deltas_ndcg.append(ndcg_at_k(yt, ya, ndcg_k) - ndcg_at_k(yt, yb, ndcg_k))
+    return {
+        "spearman": (np.percentile(deltas_sp, 2.5), np.percentile(deltas_sp, 97.5)),
+        "ndcg":     (np.percentile(deltas_ndcg, 2.5), np.percentile(deltas_ndcg, 97.5)),
+    }
+
 # Run: y_pred_a = best GNN predictions, y_pred_b = degree ranks, y_true = IC scores
 ```
 
@@ -1237,10 +1296,19 @@ def bootstrap_spearman_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, seed=42)
   "n_bootstrap": 1000,
   "comparator_a": "gnn_best_architecture",
   "comparator_b": "degree",
-  "delta_mean": "<float>",
-  "ci_95_lower": "<float>",
-  "ci_95_upper": "<float>",
-  "interpretation": "equivalent | significantly_lower | significantly_higher"
+  "equivalence_bound": 0.02,
+  "spearman": {
+    "delta_mean": "<float>",
+    "ci_95_lower": "<float>",
+    "ci_95_upper": "<float>",
+    "interpretation": "practically_equivalent | no_clear_superiority | gnn_better | degree_better"
+  },
+  "ndcg_at_10pct": {
+    "delta_mean": "<float>",
+    "ci_95_lower": "<float>",
+    "ci_95_upper": "<float>",
+    "interpretation": "practically_equivalent | no_clear_superiority | gnn_better | degree_better"
+  }
 }
 ```
 
@@ -1248,19 +1316,23 @@ def bootstrap_spearman_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, seed=42)
 
 **Protocol spec (để tránh ambiguity khi implement):**
 
-- **Metric được CI:** Spearman ρ only (primary ranking metric — không phải NDCG/Precision)
+- **Metric được CI:** **Spearman ρ (primary) + NDCG@10% (secondary)** — compute cả hai trong cùng một resampling loop, zero extra cost. Lý do: Spearman và NDCG có thể diverge (observed: gnn_graph_only Spearman 0.470 vs NDCG 0.835); reviewer sẽ hỏi.
 - **Đơn vị resample:** nodes trong test set (resample with replacement, `size = n_test`)
-- **Δ definition:** `Spearman(GNN_best) − Spearman(degree)` trên cùng test set và cùng `y_true`
+- **Δ definition:** `Δ_spearman = Spearman(GNN_best) − Spearman(degree)` và `Δ_ndcg = NDCG@10%(GNN_best) − NDCG@10%(degree)`, trên cùng test set và cùng `y_true`
 - **"GNN_best":** architecture với mean Spearman cao nhất qua 5 seeds từ C2; predictions = mean predictions qua 5 seeds
 - **"degree":** `rank(degree)` trên active graph, đã filter về test nodes
+- **Practical equivalence bound (pre-registered):** `|Δ_spearman| ≤ 0.02` = practically equivalent (SESOI — Smallest Effect of Interest). Pre-register threshold này trước khi xem kết quả.
 
-**Decision:**
+**Decision (3-tier, dùng cho cả Spearman và NDCG):**
 
-- `ci_95_lower > 0` → GNN significantly better → claim "GNN surpasses degree"
-- `ci_95_lower ≤ 0 ≤ ci_95_upper` → **"GNN achieves statistically equivalent Spearman ρ to degree while requiring no precomputed graph statistics."**
-- `ci_95_upper < 0` → **"GNN is competitive; message passing contributes +0.099 Spearman over MLP without structural features."**
+| CI outcome                                         | Interpretation                      | Paper claim                                                                                                  |
+| -------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `ci_95_lower > 0`                                  | GNN significantly better            | "GNN surpasses degree under IC-A0"                                                                           |
+| CI chứa 0 **và** toàn bộ CI trong `[-0.02, +0.02]` | **Practically equivalent**          | "GNN achieves statistically equivalent Spearman ρ to degree while requiring no precomputed graph statistics" |
+| CI chứa 0 **nhưng** rộng hơn `[-0.02, +0.02]`      | No clear superiority (underpowered) | "No significant difference detected; GNN provides learnable alternative with +0.099 over MLP"                |
+| `ci_95_upper < 0`                                  | GNN significantly worse             | "GNN competitive within bound; focus on +0.099 message passing story vs MLP"                                 |
 
-### 8.6 Multiple Testing Correction
+### 8.6 Multiple Testing Correction [🟡 BOOST]
 
 ```python
 from statsmodels.stats.multitest import multipletests
@@ -1298,14 +1370,15 @@ std_spearman  = np.std( [r['spearman'] for r in results_per_seed])
 
 ---
 
-## 9. GNN Training (v3.1 — Architecture Comparison + Ranking Loss)
+## 9. GNN Training (v3.1 — Architecture Comparison + Ranking Loss) [🔴 MAPR-MUST — xem subsection tiers]
 
 ### 9.1 Architecture Comparison: GCN / GIN / GAT / GraphSAGE / APPNP
 
 > **v3.1:** Mở rộng từ GraphSAGE duy nhất → 5 architectures. Config chuẩn giống nhau để fair comparison.
-> **APPNP là architecture được bổ sung mới** vì lý do lý thuyết mạnh nhất: K-step Personalized PageRank propagation với teleport/restart là **structural analogy/inductive bias** cho target diffusion-like — xem H3 bên dưới.
+> **APPNP là architecture được bổ sung mới** vì lý do lý thuyết mạnh nhất: APPNP **decouples feature transformation from propagation** — embed node features first (MLP), then propagate embeddings via K=10 PPR steps with teleport weight α. Điều này cho phép **receptive field sâu (K=10) mà không bị oversmoothing** (vì transformation và propagation tách biệt). Đây là inductive bias plausible cho IC regression vì IC scores reflect multi-hop cascade reach. Framing: "plausible candidate for deeper multi-hop influence propagation" — không claim APPNP mimics IC mechanics (stochastic vs deterministic là khác nhau). Xem H3 bên dưới.
 >
 > **⚠ PyG version check (trước khi chạy):** `APPNP` requires PyG ≥ 2.3. Verify:
+>
 > ```python
 > from torch_geometric.nn import APPNP; print("APPNP OK")  # must print without ImportError
 > ```
@@ -1477,7 +1550,7 @@ _Prediction (hypothesis):_ APPNP is hypothesized to **outperform SAGE/GCN/GIN/GA
 >
 > **Nếu C2 vẫn không thể beat degree trên A0:** Đây là **structural expectation** (không phải implementation failure) — A0 IC ∝ 1/deg(v) = degree-derived label. Cần I-A labels (degree-blind) để GNN có genuine structural advantage. Xem Section 10.4 (I-A supplemental analysis).
 
-### 9.1b Ranking Loss Experiment (v3.1 — MUST, fix metric mismatch)
+### 9.1b Ranking Loss Experiment — C3 [🟡 BOOST]
 
 > **Vấn đề:** HuberLoss tối ưu regression error (MSE-like), nhưng evaluation metrics là Spearman/NDCG
 > (ranking metrics). Mismatch này có thể cost 2–3 Spearman points.
@@ -1485,13 +1558,12 @@ _Prediction (hypothesis):_ APPNP is hypothesized to **outperform SAGE/GCN/GIN/GA
 ```python
 import torch.nn.functional as F
 
-# Option A: Pairwise Margin Ranking Loss
+# Option A: Pairwise Margin Ranking Loss (random pairs — baseline)
 def pairwise_ranking_loss(pred, target, margin=0.1, n_pairs=512):
     """Sample pairs (i,j) where target_i > target_j, penalize if pred_i < pred_j."""
     n = len(pred)
     idx = torch.randperm(n)[:n_pairs * 2].view(n_pairs, 2)
     i, j = idx[:, 0], idx[:, 1]
-    # Ensure target_i > target_j
     mask = target[i] > target[j]
     i, j = i[mask], j[mask]
     if len(i) == 0:
@@ -1499,21 +1571,38 @@ def pairwise_ranking_loss(pred, target, margin=0.1, n_pairs=512):
     return F.margin_ranking_loss(pred[i], pred[j],
                                   torch.ones(len(i), device=pred.device), margin=margin)
 
-# Option B: Combined loss (Huber + ranking)
+# ⭐ Option A2: Top-k Focused Ranking Loss (RECOMMENDED over random pairs)
+# Lý do: IC scores heavy-tailed → random pairs → hầu hết (low, low) pairs → weak gradient signal
+# cho top-k metrics (NDCG@10%). Top-k focused: sample pairs where ≥1 member is in top 20%.
+def pairwise_ranking_loss_topk_focused(pred, target, margin=0.1, n_pairs=512, top_frac=0.2):
+    """Top-k focused pair sampling: one from top 20%, one from rest. Better NDCG gradient."""
+    n = len(pred)
+    top_k = max(1, int(n * top_frac))
+    top_idx = torch.argsort(target, descending=True)[:top_k]
+    top_sample  = top_idx[torch.randint(top_k, (n_pairs,))]
+    rest_sample = torch.randint(n, (n_pairs,), device=pred.device)
+    mask = target[top_sample] > target[rest_sample]
+    i, j = top_sample[mask], rest_sample[mask]
+    if len(i) == 0:
+        return torch.tensor(0.0, requires_grad=True)
+    return F.margin_ranking_loss(pred[i], pred[j],
+                                  torch.ones(len(i), device=pred.device), margin=margin)
+
+# Option B: Combined loss (Huber + top-k focused ranking)
 def combined_loss(pred, target, alpha=0.5, margin=0.1):
     huber = F.huber_loss(pred, target, delta=1.0)
-    rank = pairwise_ranking_loss(pred, target, margin=margin)
+    rank = pairwise_ranking_loss_topk_focused(pred, target, margin=margin)  # ← use top-k version
     return alpha * huber + (1 - alpha) * rank
 
-# Variant naming: best_arch + '_rankloss' (e.g., 'gat_raw_attr_rankloss')
+# Variant naming: best_arch + '_rankloss' (e.g., 'appnp_raw_attr_rankloss')
 criterion_rankloss = combined_loss  # α=0.5 default; sweep [0.25, 0.5, 0.75] if time
 ```
 
-**Kỳ vọng:** +0.02–0.03 Spearman. Nếu GAT + ranking loss đạt ≥ 0.84 → vượt degree (0.826) → clean contribution.
+**Kỳ vọng:** +0.02–0.03 Spearman, và cải thiện NDCG@10% đáng kể hơn random pairs (vì gradient tập trung vào top nodes). Nếu best_arch + ranking loss đạt ≥ 0.84 → vượt degree (0.826) → clean contribution.
 
 **Output thêm vào surrogate_ranking_metrics.csv:** `best_arch_raw_attr_rankloss` (tên thực tế sau C2, ví dụ: `gat_raw_attr_rankloss` nếu GAT là best arch)
 
-### 9.1c Optional: Inductive Generalization Test _(CAN HAVE — nếu còn thời gian)_
+### 9.1c Inductive Generalization Test [🔵 FUTURE:ICLR2027]
 
 > **Khi nào làm:** Chỉ nếu architecture comparison + ranking loss vẫn không vượt degree sau bootstrap CI
 > (tức là CI entirely negative — worst case). Đây là strongest remaining argument cho GNN nhưng
@@ -1559,7 +1648,7 @@ train_edge_index = subgraph(train_node_mask, full_edge_index)[0]
 
 ---
 
-### 9.1d GINE + IC Edge Features — C5 Supplemental _(CAN HAVE — nếu còn thời gian sau C2/C3/C4)_
+### 9.1d GINE + IC Edge Features — C5 [🔵 FUTURE:TKDE/WWW2027]
 
 > **Khi nào làm:** Chỉ sau khi C2 + C3 + C4 đều done. Đây là strongest possible alignment experiment nhưng không phải "feature-agnostic" nữa — cần label rõ trong paper.
 >
@@ -1568,6 +1657,7 @@ train_edge_index = subgraph(train_node_mask, full_edge_index)[0]
 **Lý do GINE là architecture đặc biệt cho IC surrogate:**
 
 GINE (Hu et al., NeurIPS 2019) mở rộng GIN bằng cách incorporate **edge features** vào message passing:
+
 ```
 GIN:   h_v = MLP( (1+ε)·h_v + Σ_{u∈N(v)} h_u )
 GINE:  h_v = MLP( (1+ε)·h_v + Σ_{u∈N(v)} ReLU(h_u + e_uv) )
@@ -1583,16 +1673,16 @@ from torch_geometric.nn import GINEConv
 class GINESurrogate(nn.Module):
     """
     GINE surrogate với IC propagation probabilities làm edge features.
-    
+
     Alignment với IC (C5 hypothesis — H5):
     IC-A0: p(u,v) = 1/deg(v) — propagation probability của mỗi edge.
     GINE nhận e_uv = p(u,v) explicitly → message từ u đến v = ReLU(h_u + 1/deg(v))
     → Model biết "trọng số" của mỗi cạnh theo IC dynamics.
-    
+
     ⚠ Không phải "feature-agnostic": edge features = structural property (1/deg).
     Trong paper: "GINE with explicit IC mechanism encoding" — supplemental upper bound.
     ⚠ KHÔNG đưa vào C2 fair comparison (C2 = node features only, no edge features).
-    
+
     Ref: Hu et al., "Strategies for Pre-training Graph Neural Networks", NeurIPS 2019
     """
     def __init__(self, in_dim=3, hidden_dim=128, edge_dim=1, dropout=0.3):
@@ -1621,10 +1711,10 @@ class GINESurrogate(nn.Module):
 def compute_ic_edge_features(edge_index, degrees, rule='a0'):
     """
     Compute IC propagation probability for each edge as edge feature.
-    
+
     rule='a0': p(u,v) = 1/deg(v)          — IC primary (Weighted Cascade)
     rule='a2': p(u,v) = 1/sqrt(deg(u)*deg(v)) — IC symmetric sensitivity
-    
+
     Returns: edge_attr of shape (E, 1) — IC probability per directed edge
     """
     src, dst = edge_index[0], edge_index[1]
@@ -1644,11 +1734,11 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 
 **C5 Experiment protocol:**
 
-| Variant | Edge features | Node features | CSV model_name | Priority |
-|---|---|---|---|---|
-| GINE-IC-A0 | `1/deg(v)` per edge | `raw_attr` | `gine_ic_a0_raw_attr` | ✦ [IF TIME] |
-| GINE-IC-A2 | `1/√(deg(u)×deg(v))` per edge | `raw_attr` | `gine_ic_a2_raw_attr` | ✦ [IF TIME] |
-| GINE-graph-only | `1/deg(v)` per edge | `degree_norm` only | `gine_ic_a0_graph_only` | ✦ [IF TIME] |
+| Variant         | Edge features                 | Node features      | CSV model_name          | Priority    |
+| --------------- | ----------------------------- | ------------------ | ----------------------- | ----------- |
+| GINE-IC-A0      | `1/deg(v)` per edge           | `raw_attr`         | `gine_ic_a0_raw_attr`   | ✦ [IF TIME] |
+| GINE-IC-A2      | `1/√(deg(u)×deg(v))` per edge | `raw_attr`         | `gine_ic_a2_raw_attr`   | ✦ [IF TIME] |
+| GINE-graph-only | `1/deg(v)` per edge           | `degree_norm` only | `gine_ic_a0_graph_only` | ✦ [IF TIME] |
 
 > **Framing C5 trong paper (bắt buộc nếu include):** "As an upper bound analysis, we augment GNN message passing with explicit IC propagation probabilities as edge features (GINE; Hu et al., 2019). This test quantifies how much structural improvement remains when the diffusion mechanism is directly encoded — distinguishing architectural expressiveness limits from information limits."
 >
@@ -1660,17 +1750,17 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 
 ---
 
-### 9.1e Architecture Evaluation Log — Considered & Rejected
+### 9.1e Architecture Evaluation Log — Considered & Rejected [⚪ REF]
 
 > **Tại sao section này tồn tại:** Khi reviewer hỏi "why not try X?", team có documented rationale. Đây cũng là checklist để không waste time implement architectures không phù hợp.
 
-| Architecture | Xem xét? | Verdict | Lý do chi tiết |
-|---|---|---|---|
-| **GATv2** (Brody et al., ICLR 2022) | ✅ | ✅ Dùng cho **C2-I-A** | Dynamic attention khớp I-A row-normalization; C2-A0 dùng GAT v1 (static attention phù hợp hơn cho A0). Xem Section 9.1 và C2-I-A block. |
-| **GINE** (Hu et al., NeurIPS 2019) | ✅ | ✅ **C5 supplemental** [IF TIME] | Edge features = IC prob — strongest explicit alignment; NOT feature-agnostic; không vào C2 fair comparison. |
-| **GCNII** (Chen et al., ICML 2020) | ✅ | ❌ Skip cho C2 | Advantage chỉ xuất hiện tại L=16–64 layers. Tại `n_layers=2` (C2 locked), GCNII ≈ GCN + residual connection — không đủ khác biệt để justify thêm vào. Nếu muốn test, cần L=16 separate experiment, phá vỡ fair comparison. |
-| **HGT** (Hu et al., WWW 2020) | ✅ | ❌ **Loại hoàn toàn** | Designed cho heterogeneous graphs (multiple node/edge types). Twitch follower graph là **homogeneous** (1 node type, 1 edge type) → type-specific attention matrices collapse về 1 matrix → HGT = complex GAT variant với overhead không có lợi. Wrong problem type. |
-| **GraphGPS** (Rampášek et al., NeurIPS 2022) | ✅ | ❌ **Loại — scale blocker** | MPNN + global Transformer attention. Standard Transformer = O(N²) với N=168k → 28 tỷ attention pairs, không fit GPU. Efficient variants (Performer, BigBird) cần precompute LapPE/RWSE (~30–60 phút eigendecomposition trên 168k×168k). Overkill cho task node regression với 3 features. |
+| Architecture                                 | Xem xét? | Verdict                          | Lý do chi tiết                                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GATv2** (Brody et al., ICLR 2022)          | ✅       | ✅ Dùng cho **C2-I-A**           | Dynamic attention khớp I-A row-normalization; C2-A0 dùng GAT v1 (static attention phù hợp hơn cho A0). Xem Section 9.1 và C2-I-A block.                                                                                                                                                   |
+| **GINE** (Hu et al., NeurIPS 2019)           | ✅       | ✅ **C5 supplemental** [IF TIME] | Edge features = IC prob — strongest explicit alignment; NOT feature-agnostic; không vào C2 fair comparison.                                                                                                                                                                               |
+| **GCNII** (Chen et al., ICML 2020)           | ✅       | ❌ Skip cho C2                   | Advantage chỉ xuất hiện tại L=16–64 layers. Tại `n_layers=2` (C2 locked), GCNII ≈ GCN + residual connection — không đủ khác biệt để justify thêm vào. Nếu muốn test, cần L=16 separate experiment, phá vỡ fair comparison.                                                                |
+| **HGT** (Hu et al., WWW 2020)                | ✅       | ❌ **Loại hoàn toàn**            | Designed cho heterogeneous graphs (multiple node/edge types). Twitch follower graph là **homogeneous** (1 node type, 1 edge type) → type-specific attention matrices collapse về 1 matrix → HGT = complex GAT variant với overhead không có lợi. Wrong problem type.                      |
+| **GraphGPS** (Rampášek et al., NeurIPS 2022) | ✅       | ❌ **Loại — scale blocker**      | MPNN + global Transformer attention. Standard Transformer = O(N²) với N=168k → 28 tỷ attention pairs, không fit GPU. Efficient variants (Performer, BigBird) cần precompute LapPE/RWSE (~30–60 phút eigendecomposition trên 168k×168k). Overkill cho task node regression với 3 features. |
 
 **Quick decision rule cho future architectures:**
 
@@ -1690,6 +1780,28 @@ Câu hỏi 4: Architecture cần edge features không có trong đồ thị?
   → Nếu edge features có thể compute từ graph structure → OK (GINE + IC prob)
   → Nếu cần external data không có → Loại
 ```
+
+---
+
+### 9.1f Future Work — Other Venues [⚪ REF — NOT in active MAPR plan]
+
+> **Mục đích:** Những items dưới đây được reviewer khuyên cắt khỏi active plan cho MAPR (6 trang, 13 ngày). Tuy nhiên chúng có **research value riêng** và phù hợp với venue khác có deadline trễ hơn. Giữ tài liệu này để làm reference sau MAPR.
+
+| Item                                     | MAPR verdict            | Venue value                                                                                     | Venue phù hợp                                                            | Ghi chú                                                                           |
+| ---------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| **C5 GINE + IC edge features**           | Cắt khỏi active         | **Cao** — First paper encode IC probability as GNN edge feature; novel contribution riêng       | TKDE / IEEE TNNLS / WWW 2027 workshop, WSDM 2027                         | Cần: C2 done + I-A labels. Code đã có trong Section 9.1d                          |
+| **Inductive Generalization Test (9.1c)** | Cắt nếu bootstrap CI OK | **Rất cao** — "Train on one network, predict on another" = independent paper-level contribution | ICLR 2027 / NeurIPS 2027 graph learning track                            | Cần: 2nd dataset (Facebook MUSAE / Reddit / Twitch-ES). Thiết kế đã có trong 9.1c |
+| **GATv2 I-A branch**                     | Cắt nếu I-A pilot fail  | **Trung bình** — GAT v1 vs GATv2 distinction for row-normalized IC is theoretically sound       | Journal extension sau MAPR (full architecture comparison per IC variant) | Code đã có trong Section 9.1                                                      |
+| **A1 source budget `p=1/deg(u)`**        | Cắt — marginal insight  | **Thấp** — Small variation of A0; no reviewer asks for it in isolation                          | Comprehensive sensitivity study (SNA journal)                            | Implement: 1-line change từ A0                                                    |
+| **II-B views-density `w(v)/deg(v)`**     | Archive                 | **Minimal** — Only relevant if I-A fail + still want attribute-informed                         | Không thấy venue riêng biệt                                              | Đã có formula; chạy nếu I-A pilot fail và muốn test thêm                          |
+| **Per-group prediction error**           | Cắt                     | **Trung bình** — Fairness angle: does GNN favor high-degree nodes?                              | FAccT 2027 / AIES 2027 / CIKM fairness track                             | Cần: `per_group_prediction_error.csv` (script exists in plan)                     |
+| **Louvain resolution sensitivity**       | Cắt                     | **Thấp** — Robustness check for community detection                                             | Methodological note trong journal appendix                               | ~1h additional; only if Louvain used in stability explanation                     |
+
+> **Tóm tắt venue strategy post-MAPR:**
+>
+> - **MAPR 2026 (30/4):** A0 core story + C2 + C3 + C4 + (I-A if pilot pass) — 6 pages
+> - **Journal extension (2026-2027):** Full architecture comparison per IC variant (A0/A2/I-A) + GATv2 + GINE edge features + inductive test. Target: IEEE TNNLS / TKDE / Pattern Recognition
+> - **Full paper (2027):** Inductive GNN surrogate for IC with cross-dataset evaluation. Target: ICLR / NeurIPS / WWW
 
 ---
 
@@ -1745,12 +1857,12 @@ GNN-raw-attr deployment cost = training (one-time, ~460s) + inference (0.067s) v
 
 ---
 
-## 12. Research Questions (v3.1 — Aligned with Linear Pipeline)
+## 12. Research Questions (v3.1 — Aligned with Linear Pipeline) [⚪ REF]
 
 > **v3.1 re-alignment:** Professor's framing tổ chức paper theo 4-bước tuyến tính, không phải 6 RQ song song.
 > **MAIN RQs** (Section 3+4 của paper): RQ1 + RQ3.
 > **Supporting analysis:** metric correlation matrix (continuous; no categorical grouping) để contextualize baselines/ablations.
-> Thứ tự ưu tiên: hoàn thiện RQ1 và RQ3 trước; correlation matrix chỉ chạy nếu không block pipeline.
+> **Priority rule:** hoàn thiện RQ1 và RQ3 trước; correlation matrix là **MUST** nhưng phải được lên lịch sao cho **không làm chậm** IC labels / C2 / C4 (chạy sau khi `ic_scores_primary.parquet` + `diffusion_proxies.parquet` đã có).
 
 ### RQ1 — IC Operationalization Quality & Label Stability ★ **[MAIN — Task A]**
 
@@ -1800,15 +1912,15 @@ _Nếu GNN-raw-attr > two-hop proxy:_
 
 _Nếu GNN-raw-attr ≤ two-hop proxy:_
 
-> _"We find that 2-hop analytical spread approximation (naive full-graph complexity gần O(Σ d(v)^2)) achieves ρ ≈ [X] with MC IC scores, closely matching GNN surrogate performance while requiring no training. This suggests weighted-cascade dynamics are well-approximated by local structural summaries. GNN's value lies primarily in the feature-agnostic message passing contribution (+0.099 Spearman over MLP without any precomputed graph statistics)."_
+> _"We find that 2-hop analytical spread approximation achieves ρ ≈ [X] with MC IC scores, closely matching GNN surrogate performance while requiring no training. This suggests weighted-cascade dynamics are well-approximated by local structural summaries. GNN's value lies primarily in the message passing contribution — **+0.099 Spearman over MLP without precomputed structural summaries** (learns from raw user metadata: views, activity, account age — no hand-crafted centrality)."_
 
-> **Lưu ý framing:** Câu "GNN's value lies primarily in efficient inference as network evolves" ngụ ý inductive generalization — chỉ dùng nếu Section 9.1c (inductive test) được thực hiện. Nếu không có 9.1c, dùng feature-agnostic message passing story (+0.099) thay thế.
+> **Lưu ý framing:** "Without precomputed structural summaries" thay thế "feature-agnostic" (per reviewer: raw_attr vẫn là features → "feature-agnostic" misleading). Câu "GNN's value lies primarily in efficient inference as network evolves" ngụ ý inductive generalization — chỉ dùng nếu Section 9.1c (inductive test) được thực hiện. Nếu không có 9.1c, dùng "+0.099 without precomputed structural summaries" story thay thế.
 
 _Cả hai outcomes đều publishable tại MAPR với framing đúng._
 
 ---
 
-## 13. Dead Account Analysis (Stage 0)
+## 13. Dead Account Analysis (Stage 0) [⚪ REF — completed]
 
 ```python
 def dead_account_audit(df_raw):
@@ -1826,23 +1938,29 @@ def dead_account_audit(df_raw):
 
 ---
 
-## 14. Paper Structure (v3.1 — Professor's Linear Narrative, 6 trang IEEE Double-blind)
+## 14. Paper Structure (v3.1 — Professor's Linear Narrative, 6 trang IEEE Double-blind) [🔴 MAPR-MUST]
 
 > **Framing:** Pipeline tuyến tính [1]→[2]→[3]→[4]. KHÔNG tổ chức theo 6 RQ song song.
 > Appendix là optional; chỉ include thêm sensitivity/diagnostics nếu còn page budget.
 
 ### Tổng quan cấu trúc
 
-| Section  | Tiêu đề                     | Nội dung chính                                                                                                                               | Trang |
-| -------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| 1        | Introduction                | Problem, Twitch context, 3 contributions (linear pipeline)                                                                                   | 0.5   |
-| 2        | Background                  | Weighted cascade IC, IC surrogate problem statement, GNN architectures overview                                                              | 0.75  |
-| 3        | MC-IC as Operational Metric | 3.1 Discriminativeness; 3.2 IC ≠ degree (variance test); 3.3 Stability; 3.4 Regression justification                                         | 0.75  |
-| 4        | GNN Surrogate Learning      | 4.1 Setup + feature sets; 4.2 Full baseline table; 4.3 Architecture comparison; 4.4 Feature ablation; 4.5 Ranking loss; 4.6 Runtime vs MC-IC | 2.5   |
-| 5        | Discussion & Limitations    | When GNN adds value; when degree sufficient; ceiling analysis; construct validity                                                            | 0.5   |
-| Appendix | _(optional, nếu có trang)_  | Sensitivity + additional diagnostics (A2/A1, I-A pilot summary, stability explanation details)                                               | —     |
+| Section  | Tiêu đề                     | Nội dung chính                                                                                                                                               | Trang   |
+| -------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| 1        | Introduction                | Problem, Twitch context, 3 contributions (linear pipeline)                                                                                                   | 0.5     |
+| 2        | Background                  | Weighted cascade IC, IC surrogate problem statement, GNN architectures overview                                                                              | 0.75    |
+| 3        | MC-IC as Operational Metric | 3.1 Discriminativeness; 3.2 IC ≠ degree (C1 enhanced variance test); 3.3 Stability + structural cause; 3.4 Regression justification                          | **1.0** |
+| 4        | GNN Surrogate Learning      | 4.1 Setup + feature sets; 4.2 Full baseline table; 4.3 Architecture comparison _(ceiling finding)_; 4.4 Ranking loss; 4.5 Runtime vs MC-IC                   | **2.0** |
+| 5        | Discussion & Limitations    | When GNN adds value; when degree sufficient; **ceiling analysis** (structural IC creates degree-dominated regime — finding, not failure); construct validity | 0.5     |
+| Appendix | _(optional, nếu có trang)_  | Sensitivity + additional diagnostics (A2/A1, I-A pilot summary, stability explanation details)                                                               | —       |
 
-**Total: ~5 trang nội dung + 0.5 trang references (≤12 refs)**
+**Total: ~4.75 trang nội dung + 0.75 trang references (≤12 refs)**
+
+> **Lý do rebalance (per reviewer feedback):**
+>
+> - Section 3 tăng 0.75→**1.0**: Stability analysis + regression justification là strongest original finding của project — community boundary analysis (84.2% span top-k boundary), C1 enhanced two-tier variance test, và CV-based regression motivation đều deserve more space.
+> - Section 4 giảm 2.5→**2.0**: Architecture comparison nên framed như "empirical characterization of ceiling under structural IC" (0.5 trang), không phải drawn-out search. Freed 0.5 trang cho Section 3.
+> - Section 5 thêm **ceiling analysis**: "Under A0, IC labels are degree-coupled → all architectures converge to similar ceiling. This is a finding about IC operationalization, not GNN failure." Nếu I-A results available: I-A shows GNN advantage when degree-coupling removed → strongest closing argument.
 
 ---
 
@@ -1935,7 +2053,7 @@ def dead_account_audit(df_raw):
 
 ---
 
-### Section 4 — GNN Surrogate Learning (2.5 trang)
+### Section 4 — GNN Surrogate Learning (2.0 trang)
 
 **Figure 2 (bắt buộc):** Architecture comparison bar chart — Spearman ρ for all models; degree baseline as horizontal reference line; bootstrap 95% CI error bars for GNN variants
 
@@ -1975,7 +2093,7 @@ _Mean ± std across 5 seeds for all G5 models. Confirmed values from existing ar
 **4.3 Architecture Comparison (APPNP / GCN / GIN / GAT / SAGE — 5 architectures)**
 
 - Controlled comparison: same features (`raw_attr`), same hyperparams, 5 seeds
-- **APPNP (H3 — strongest theoretical motivation):** K-step PPR-style propagation với teleport/restart là **structural analogy/inductive bias** cho target diffusion-like; `K=10, alpha=0.15` là starting point (không claim calibration).
+- **APPNP (H3 — strongest theoretical motivation):** Decouples feature transformation from propagation → K=10 PPR steps without oversmoothing → **deeper receptive field** than 2-layer GCN/GAT. `K=10, alpha=0.15` là starting point. Framing trong paper: "plausible inductive bias for multi-hop influence reach" — không claim APPNP mimics IC mechanics (IC stochastic + binary activation; APPNP deterministic + linear).
 - GAT (H1): attention mechanism **may** learn a 1/degree(v)-like weighting — potentially aligned with weighted cascade
 - GIN: sum aggregation, WL-equivalent — highest expressiveness; may capture two-hop structure better than SAGE mean (empirical on test split: two_hop ρ=0.804 > one_hop ρ=0.688)
 - GCN (H2): relevant primarily if A2 sensitivity labels are run
@@ -1985,7 +2103,7 @@ _Mean ± std across 5 seeds for all G5 models. Confirmed values from existing ar
 
 - `graph_only` (0.470) → `raw_attr` (0.534) → `centrality` (0.817)
 - Message passing contribution: `gnn_raw_attr` 0.534 vs `mlp_raw_attr` 0.435 = **+0.099 from graph structure**
-- Centrality features dominate final ranking; raw-attr GNN is feature-agnostic story
+- Centrality features dominate final ranking; raw-attr GNN demonstrates message passing value **without precomputed structural summaries** (+0.099 over MLP)
   > ⚠ **Clarification "feature-agnostic" (reviewer prep):** Trong paper, "feature-agnostic" = **không cần hand-crafted centrality/structural features** (degree, PageRank, k-shell) được pre-compute. `raw_attr` vẫn sử dụng user **metadata** (views_log_norm, views_per_day_norm, life_time_norm) — đây là metadata tĩnh của node, **KHÔNG phải behavioral traces** (không có click logs, retweet sequences hay engagement events). **A0 IC labels** là views-independent; nếu bật **I-A** thì đó là **attribute-informed operationalization** và phải label rõ. Khi reviewer hỏi "GNN is not truly feature-agnostic": response = GNN-raw_attr adds +0.099 Spearman **over MLP-raw_attr on the same metadata** — giá trị đến từ structural message passing, không phải từ centrality pre-computation.
 
 **4.5 Ranking Loss Experiment**
@@ -2021,8 +2139,7 @@ _GNN inference matches degree for deployment speed; training is one-time cost._
 
 - GNN (`raw_attr`): no precomputed centrality needed — deployable on new graphs without full graph traversal
 - Bootstrap CI result: if GNN ≈ degree statistically → "GNN is a viable fast surrogate"
-- Feature-agnostic message passing: +0.099 over MLP shows structural signal without explicit centrality
-  _(Note: "feature-agnostic" = no hand-crafted centrality features; raw_attr uses user metadata — views_log, views/day, life_time — which are NOT behavioral traces. IC labels are views-independent under A0.)_
+- Message passing **without precomputed structural summaries**: +0.099 over MLP shows structural signal without explicit centrality. raw_attr = user metadata (views_log, views/day, life_time — NOT behavioral traces); IC labels views-independent under A0.
 - **GNN advantage scales with IC operationalization complexity** _(chỉ include nếu I-A experiment chạy):_
   - Structural IC (A0): GNN matches degree baseline — viable surrogate; degree is a near-sufficient proxy
   - Attribute-informed IC (I-A): GNN significantly outperforms degree — message passing over node attributes captures cascade dynamics that scalar degree cannot represent
@@ -2072,7 +2189,7 @@ Ling 2023 (DeepIM), Benjamini&Hochberg 1995, Blondel 2008 (Louvain), Grover 2016
 
 ---
 
-## 15. Experiment Configuration (Final)
+## 15. Experiment Configuration (Final) [🔴 MAPR-MUST]
 
 ```yaml
 # experiment.yaml v3.1
@@ -2262,7 +2379,7 @@ lifetime_n_quintiles_significant_target: 3
 
 ---
 
-## 16. Timeline 25 ngày (6/4 – 30/4)
+## 16. Timeline 25 ngày (6/4 – 30/4) [🔴 MAPR-MUST]
 
 > **📍 Current date: 16/4/2026** — Ngày 6–15/4 đã qua. Các mốc ✅ coi là complete (hoặc ghi override nếu chưa xong).
 > Ưu tiên hiện tại: GNN architecture comparison (NEW) + ranking loss (NEW) + bootstrap CI (NEW).
@@ -2310,7 +2427,7 @@ lifetime_n_quintiles_significant_target: 3
 
 ---
 
-## 17. Folder Structure
+## 17. Folder Structure [⚪ REF]
 
 ```
 SNA_MAPR2026/
@@ -2400,7 +2517,7 @@ SNA_MAPR2026/
 
 ---
 
-## 18. Pre-Submission Checklist
+## 18. Pre-Submission Checklist [🔴 MAPR-MUST]
 
 ### Blocker — Nền tảng (reject nếu thiếu)
 
@@ -2459,7 +2576,7 @@ SNA_MAPR2026/
 
 ---
 
-## 19. Risk Management
+## 19. Risk Management [⚪ REF]
 
 ### 19.1 Infrastructure & Data Risks
 
@@ -2473,18 +2590,18 @@ SNA_MAPR2026/
 
 ### 19.2 GNN Surrogate Risks (v3.1 — mới)
 
-| Rủi ro                                                                          | Xác suất   | Impact     | Mitigation                                                                                                                  |
-| ------------------------------------------------------------------------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
-| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/GAT)           | Trung bình | Trung bình | Chạy bootstrap CI (Section 8.5) → nếu CI bao gồm 0: claim statistical equivalence; feature-agnostic story (+0.099 over MLP) |
-| GAT không converge với current setup (4 heads, hidden=128)                      | Thấp       | Thấp       | Reduce heads=1; increase epochs=300; nếu vẫn fail: report GAT instability as finding                                        |
-| Ranking loss không improve Spearman so với Huber                                | Trung bình | Thấp       | Report as negative finding (appendix note); Huber-trained GNN remains primary variant                                       |
-| Degree-controlled variance test shows low IC variance (CV < 0.3)                | Thấp       | Trung bình | Honest limitation in paper: "IC ≈ degree at Twitch scale"; strengthen runtime story instead                                 |
-| Bootstrap CI shows GNN significantly _lower_ than degree (CI entirely negative) | Thấp       | Cao        | Restructure Section 4 claim: focus on (1) no-centrality-precompute advantage + (2) message passing contribution (+0.099)    |
-| Multiple architecture runs produce high variance (std > 0.05)                   | Thấp       | Trung bình | Report mean ± std across 5 seeds; highlight reproducibility; use more seeds (10) for final table                            |
+| Rủi ro                                                                          | Xác suất   | Impact     | Mitigation                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/GAT/APPNP)     | Trung bình | Trung bình | Bootstrap CI (Section 8.5) → claim practical equivalence (nếu CI within ±0.02); "+0.099 without precomputed structural summaries" story vs MLP |
+| GAT không converge với current setup (4 heads, hidden=128)                      | Thấp       | Thấp       | Reduce heads=1; increase epochs=300; nếu vẫn fail: report GAT instability as finding                                                           |
+| Ranking loss không improve Spearman so với Huber                                | Trung bình | Thấp       | Report as negative finding (appendix note); Huber-trained GNN remains primary variant                                                          |
+| Degree-controlled variance test shows low IC variance (CV < 0.3)                | Thấp       | Trung bình | Honest limitation in paper: "IC ≈ degree at Twitch scale"; strengthen runtime story instead                                                    |
+| Bootstrap CI shows GNN significantly _lower_ than degree (CI entirely negative) | Thấp       | Cao        | Restructure Section 4 claim: focus on (1) no-centrality-precompute advantage + (2) message passing contribution (+0.099)                       |
+| Multiple architecture runs produce high variance (std > 0.05)                   | Thấp       | Trung bình | Report mean ± std across 5 seeds; highlight reproducibility; use more seeds (10) for final table                                               |
 
 ---
 
-## 20. Decision Log Template
+## 20. Decision Log Template [⚪ REF]
 
 > **Status as of 16/4/2026:** Day-1 decisions đã hoàn thành. IC simulation đã chạy xong. Known outcomes
 > from artifacts (runtime_breakdown.csv, surrogate_ranking_metrics.csv) được ghi lại bên dưới.
@@ -2535,7 +2652,7 @@ Paper claim: map theo `interpretation` (equivalent / significantly_lower / signi
 
 ---
 
-## 21. Phân Công Team
+## 21. Phân Công Team [⚪ REF]
 
 > **Execution alignment note (v3.1):** Bảng dưới đây là 6-person reference để mô tả đầy đủ vai trò. Khi triển khai thực tế với team 3 người, **`docs/MAPR2026_v3_team_parallel_coding_plan.md` là bản execution override**. Mapping đã lock: role GNN (Person 5 reference) → Person 3 execution; Person 3 phụ trách C2 + C3 + C4.
 
@@ -2571,7 +2688,7 @@ Person 6 Section 4 write-up → finalize 20-21/4
 
 ---
 
-## 22. New Experiments Checklist (v3.1 — Per Professor's Framing)
+## 22. New Experiments Checklist (v3.1 — Per Professor's Framing) [🔴 MAPR-MUST]
 
 > Quick-reference cho Person 3 và Person 5 — các thực nghiệm mới cần chạy theo framing v3.1.
 > Đánh dấu khi hoàn thành và ghi artifact path vào cột tương ứng.

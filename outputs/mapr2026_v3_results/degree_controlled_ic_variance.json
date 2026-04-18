@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-04-17T21:49:45",
+  "n_rows": 5000,
+  "n_bands": 5,
+  "bands": [
+    {
+      "degree_band": "q1",
+      "degree_range": [
+        1,
+        10
+      ],
+      "n_nodes_in_band": 1065,
+      "ic_mean_in_band": 2.506389671361503,
+      "ic_std_in_band": 5.728601585161056,
+      "cv_within_band": 2.2855989436188535,
+      "interpretation": "Within-band variability summary (see top-level interpretation)."
+    },
+    {
+      "degree_band": "q2",
+      "degree_range": [
+        11,
+        23
+      ],
+      "n_nodes_in_band": 972,
+      "ic_mean_in_band": 7.4570884773662565,
+      "ic_std_in_band": 14.056866157113468,
+      "cv_within_band": 1.8850341121442835,
+      "interpretation": "Within-band variability summary (see top-level interpretation)."
+    },
+    {
+      "degree_band": "q3",
+      "degree_range": [
+        24,
+        44
+      ],
+      "n_nodes_in_band": 969,
+      "ic_mean_in_band": 13.101001031991743,
+      "ic_std_in_band": 18.897835548232948,
+      "cv_within_band": 1.4424726402269363,
+      "interpretation": "Within-band variability summary (see top-level interpretation)."
+    },
+    {
+      "degree_band": "q4",
+      "degree_range": [
+        45,
+        92
+      ],
+      "n_nodes_in_band": 1001,
+      "ic_mean_in_band": 24.296773226773226,
+      "ic_std_in_band": 27.20483697759504,
+      "cv_within_band": 1.1196892988085079,
+      "interpretation": "Within-band variability summary (see top-level interpretation)."
+    },
+    {
+      "degree_band": "q5",
+      "degree_range": [
+        93,
+        7613
+      ],
+      "n_nodes_in_band": 993,
+      "ic_mean_in_band": 109.31278449144008,
+      "ic_std_in_band": 176.597207294794,
+      "cv_within_band": 1.6155219914704737,
+      "interpretation": "Within-band variability summary (see top-level interpretation)."
+    }
+  ],
+  "interpretation": "Median within-band CV ≥ 0.30: IC variability remains substantial even after conditioning on degree; supports 'IC is not solely degree'."
+}
