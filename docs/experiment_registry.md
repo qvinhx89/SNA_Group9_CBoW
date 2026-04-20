@@ -16,6 +16,22 @@
 
 ## Registry Entries
 
+### [2026-04-20 21:56] - HSCC-refined formula lock + regression target artifact backfill
+
+- **Config hash**: n/a (formula + artifact registration)
+- **Parameter changed**: `ic_formula_hscc_refined`, `hscc_regression_target_artifact`
+- **Old value**: HSCC-refined run artifacts existed, but registry entry and `regression_targets_hscc_refined.parquet` were missing in working tree.
+- **New value**:
+   - Formula lock (implemented in `src/mapr2026_v3/ic_labels_hscc_refined.py`):
+      `p(u,v)=clip(lambda * phi(u)/deg(u) * (1 + gamma * I[c_u!=c_v]), p_max)`
+      with `phi(u)=rank(log1p(views_u)/(1+life_time_u))/N`.
+   - Added artifact: `data/processed/regression_targets_hscc_refined.parquet` (`node_id`, `y=log1p(ic_score_mean)`, n=5000).
+- **Rationale**: Close reproducibility gap before HSCC surrogate training and keep experiment traceability aligned with anti-HARKing protocol.
+- **Impact**:
+   - Person 3 can now train surrogates directly on HSCC targets via `--targets-path data/processed/regression_targets_hscc_refined.parquet`.
+   - HSCC run now has explicit registry provenance.
+- **Author**: Person 1
+
 ### [2026-04-18 12:46] - Enable CUDA torch + I-A labeling CUDA-only implementation
 
 - **Config hash**: n/a (environment + implementation change)

@@ -203,6 +203,18 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
     views_log = np.log1p(views_raw)
     views_per_day = views_raw / life_time
 
+    lang_col = None
+    if "language" in df.columns:
+        lang_col = "language"
+    elif "lang" in df.columns:
+        lang_col = "lang"
+
+    lang_dummies = pd.DataFrame(index=df.index)
+    if lang_col is not None:
+        lang_series = df[lang_col].astype(str).fillna("unknown")
+        lang_series = lang_series.replace({"nan": "unknown", "None": "unknown"})
+        lang_dummies = pd.get_dummies(lang_series, prefix="lang", dtype=float)
+
     features = pd.DataFrame(
         {
             "node_id": df["node_id"],
@@ -211,6 +223,8 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
             "life_time": life_time.astype(float),
         }
     )
+    if not lang_dummies.empty:
+        features = pd.concat([features, lang_dummies], axis=1)
     return features
 
 
@@ -308,7 +322,7 @@ def load_surrogate_data_bundle(
         feature_cols = ["const_1"]
     elif feature_mode == "raw_attr":
         merged = merged.merge(raw_features_df, on="node_id", how="left")
-        feature_cols = ["views_log", "views_per_day", "life_time"]
+        feature_cols = [c for c in raw_features_df.columns if c != "node_id"]
     elif feature_mode == "random":
         rng = np.random.default_rng(42)
         random_features = rng.standard_normal((len(merged), 3), dtype=np.float32)
@@ -352,7 +366,7 @@ def load_surrogate_data_bundle(
                 raise ValueError(f"Missing required full-feature centrality columns: {missing}")
             merged = merged.merge(raw_features_df, on="node_id", how="left")
             merged = merged.merge(centrality_sel[["node_id", *required]], on="node_id", how="left")
-            feature_cols = ["views_log", "views_per_day", "life_time", "degree", "pagerank", "kshell"]
+            feature_cols = [c for c in raw_features_df.columns if c != "node_id"] + ["degree", "pagerank", "kshell"]
     else:
         raise ValueError(f"Unsupported feature_mode={feature_mode}")
 

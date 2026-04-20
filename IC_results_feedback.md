@@ -4,6 +4,59 @@
 
 ---
 
+## Addendum (2026-04-20): HSCC-refined Fix Status + Verified Outputs
+
+This addendum records implementation updates and verified metrics after the latest audit.
+
+### A. Fix status for previously flagged issues
+
+1. **Missing HSCC regression target artifact**: **FIXED**
+  - File created: `data/processed/regression_targets_hscc_refined.parquet`
+  - Contract verified: columns `node_id, y`, with `y = log1p(ic_score_mean)`.
+
+2. **Feedback/process traceability (registry gap)**: **FIXED**
+  - Added registry entry in `docs/experiment_registry.md`:
+    - `[2026-04-20 21:56] - HSCC-refined formula lock + regression target artifact backfill`
+
+3. **HSCC baseline run was sanity-only**: **FIXED**
+  - Official HSCC baseline run completed to:
+    - `outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc.csv`
+
+4. **Surrogate `raw_attr` missing language feature**: **FIXED**
+  - `run_surrogates.py` updated so `raw_attr` includes language-derived features (one-hot dummies).
+  - Quick check on labeled scope shows `raw_attr` now has 24 features (`x_shape=(5000, 24)`).
+
+### B. Official HSCC baseline results (from `baseline_ranking_metrics_hscc.csv`)
+
+Key rows (test-split metrics):
+
+- `degree`: Spearman = **-0.0064**
+- `views`: Spearman = **0.1467**
+- `life_time`: Spearman = **-0.7900**
+- `lr_life_time`: Spearman = **0.7900**
+- `lr_views_life_time`: Spearman = **0.8678**
+- `lr_degree_views_life_time`: Spearman = **0.8679**
+- `phi`: Spearman = **0.8779**
+- `lr_phi`: Spearman = **0.8779**
+- `mlp_raw_attr`: Spearman = **0.8640 ± 0.0018** (5 seeds)
+
+Interpretation update:
+- HSCC still solves the **degree-dominance** problem strongly.
+- However, **life_time-aware linear baselines are very strong** and must remain in the main baseline table.
+
+### C. Environment limitation noted during official run
+
+- Node2Vec baseline was skipped because `torch-cluster`/`pyg-lib` is unavailable in the current environment.
+- The run completed successfully with all other baselines.
+
+### D. Minor numeric correction from previous draft
+
+- `rho(HSCC, I-A)` verified at approximately **0.0323** (not ~0.017).
+
+---
+
+---
+
 ## 1. Honest Assessment of Where Things Stand
 
 Let me be direct about the situation as revealed by the data.

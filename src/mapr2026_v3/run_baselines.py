@@ -517,15 +517,68 @@ def _align_series_to_nodes(df: pd.DataFrame, node_ids: pd.Series, value_col: str
     return pd.Series(out_np, index=node_ids.index)
 
 
+def _align_frame_to_nodes(df: pd.DataFrame, node_ids: pd.Series, value_cols: list[str]) -> pd.DataFrame:
+    aligned = _ensure_node_id_str(df).set_index("node_id")
+    clean_node_ids = node_ids.astype(str).str.replace(r"\.0$", "", regex=True)
+    out = aligned.reindex(clean_node_ids)[value_cols].copy()
+    for col in value_cols:
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    out.index = node_ids.index
+    return out
+
+
+def eval_linear_combo(bundle: BaselineDataBundle, feature_df: pd.DataFrame, cols: list[str], name: str) -> dict[str, float]:
+    x_df = _align_frame_to_nodes(feature_df, bundle.node_ids, cols)
+    x = x_df.to_numpy(dtype=np.float32)
+    y = bundle.y.detach().cpu().numpy().astype(np.float32)
+    train_mask = bundle.train_mask.detach().cpu().numpy().astype(bool)
+
+    if train_mask.sum() == 0:
+        return _empty_metrics_row(name)
+
+    t_train_0 = time.time()
+    lr = LinearRegression()
+    lr.fit(x[train_mask], y[train_mask])
+    t_train_1 = time.time()
+
+    t0 = time.time()
+    y_pred_np = lr.predict(x)
+    t1 = time.time()
+
+    y_pred = torch.tensor(y_pred_np, dtype=torch.float32)
+    metrics = evaluate_on_test_mask(
+        node_ids=bundle.node_ids,
+        y_true=bundle.y,
+        y_pred=y_pred,
+        split_mask_df=bundle.split_mask_df,
+    )
+
+    return {
+        "model_name": name,
+        "spearman_rho": metrics["spearman_rho"],
+        "spearman_rho_std": 0.0,
+        "ndcg_at_10pct": metrics["ndcg_at_10pct"],
+        "ndcg_at_10pct_std": 0.0,
+        "precision_at_10pct": metrics["precision_at_10pct"],
+        "precision_at_10pct_std": 0.0,
+        "runtime_sec": float(t1 - t0),
+        "train_sec": float(t_train_1 - t_train_0),
+    }
+
+
 def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]:
     rows: list[dict[str, float]] = []
 
     node_attr = _safe_read_parquet(PATHS.node_attributes)
+    centrality = _safe_read_parquet("data/processed/centrality_table.parquet")
+    derived: pd.DataFrame | None = None
+
     if node_attr is not None:
         node_attr = _ensure_node_id_str(node_attr)
+        derived = _derive_features(node_attr)
+
         if "views" in node_attr.columns:
             rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "views"), "views"))
-            derived = _derive_features(node_attr)
             rows.append(
                 eval_heuristic(
                     bundle,
@@ -533,14 +586,45 @@ def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]
                     "views_day",
                 )
             )
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(derived, bundle.node_ids, "life_time"), "life_time"))
+
+            # Phi baseline used in HSCC analyses.
+            phi_df = derived[["node_id", "views_log", "life_time"]].copy()
+            raw = phi_df["views_log"] / (1.0 + phi_df["life_time"].clip(lower=0.0))
+            phi_df["phi"] = pd.Series(raw).rank(method="average", pct=True).astype(float)
+            rows.append(eval_heuristic(bundle, _align_series_to_nodes(phi_df, bundle.node_ids, "phi"), "phi"))
+
+            # Linear baselines to avoid feature-mismatch claims.
+            rows.append(eval_linear_combo(bundle, derived, ["life_time"], "lr_life_time"))
+            rows.append(eval_linear_combo(bundle, derived, ["views_log", "life_time"], "lr_views_life_time"))
+            rows.append(eval_linear_combo(bundle, phi_df, ["phi"], "lr_phi"))
+
         if "degree" in node_attr.columns:
             rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "degree"), "degree"))
 
-    centrality = _safe_read_parquet("data/processed/centrality_table.parquet")
     if centrality is not None:
         for col in ["pagerank", "betweenness", "degree"]:
             if col in centrality.columns and col != "degree":
                 rows.append(eval_heuristic(bundle, _align_series_to_nodes(centrality, bundle.node_ids, col), col))
+
+    # Degree-inclusive linear baseline (HSCC critical comparator).
+    if derived is not None:
+        degree_df: pd.DataFrame | None = None
+        if centrality is not None and "degree" in centrality.columns:
+            degree_df = _ensure_node_id_str(centrality)[["node_id", "degree"]].copy()
+        elif node_attr is not None and "degree" in node_attr.columns:
+            degree_df = _ensure_node_id_str(node_attr)[["node_id", "degree"]].copy()
+
+        if degree_df is not None:
+            combo_df = derived.merge(degree_df, on="node_id", how="left")
+            rows.append(
+                eval_linear_combo(
+                    bundle,
+                    combo_df,
+                    ["degree", "views_log", "life_time"],
+                    "lr_degree_views_life_time",
+                )
+            )
 
     kshell = _safe_read_parquet("data/processed/kshell_table.parquet")
     if kshell is not None:
@@ -564,6 +648,11 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="MAPR2026 v3 baseline runner scaffold")
     p.add_argument("--out-dir", default=PATHS.results_dir)
     p.add_argument("--out-csv", default=str(Path(PATHS.results_dir) / "baseline_ranking_metrics.csv"))
+    p.add_argument(
+        "--targets-path",
+        default=PATHS.regression_targets,
+        help="Regression targets parquet path (default: primary A0).",
+    )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
     p.add_argument("--node2vec-epochs", type=int, default=10)
@@ -599,11 +688,17 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Training device: {device}")
 
-    bundle = load_baseline_data_bundle()
-    if Node2Vec is None:
+    bundle = load_baseline_data_bundle(targets_path=args.targets_path)
+    if args.skip_node2vec:
+        print("[INFO] Node2Vec dependency check skipped by flag (--skip-node2vec).")
+    elif Node2Vec is None:
         print("[WARN] torch_geometric not installed; Node2Vec architecture check skipped.")
     else:
-        _ = build_node2vec_model(bundle.edge_index)
+        try:
+            _ = build_node2vec_model(bundle.edge_index)
+        except Exception as exc:
+            print(f"[WARN] Node2Vec dependency missing ({exc}); continuing without Node2Vec.")
+            args.skip_node2vec = True
 
     results_list = collect_heuristic_rows(bundle)
     results_list.append(train_mlp_5seeds(bundle=bundle, max_epochs=args.max_epochs))
