@@ -30,7 +30,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from _shared import PATHS, ensure_parent, load_csr_npz, now_iso, require_columns, write_json
-from ic_labels_primary import _simulate_ic_node_summary
+from ic_labels_primary import _compute_views_strength_aligned, _simulate_ic_node_summary
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,32 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed-multiplier", type=int, default=10000)
     p.add_argument("--top-pct", type=float, default=0.10)
     p.add_argument("--jaccard-threshold", type=float, default=0.85)
+
+    # IC probability model (default: original weighted cascade)
+    p.add_argument(
+        "--p-model",
+        default="weighted_cascade",
+        choices=[
+            "weighted_cascade",
+            "hybrid_degree_views_mult",
+            "hybrid_degree_views_centered",
+        ],
+        help=(
+            "Activation probability model. weighted_cascade uses p(u->v)=1/deg(v). "
+            "Hybrid variants use sender strength derived from log1p(views)."
+        ),
+    )
+    p.add_argument("--node-attrs", default=PATHS.node_attributes)
+    p.add_argument("--views-col", default="views")
+    p.add_argument("--hybrid-gamma", type=float, default=0.0)
+    p.add_argument("--views-q-low", type=float, default=0.05)
+    p.add_argument("--views-q-high", type=float, default=0.95)
+    p.add_argument(
+        "--max-nodes",
+        type=int,
+        default=0,
+        help="Optional cap for quick smoke tests (0 means all labeled nodes)",
+    )
     return p.parse_args()
 
 
@@ -75,6 +101,9 @@ def _simulate_means_for_seed(
     n_runs: int,
     seed_offset: int,
     n_jobs: int,
+    p_model: str,
+    sender_strength: np.ndarray | None,
+    hybrid_gamma: float,
 ) -> np.ndarray:
     def _worker(row: int) -> float:
         mean_score, _ = _simulate_ic_node_summary(
@@ -84,6 +113,9 @@ def _simulate_means_for_seed(
             inv_degrees=inv_degrees,
             n_runs=n_runs,
             worker_seed=seed_offset + int(row),
+            p_model=str(p_model),
+            sender_strength=sender_strength,
+            hybrid_gamma=float(hybrid_gamma),
         )
         return float(mean_score)
 
@@ -129,11 +161,29 @@ def main() -> None:
 
     ordered_node_ids = df_ic["node_id"].astype(str).to_numpy()
     rows = np.asarray([node_to_row[n] for n in ordered_node_ids], dtype=np.int64)
+    if int(args.max_nodes) > 0:
+        rows = rows[: int(args.max_nodes)]
 
     degrees = csr["degrees"]
     inv_degrees = np.zeros_like(degrees, dtype=float)
     positive = degrees > 0
     inv_degrees[positive] = 1.0 / degrees[positive].astype(float)
+
+    sender_strength: np.ndarray | None = None
+    if str(args.p_model) in {"hybrid_degree_views_mult", "hybrid_degree_views_centered"}:
+        raw_strength, _meta = _compute_views_strength_aligned(
+            node_ids=node_ids,
+            node_attrs_path=args.node_attrs,
+            views_col=str(args.views_col),
+            q_low=float(args.views_q_low),
+            q_high=float(args.views_q_high),
+        )
+        if str(args.p_model) == "hybrid_degree_views_centered":
+            sender_strength = (raw_strength - float(raw_strength.mean())).astype(
+                np.float64, copy=False
+            )
+        else:
+            sender_strength = raw_strength
 
     scores_by_seed: dict[int, np.ndarray] = {}
     top_sets: dict[int, set[int]] = {}
@@ -149,6 +199,9 @@ def main() -> None:
             n_runs=int(args.n_runs),
             seed_offset=seed_offset,
             n_jobs=int(args.n_jobs),
+            p_model=str(args.p_model),
+            sender_strength=sender_strength,
+            hybrid_gamma=float(args.hybrid_gamma),
         )
         scores_by_seed[int(mc_seed)] = means
         top_set = _top_decile_set(means, top_pct=float(args.top_pct))
@@ -182,7 +235,12 @@ def main() -> None:
             "worker_seed_rule": "mc_seed * seed_multiplier + node_row",
             "top_pct": float(args.top_pct),
             "jaccard_threshold": float(args.jaccard_threshold),
-            "p_model": "weighted_cascade",
+            "p_model": str(args.p_model),
+            "hybrid_gamma": float(args.hybrid_gamma),
+            "views_col": str(args.views_col),
+            "views_q_low": float(args.views_q_low),
+            "views_q_high": float(args.views_q_high),
+            "max_nodes": int(args.max_nodes),
         },
         "top_decile_counts": {str(k): int(v) for k, v in top_counts.items()},
         "pairwise": [asdict(p) for p in pairwise],

@@ -1,0 +1,50 @@
+[2026-04-15T15:05:52] sweep_started run_grid=[30, 50, 100, 150] nodes=200 p_model=hybrid_degree_views_centered gamma=0.2
+[2026-04-15T15:05:52] run_started n_runs=30
+[2026-04-15T15:05:52] seed_started n_runs=30 mc_seed=0
+[2026-04-15T15:06:26] seed_completed n_runs=30 mc_seed=0 runtime_sec=34.86
+[2026-04-15T15:06:26] seed_started n_runs=30 mc_seed=1
+[2026-04-15T15:07:01] seed_completed n_runs=30 mc_seed=1 runtime_sec=34.04
+[2026-04-15T15:07:01] seed_started n_runs=30 mc_seed=2
+[2026-04-15T15:07:30] seed_completed n_runs=30 mc_seed=2 runtime_sec=29.16
+[2026-04-15T15:07:30] seed_started n_runs=30 mc_seed=3
+[2026-04-15T15:07:57] seed_completed n_runs=30 mc_seed=3 runtime_sec=27.31
+[2026-04-15T15:07:57] seed_started n_runs=30 mc_seed=4
+[2026-04-15T15:08:29] seed_completed n_runs=30 mc_seed=4 runtime_sec=32.42
+[2026-04-15T15:08:29] run_completed n_runs=30 jaccard_mean=0.204030 jaccard_min=0.111111 spearman_mean=0.637626 runtime_sec=157.81 pass=False
+[2026-04-15T15:08:29] run_started n_runs=50
+[2026-04-15T15:08:29] seed_started n_runs=50 mc_seed=0
+[2026-04-15T15:09:07] seed_completed n_runs=50 mc_seed=0 runtime_sec=37.72
+[2026-04-15T15:09:07] seed_started n_runs=50 mc_seed=1
+[2026-04-15T15:09:38] seed_completed n_runs=50 mc_seed=1 runtime_sec=31.09
+[2026-04-15T15:09:38] seed_started n_runs=50 mc_seed=2
+[2026-04-15T15:10:08] seed_completed n_runs=50 mc_seed=2 runtime_sec=29.25
+[2026-04-15T15:10:08] seed_started n_runs=50 mc_seed=3
+[2026-04-15T15:10:38] seed_completed n_runs=50 mc_seed=3 runtime_sec=30.28
+[2026-04-15T15:10:38] seed_started n_runs=50 mc_seed=4
+[2026-04-15T15:11:11] seed_completed n_runs=50 mc_seed=4 runtime_sec=32.94
+[2026-04-15T15:11:11] run_completed n_runs=50 jaccard_mean=0.247069 jaccard_min=0.142857 spearman_mean=0.680950 runtime_sec=161.30 pass=False
+[2026-04-15T15:11:11] run_started n_runs=100
+[2026-04-15T15:11:11] seed_started n_runs=100 mc_seed=0
+[2026-04-15T15:12:23] seed_completed n_runs=100 mc_seed=0 runtime_sec=72.14
+[2026-04-15T15:12:23] seed_started n_runs=100 mc_seed=1
+[2026-04-15T15:13:28] seed_completed n_runs=100 mc_seed=1 runtime_sec=65.42
+[2026-04-15T15:13:28] seed_started n_runs=100 mc_seed=2
+[2026-04-15T15:14:30] seed_completed n_runs=100 mc_seed=2 runtime_sec=61.22
+[2026-04-15T15:14:30] seed_started n_runs=100 mc_seed=3
+[2026-04-15T15:15:34] seed_completed n_runs=100 mc_seed=3 runtime_sec=64.02
+[2026-04-15T15:15:34] seed_started n_runs=100 mc_seed=4
+[2026-04-15T15:16:30] seed_completed n_runs=100 mc_seed=4 runtime_sec=56.83
+[2026-04-15T15:16:30] run_completed n_runs=100 jaccard_mean=0.313315 jaccard_min=0.250000 spearman_mean=0.684020 runtime_sec=319.64 pass=False
+[2026-04-15T15:16:30] run_started n_runs=150
+[2026-04-15T15:16:30] seed_started n_runs=150 mc_seed=0
+[2026-04-15T15:18:15] seed_completed n_runs=150 mc_seed=0 runtime_sec=104.39
+[2026-04-15T15:18:15] seed_started n_runs=150 mc_seed=1
+[2026-04-15T15:19:52] seed_completed n_runs=150 mc_seed=1 runtime_sec=97.28
+[2026-04-15T15:19:52] seed_started n_runs=150 mc_seed=2
+[2026-04-15T15:21:35] seed_completed n_runs=150 mc_seed=2 runtime_sec=103.38
+[2026-04-15T15:21:35] seed_started n_runs=150 mc_seed=3
+[2026-04-15T15:23:20] seed_completed n_runs=150 mc_seed=3 runtime_sec=104.33
+[2026-04-15T15:23:20] seed_started n_runs=150 mc_seed=4
+[2026-04-15T15:24:47] seed_completed n_runs=150 mc_seed=4 runtime_sec=86.75
+[2026-04-15T15:24:47] run_completed n_runs=150 jaccard_mean=0.377381 jaccard_min=0.290323 spearman_mean=0.698290 runtime_sec=496.15 pass=False
+[2026-04-15T15:24:47] sweep_completed any_pass=False summary=outputs\day1_benchmark\hybrid_sweep\stability_nodes200_gamma0p2_seeds0-4\stability_sweep_summary.csv

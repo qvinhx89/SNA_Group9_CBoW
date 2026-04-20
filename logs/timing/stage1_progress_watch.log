@@ -1,0 +1,14 @@
+--- watch start 2026-03-29 16:10:54 ---
+2026-03-29 16:10:56 | pid=41372 | cpu=0.02 | rss_mb=0.55
+2026-03-29 16:25:57 | pid=41372 | cpu=0.02 | rss_mb=0.3
+--- watch restart 2026-03-29 16:28:10 ---
+2026-03-29 16:28:11 | worker_pid=45268 | worker_cpu=3983.53 | worker_rss_mb=1818.09 | all=pid=41372,cpu=0.02,rss=0.3 | pid=45268,cpu=3983.53,rss=1818.09
+--- manual restart request 2026-03-29 17:26:38 ---
+--- watch restart 25m 2026-03-29 17:27:03 ---
+2026-03-29 17:27:03 | worker_pid=27040 | elapsed_min=0.25 | worker_cpu=14.33 | worker_rss_mb=1801.57 | all=pid=48672,cpu=0,rss=3.99 | pid=27040,cpu=14.33,rss=1801.57
+2026-03-29 17:52:03 | worker_pid=27040 | elapsed_min=25.25 | worker_cpu=1470.94 | worker_rss_mb=1902.37 | all=pid=48672,cpu=0,rss=4 | pid=27040,cpu=1470.94,rss=1902.37
+2026-03-29 18:17:03 | worker_pid=27040 | elapsed_min=50.25 | worker_cpu=2923.59 | worker_rss_mb=1894.93 | all=pid=48672,cpu=0,rss=4 | pid=27040,cpu=2923.59,rss=1894.93
+2026-03-29 18:42:04 | worker_pid=27040 | elapsed_min=75.26 | worker_cpu=4368.67 | worker_rss_mb=1859.54 | all=pid=48672,cpu=0,rss=3.91 | pid=27040,cpu=4368.67,rss=1859.54
+2026-03-29 19:07:04 | worker_pid=27040 | elapsed_min=100.26 | worker_cpu=5807.55 | worker_rss_mb=1819.66 | all=pid=48672,cpu=0,rss=3.66 | pid=27040,cpu=5807.55,rss=1819.66
+2026-03-29 19:32:04 | worker_pid=27040 | elapsed_min=125.27 | worker_cpu=7246.55 | worker_rss_mb=1815.14 | all=pid=48672,cpu=0,rss=3.66 | pid=27040,cpu=7246.55,rss=1815.14
+--- watch end 2026-03-29 19:57:05 ---

@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-04-15T12:40:57",
+  "config": {
+    "n_labeled_nodes": 500,
+    "n_runs_per_seed": 50,
+    "mc_seeds": [
+      0,
+      1,
+      2
+    ],
+    "seed_multiplier": 10000,
+    "worker_seed_rule": "mc_seed * seed_multiplier + node_row",
+    "top_pct": 0.1,
+    "jaccard_threshold": 0.85,
+    "p_model": "hybrid_degree_views_centered",
+    "hybrid_gamma": 0.2,
+    "views_col": "views",
+    "views_q_low": 0.05,
+    "views_q_high": 0.95,
+    "max_nodes": 500
+  },
+  "top_decile_counts": {
+    "0": 50,
+    "1": 50,
+    "2": 50
+  },
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.2987012987012987,
+      "spearman_rank": 0.6678621761053825
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.35135135135135137,
+      "spearman_rank": 0.6803575343555761
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.28205128205128205,
+      "spearman_rank": 0.6774462416644723
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.3107013107013107,
+    "jaccard_min": 0.28205128205128205,
+    "jaccard_pass_threshold": false,
+    "spearman_mean": 0.6752219840418103,
+    "spearman_min": 0.6678621761053825
+  }
+}

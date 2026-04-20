@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-04-06T21:01:13",
+  "n_runs": 1200,
+  "n_labeled_nodes": 5000,
+  "mc_seeds": [
+    0,
+    1,
+    2
+  ],
+  "seed_runtime_sec": {
+    "0": 2181.6572514,
+    "1": 1820.000816899992,
+    "2": 1852.728965300019
+  },
+  "runtime_sec": 5854.3934980000195,
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.669449081803005,
+      "spearman_rank": 0.8226344356380758
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.6920473773265652,
+      "spearman_rank": 0.8247554403938611
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "jaccard_top_decile": 0.6835016835016835,
+      "spearman_rank": 0.832742914880223
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.6816660475437512,
+    "jaccard_min": 0.669449081803005,
+    "spearman_mean": 0.8267109303040533,
+    "spearman_min": 0.8226344356380758,
+    "pass_plan_threshold": false,
+    "threshold_jaccard_mean": 0.85,
+    "threshold_jaccard_min": 0.8
+  }
+}

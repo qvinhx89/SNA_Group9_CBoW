@@ -16,7 +16,28 @@
 
 ## Registry Entries
 
+### [2026-04-07 19:30] - Task 6 Comparator Lock + IF PROBLEM Fallback Activated
+
+- **Config hash**: n/a (analysis/protocol lock for MAPR2026 v3 Track B)
+- **Parameter changed**: `task6_lifetime_comparator`
+- **Old value**: Hidden vs Overrated (pseudocode drift in implementation plan section 10.2)
+- **New value**: Hidden vs Non-Hidden
+- **Rationale**: Lock implementation to team parallel coding plan contract and avoid protocol drift across docs.
+- **Impact**: Lifetime validation uses one comparator consistently across reruns and sign-off checks.
+- **Author**: Person 2 / Group 9
+
+### [2026-04-07 19:35] - Task 6 Power Guard + Language Fallback Artifact
+
+- **Config hash**: n/a (code-level guard and fallback branch)
+- **Parameter changed**: `lifetime_min_group_size`, `language_fallback_enabled`
+- **Old value**: Stratified MWU accepted non-empty groups (`n > 0`)
+- **New value**: Stratified MWU requires `n_hidden >= 10` and `n_non_hidden >= 10`; IF PROBLEM branch writes `language_validation.json`
+- **Rationale**: Address Bottleneck #3 power issue and execute mandatory IF PROBLEM branch when lifetime gate fails.
+- **Impact**: `lifetime_validation.json` remains primary artifact; fallback corroboration is now produced at `outputs/mapr2026_v3_results/language_validation.json`.
+- **Author**: Person 2 / Group 9
+
 ### Entry Template
+
 ```
 ### [YYYY-MM-DD HH:MM] - Brief Description
 - **Config hash**: xxxxxxxx
@@ -33,6 +54,7 @@
 ## Implementation Plan Revision (2026-03)
 
 ### [2026-03-27] - Implementation Plan Aligned with Proposal
+
 - **Changes applied per proposal alignment review**:
 
 1. **SIS Formula (FORBIDDEN-1)**:
@@ -79,6 +101,7 @@
 ## Week 1-2: Setup Phase
 
 ### [XXXX-XX-XX] - Initial Configuration
+
 - **Config hash**: (generate after creating config)
 - **Parameters set**:
   - `sis.formula`: unweighted rank-average (NO WEIGHTS per proposal)
@@ -94,6 +117,7 @@
 ## Week 3-4: Centrality & Community Phase
 
 ### [XXXX-XX-XX] - Betweenness Computation
+
 - **Config hash**:
 - **k_pivots used**: 1000
 - **seed used**: 42
@@ -101,6 +125,7 @@
 - **Author**:
 
 ### [XXXX-XX-XX] - Louvain Stability Check (CHANGE-4)
+
 - **Config hash**:
 - **Number of runs**: 10
 - **Seeds used**: 0-9
@@ -116,6 +141,7 @@
 ## Week 5-6: SIS & Typology Phase
 
 ### [XXXX-XX-XX] - SIS Computation
+
 - **Config hash**:
 - **Formula used**: `SIS(v) = [rank(PageRank) + rank(Betweenness) + rank(k-shell)] / 3`
 - **Weights**: None (unweighted per FORBIDDEN-1)
@@ -123,6 +149,7 @@
 - **Author**:
 
 ### [XXXX-XX-XX] - Robustness Analysis Results
+
 - **Config hash**:
 - **Threshold sensitivity**:
   | Threshold | Hidden count | Jaccard with 20% |
@@ -139,6 +166,7 @@
 ## Week 7-8: IC Calibration & Validation Phase
 
 ### [XXXX-XX-XX] - IC Parameter Calibration (CHANGE-6)
+
 - **Config hash**:
 - **Pilot subgraph**: 10% of nodes (N = XXX)
 - **p values tested**: {0.01, 0.03, 0.05}
@@ -156,6 +184,7 @@
 - **Author**:
 
 ### [XXXX-XX-XX] - IC Robustness Check (NUANCED-1)
+
 - **Config hash**:
 - **p_chosen**: X.XX
 - **p_high (p_chosen × 2)**: X.XX
@@ -169,6 +198,7 @@
 ## Week 9-10: ML Phase
 
 ### [XXXX-XX-XX] - ML Pipeline Configuration (FORBIDDEN-2)
+
 - **Config hash**:
 - **Train/Val/Test split**: 70/10/20
 - **Stratification**: By typology
@@ -182,6 +212,7 @@
 - **Author**:
 
 ### [XXXX-XX-XX] - CV Variance Estimation (NUANCED-2)
+
 - **Config hash**:
 - **Folds**: 5
 - **Data used**: train+val combined
@@ -195,6 +226,7 @@
 - **Author**:
 
 ### [XXXX-XX-XX] - Data Leakage Check
+
 - **Verification method**:
 - **Result**: [PASS/FAIL]
 - **Author**:
@@ -203,26 +235,26 @@
 
 ## Summary Statistics
 
-| Phase | Entries | Critical Decisions |
-|-------|---------|-------------------|
-| Week 1-2 | X | Initial config, SIS formula |
-| Week 3-4 | X | Betweenness params, Louvain stability |
-| Week 5-6 | X | SIS computation, Robustness |
-| Week 7-8 | X | IC calibration |
-| Week 9-10 | X | ML config |
+| Phase     | Entries | Critical Decisions                    |
+| --------- | ------- | ------------------------------------- |
+| Week 1-2  | X       | Initial config, SIS formula           |
+| Week 3-4  | X       | Betweenness params, Louvain stability |
+| Week 5-6  | X       | SIS computation, Robustness           |
+| Week 7-8  | X       | IC calibration                        |
+| Week 9-10 | X       | ML config                             |
 
 ---
 
 ## Config File Hashes (Checkpoints)
 
-| Date | Stage | Hash | Notes |
-|------|-------|------|-------|
-| | Stage 0 | | Initial |
-| | Stage 1-2 | | Centrality + Community |
-| | Stage 3 | | Post-SIS |
-| | Stage 4 | | Post-IC calibration |
-| | Stage 6 | | Final |
+| Date | Stage     | Hash | Notes                  |
+| ---- | --------- | ---- | ---------------------- |
+|      | Stage 0   |      | Initial                |
+|      | Stage 1-2 |      | Centrality + Community |
+|      | Stage 3   |      | Post-SIS               |
+|      | Stage 4   |      | Post-IC calibration    |
+|      | Stage 6   |      | Final                  |
 
 ---
 
-*This registry is the source of truth for all experimental decisions.*
+_This registry is the source of truth for all experimental decisions._

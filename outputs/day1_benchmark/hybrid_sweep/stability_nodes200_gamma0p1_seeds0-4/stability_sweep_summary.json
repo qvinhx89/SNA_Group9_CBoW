@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-04-15T21:31:39",
+  "interrupted": false,
+  "config": {
+    "run_grid": [
+      30,
+      50,
+      100,
+      150
+    ],
+    "mc_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "seed_multiplier": 10000,
+    "top_pct": 0.1,
+    "n_jobs": 4,
+    "n_labeled_nodes": 200,
+    "max_nodes": 200,
+    "min_jaccard_mean": 0.85,
+    "min_jaccard_min": 0.8,
+    "p_model": "hybrid_degree_views_centered",
+    "hybrid_gamma": 0.1,
+    "views_col": "views",
+    "views_q_low": 0.05,
+    "views_q_high": 0.95
+  },
+  "rows": [
+    {
+      "n_runs": 30,
+      "jaccard_mean": 0.20633045006859047,
+      "jaccard_min": 0.14285714285714285,
+      "spearman_mean": 0.6331593147651513,
+      "spearman_min": 0.5287991490865774,
+      "runtime_sec": 95.31581700000243,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 50,
+      "jaccard_mean": 0.2219976260298841,
+      "jaccard_min": 0.14285714285714285,
+      "spearman_mean": 0.6675705852011721,
+      "spearman_min": 0.6077120823699766,
+      "runtime_sec": 148.55233139999837,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 100,
+      "jaccard_mean": 0.35694687218602683,
+      "jaccard_min": 0.2903225806451613,
+      "spearman_mean": 0.6866363954321347,
+      "spearman_min": 0.631126498587045,
+      "runtime_sec": 270.2637818000003,
+      "pass_plan_threshold": false
+    },
+    {
+      "n_runs": 150,
+      "jaccard_mean": 0.39157088122605366,
+      "jaccard_min": 0.3333333333333333,
+      "spearman_mean": 0.6645460762622182,
+      "spearman_min": 0.5925793973620829,
+      "runtime_sec": 359.53504239999893,
+      "pass_plan_threshold": false
+    }
+  ],
+  "selected_first_pass": null,
+  "best_by_jaccard": {
+    "n_runs": 150,
+    "jaccard_mean": 0.39157088122605366,
+    "jaccard_min": 0.3333333333333333,
+    "spearman_mean": 0.6645460762622182,
+    "spearman_min": 0.5925793973620829,
+    "runtime_sec": 359.53504239999893,
+    "pass_plan_threshold": false
+  },
+  "any_pass": false,
+  "artifacts": {
+    "events_jsonl": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p1_seeds0-4/stability_sweep_events.jsonl",
+    "text_log": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p1_seeds0-4/stability_sweep.log",
+    "summary_csv": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p1_seeds0-4/stability_sweep_summary.csv",
+    "summary_json": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p1_seeds0-4/stability_sweep_summary.json"
+  }
+}

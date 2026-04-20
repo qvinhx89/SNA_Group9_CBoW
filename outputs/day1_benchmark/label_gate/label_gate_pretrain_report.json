@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-04-16T07:18:01.229238+00:00",
+  "formula": "hybrid_degree_views_centered(gamma=0.1)",
+  "stability_reference": {
+    "path": "outputs/day1_benchmark/hybrid_sweep/stability_nodes200_gamma0p1_seeds0-4/stability_sweep_summary.csv",
+    "n_runs": 150,
+    "jaccard_mean": 0.3915708812260536,
+    "jaccard_min": 0.3333333333333333,
+    "spearman_mean": 0.6645460762622182,
+    "spearman_min": 0.5925793973620829
+  },
+  "uncertainty": {
+    "ic_score_std": {
+      "min": 0.0,
+      "p50": 37.215262408139886,
+      "p90": 1185.1597950262378,
+      "p95_train_threshold": 1620.0895363899274,
+      "max": 4979.231975564995
+    },
+    "suggested_weight_rule": "clip((1/(ic_score_std+1e-6))/median_train_inverse_std, 0.25, 4.0)",
+    "sample_weight_stats": {
+      "min": 0.25,
+      "p50": 0.9665322800299705,
+      "p90": 4.0,
+      "max": 4.0
+    },
+    "drop_noisy_quantile": 0.95,
+    "train_total": 4000,
+    "train_dropped": 200,
+    "train_kept": 3800,
+    "train_dropped_rate": 0.05
+  }
+}

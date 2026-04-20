@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-04-12T14:50:52.011241+00:00",
+  "summary": {
+    "primary_candidate": "res1_1",
+    "sensitivity_candidate": "res1_6",
+    "same_direction_effect": true,
+    "effect_size_meaningful_both": true,
+    "significance_not_flipped": true
+  },
+  "partition_stats": {
+    "res1_1": {
+      "resolution": 1.1,
+      "seed": 6,
+      "n_nodes": 168114,
+      "n_communities": 24,
+      "best_modularity_single_seed": 0.4231252972487002,
+      "pct_nodes_top3_communities": 49.23147388081897,
+      "community_features_path": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\community_features_res1_1.parquet"
+    },
+    "res1_6": {
+      "resolution": 1.6,
+      "seed": 2,
+      "n_nodes": 168114,
+      "n_communities": 34,
+      "best_modularity_single_seed": 0.4052396602806919,
+      "pct_nodes_top3_communities": 31.98781779030896,
+      "community_features_path": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\community_features_res1_6.parquet"
+    }
+  },
+  "task5_downstream": {
+    "res1_1": {
+      "resolution": 1.1,
+      "seed": 6,
+      "structural_profiling_csv": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\mapr2026_v3_results\\structural_profiling_res1_1.csv",
+      "cross_community_edge_fraction": {
+        "group_hidden_mean": 0.41691804805182653,
+        "group_overrated_mean": 0.34231462885198166,
+        "delta_hidden_minus_overrated": 0.07460341919984487,
+        "cliffs_delta": 0.20622960911049554,
+        "p_corrected": 2.452437604119954e-05,
+        "significant": true
+      }
+    },
+    "res1_6": {
+      "resolution": 1.6,
+      "seed": 2,
+      "structural_profiling_csv": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\outputs\\mapr2026_v3_results\\structural_profiling_res1_6.csv",
+      "cross_community_edge_fraction": {
+        "group_hidden_mean": 0.48161531998342844,
+        "group_overrated_mean": 0.3936245038108271,
+        "delta_hidden_minus_overrated": 0.08799081617260135,
+        "cliffs_delta": 0.20817482302246845,
+        "p_corrected": 2.0473297248983987e-05,
+        "significant": true
+      }
+    }
+  },
+  "decision_rule_notes": {
+    "same_direction_effect": "Hidden minus Overrated mean of cross_community_edge_fraction keeps same sign",
+    "effect_size_meaningful_both": "|Cliff's delta| >= 0.20 in both resolutions",
+    "significance_not_flipped": "significant boolean for cross_community_edge_fraction is identical"
+  }
+}

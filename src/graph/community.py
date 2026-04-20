@@ -269,12 +269,14 @@ def detect_communities(
     logger.info(f"Best partition: run {best_idx+1}, seed={best_seed}, "
                 f"Q={best_modularity:.4f}, n_communities={n_communities}")
 
-    # CHANGE-4: Compute NMI between all pairs of partitions
+    # CHANGE-4: Compute NMI between all pairs of partitions (cache to avoid double computation)
     logger.info("Computing NMI stability across runs...")
+    nmi_cache: dict[tuple[int, int], float] = {}
     nmi_values = []
     for i in range(n_runs):
         for j in range(i + 1, n_runs):
             nmi = compute_nmi_between_partitions(partitions[i], partitions[j], nodes)
+            nmi_cache[(i, j)] = nmi
             nmi_values.append(nmi)
 
     mean_nmi = np.mean(nmi_values)
@@ -361,7 +363,7 @@ def detect_communities(
             for i in range(n_runs)
         ],
         "nmi_pairwise": {
-            f"run{i+1}_vs_run{j+1}": float(compute_nmi_between_partitions(partitions[i], partitions[j], nodes))
+            f"run{i+1}_vs_run{j+1}": float(nmi_cache[(i, j)])
             for i in range(n_runs) for j in range(i + 1, n_runs)
         },
         "summary": {

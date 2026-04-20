@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-04-15T15:03:20",
+  "n_runs": 10,
+  "n_labeled_nodes": 50,
+  "mc_seeds": [
+    0,
+    1
+  ],
+  "seed_runtime_sec": {
+    "0": 7.291476800000055,
+    "1": 7.301404300000058
+  },
+  "runtime_sec": 14.60968760000003,
+  "pairwise": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "jaccard_top_decile": 0.25,
+      "spearman_rank": 0.5661559668567812
+    }
+  ],
+  "summary": {
+    "jaccard_mean": 0.25,
+    "jaccard_min": 0.25,
+    "spearman_mean": 0.5661559668567812,
+    "spearman_min": 0.5661559668567812,
+    "pass_plan_threshold": false,
+    "threshold_jaccard_mean": 0.85,
+    "threshold_jaccard_min": 0.8
+  }
+}

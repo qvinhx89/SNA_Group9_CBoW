@@ -1,0 +1,6 @@
+[2026-04-15T12:43:04] sweep_started run_grid=[50, 100, 150, 300] nodes=500
+[2026-04-15T12:43:04] run_started n_runs=50
+[2026-04-15T12:49:42] run_completed n_runs=50 jaccard_mean=0.310701 jaccard_min=0.282051 spearman_mean=0.675222 runtime_sec=398.90 pass=False
+[2026-04-15T12:49:42] run_started n_runs=100
+[2026-04-15T13:13:09] run_completed n_runs=100 jaccard_mean=0.346828 jaccard_min=0.298701 spearman_mean=0.680844 runtime_sec=1406.36 pass=False
+[2026-04-15T13:13:09] run_started n_runs=150

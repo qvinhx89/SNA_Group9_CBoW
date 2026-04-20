@@ -2,41 +2,55 @@
 
 Date: 2026-04-06
 Owner: Person 1
-Version: person1_day1_20260406_p1_day1_v1
+Mode: Option B (provisional, governance-locked)
+Active package baseline: person1_day1_20260409_p1_day1_v3i_optionB_lockstep
 
-## 1) What is frozen and safe to reuse now
+## 1) Why this mode exists
 
-- Split mask is frozen and checksum-locked:
-  - path: `data/processed/split_masks.parquet`
-  - sha256: `005de40762f6c75e4df66a53efeaa883d126d52abd5c4af0224d736992362104`
-  - freeze manifest: `outputs/day1_benchmark/split_freeze_manifest.json`
-- Versioned package manifest:
-  - `outputs/handoffs/person1_day1_20260406_p1_day1_v1/manifest.json`
+- Hard gate currently does not pass.
+- This is not treated as a hidden pass.
+- Team progress continues under explicit governance and immutable artifacts.
 
-## 2) How to consume (must-follow)
+## 2) Lockstep rules (must-follow)
 
-1. Do not create your own split.
-2. Always load split using the shared artifact (`split_masks.parquet`).
-3. Use `regression_targets.parquet` as primary target for current model comparison.
-4. Use `classification_labels.parquet` (`y_top10`) as provisional only.
+1. Use exactly one handoff package version per experiment cycle.
+2. Do not create local train/test splits.
+3. Keep canonical and supplementary branches separated.
+4. Any change request must create a new version tag (no overwrite).
 
-## 3) Why y_top10 is provisional
+## 3) Mandatory data sources
 
-Evidence from official P0 checks:
-- Stability report: `outputs/day1_benchmark/ic_label_stability.json`
-  - jaccard_mean = 0.3069298298144156
-  - jaccard_min = 0.3020833333333333
-  - threshold (required) = 0.85
-- Uncertainty report: `outputs/day1_benchmark/ic_label_uncertainty.json`
-  - boundary nodes (CI crosses top-10 threshold) = 995/5000
-  - boundary among positive labels = 415/500
+- Shared split (single source of truth):
+  - `data/processed/split_masks.parquet`
+  - `outputs/day1_benchmark/split_freeze_manifest.json`
+- Canonical compatibility labels:
+  - `data/processed/classification_labels.parquet`
+- Supplementary consensus labels:
+  - `data/processed/classification_labels_consensus.parquet`
+  - `outputs/day1_benchmark/policy_compare/classification_labels_consensus_report.json`
+- Primary modeling target:
+  - `data/processed/regression_targets.parquet`
 
-Interpretation:
-- Binary top-10 label is sensitive to MC seed noise near threshold.
-- Continuous IC target is more stable for immediate downstream experiments.
+## 4) Consumer guidance by role
 
-## 4) Recommended reporting language
+Person 2:
+- Keep typology axis by M0 rule on continuous thresholds.
+- Do not replace canonical branch with consensus branch in compatibility outputs.
 
-- "Runtime decision and one-hop branch are locked for planning."
-- "Regression metrics are computed on frozen split and are handoff-ready."
-- "Classification metrics on y_top10 are provisional pending stronger cross-seed stability."
+Person 3:
+- Binary evaluation can use consensus branch.
+- For strict binary claims, exclude uncertain nodes (`is_uncertain=1` or `vote_count=1`).
+- Always state evaluation scope (all nodes vs non-uncertain subset).
+
+## 5) Reporting language (recommended)
+
+- "This cycle uses Option B provisional governance with immutable handoff artifacts."
+- "Regression is treated as primary objective; binary is supplementary and uncertainty-aware."
+- "All experiments reuse the frozen split and declared handoff version."
+
+## 6) Team acknowledgement checklist
+
+- [ ] I confirm using one declared handoff version only.
+- [ ] I confirm not re-splitting locally.
+- [ ] I confirm canonical vs consensus branches are not mixed silently.
+- [ ] I confirm uncertainty handling is declared for binary metrics.

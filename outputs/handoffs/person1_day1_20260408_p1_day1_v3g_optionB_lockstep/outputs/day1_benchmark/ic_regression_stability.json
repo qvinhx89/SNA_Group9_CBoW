@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-04-06T22:58:37",
+  "source": {
+    "summary_csv": "outputs/day1_benchmark/stability_sweep/stability_sweep_summary.csv",
+    "summary_json": "outputs/day1_benchmark/stability_sweep/stability_sweep_summary.json",
+    "summary_json_exists": true
+  },
+  "thresholds": {
+    "spearman_mean_min": 0.9
+  },
+  "rows": [
+    {
+      "n_runs": 150,
+      "spearman_mean": 0.685383690615586,
+      "spearman_min": 0.6823998811753503,
+      "runtime_sec": 736.9496184000163,
+      "spearman_pass_threshold": false
+    },
+    {
+      "n_runs": 300,
+      "spearman_mean": 0.7179743196866494,
+      "spearman_min": 0.7142555122632497,
+      "runtime_sec": 1467.5728335999884,
+      "spearman_pass_threshold": false
+    },
+    {
+      "n_runs": 500,
+      "spearman_mean": 0.7502758979212824,
+      "spearman_min": 0.7485196422755335,
+      "runtime_sec": 2423.282010499999,
+      "spearman_pass_threshold": false
+    },
+    {
+      "n_runs": 800,
+      "spearman_mean": 0.786752492922648,
+      "spearman_min": 0.7814616999155403,
+      "runtime_sec": 3802.0469233000185,
+      "spearman_pass_threshold": false
+    },
+    {
+      "n_runs": 1200,
+      "spearman_mean": 0.8267109303040533,
+      "spearman_min": 0.8226344356380758,
+      "runtime_sec": 5854.39349800002,
+      "spearman_pass_threshold": false
+    }
+  ],
+  "summary": {
+    "any_pass": false,
+    "selected_first_pass": null,
+    "best_by_spearman": {
+      "n_runs": 1200,
+      "spearman_mean": 0.8267109303040533,
+      "spearman_min": 0.8226344356380758,
+      "runtime_sec": 5854.39349800002
+    },
+    "recommendation": "Regression target can be treated as more stable than binary labels; continue using regression as primary objective and binary labels as supplementary."
+  }
+}
