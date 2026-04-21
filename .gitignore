@@ -77,6 +77,9 @@ data/processed/*
 !data/processed/diffusion_proxies.parquet
 !data/processed/regression_targets.parquet
 !data/processed/regression_targets_ia.parquet
+!data/processed/regression_targets_hscc_refined.parquet
+!data/processed/regression_targets_hscc_refined_smoke.parquet
+!data/processed/regression_targets_hscc_refined_smoke_cuda.parquet
 !data/processed/classification_labels.parquet
 !data/processed/split_masks.parquet
 
