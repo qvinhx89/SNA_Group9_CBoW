@@ -35,13 +35,14 @@ from sklearn.preprocessing import MinMaxScaler
 
 try:
     from torch_geometric.data import Data
-    from torch_geometric.nn import SAGEConv, GATConv, GCNConv, GINConv
+    from torch_geometric.nn import SAGEConv, GATConv, GCNConv, GINConv, APPNP
 except Exception:
     Data = None
     SAGEConv = None
     GATConv = None
     GCNConv = None
     GINConv = None
+    APPNP = None
 
 from _shared import PATHS, ensure_dir, now_iso, read_edgelist_pairs, require_columns
 from eval_ranking_harness import (
@@ -151,21 +152,45 @@ class GNNSurrogateRegressor(nn.Module):
             self.conv1 = GATConv(in_channels, hidden_channels, heads=heads, concat=True, dropout=dropout)
             self.conv2 = GATConv(hidden_channels * heads, hidden_channels, heads=1, concat=True, dropout=dropout)
             self.head = nn.Linear(hidden_channels, 1)
+        elif self.arch == "appnp":
+            if APPNP is None:
+                raise ImportError("torch_geometric is required for APPNP but is not available.")
+            # APPNP: MLP feature transform + personalized propagation.
+            self.lin1 = nn.Linear(in_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+            self.propagation = APPNP(K=10, alpha=0.1, dropout=dropout)
+            self.head = nn.Linear(hidden_channels, 1)
         else:
-            raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat")
+            raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat, appnp")
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x, edge_index)
-        x = torch.relu(x)
-        x = self.dropout(x)
-        x = self.conv2(x, edge_index)
-        x = torch.relu(x)
-        x = self.dropout(x)
+        if self.arch == "appnp":
+            x = self.lin1(x)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.lin2(x)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.propagation(x, edge_index)
+        else:
+            x = self.conv1(x, edge_index)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.conv2(x, edge_index)
+            x = torch.relu(x)
+            x = self.dropout(x)
         out = self.head(x)
         return out.squeeze(-1)
 
     def reset_parameters(self) -> None:
-        for mod in [getattr(self, "conv1", None), getattr(self, "conv2", None), getattr(self, "head", None)]:
+        for mod in [
+            getattr(self, "conv1", None),
+            getattr(self, "conv2", None),
+            getattr(self, "lin1", None),
+            getattr(self, "lin2", None),
+            getattr(self, "propagation", None),
+            getattr(self, "head", None),
+        ]:
             if mod is None:
                 continue
             reset = getattr(mod, "reset_parameters", None)
@@ -686,7 +711,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--include-c2-arch",
         action="store_true",
-        help="Also run GCN/GIN/GAT on raw_attr features (C2 architecture comparison).",
+        help="Also run GCN/GIN/GAT/APPNP on raw_attr features (C2 architecture comparison).",
     )
     p.add_argument(
         "--include-edge-only",
@@ -747,6 +772,7 @@ def main() -> None:
             ("gcn_edge_only", "constant", False, "gcn"),
             ("gin_edge_only", "constant", False, "gin"),
             ("gat_edge_only", "constant", False, "gat"),
+            ("appnp_edge_only", "constant", False, "appnp"),
         ]
     else:
         model_specs = [
@@ -768,6 +794,7 @@ def main() -> None:
                 ("gcn_raw_attr", "raw_attr", False, "gcn"),
                 ("gin_raw_attr", "raw_attr", False, "gin"),
                 ("gat_raw_attr", "raw_attr", False, "gat"),
+                ("appnp_raw_attr", "raw_attr", False, "appnp"),
             ]
         )
 
@@ -778,6 +805,7 @@ def main() -> None:
                 ("gcn_edge_only", "constant", False, "gcn"),
                 ("gin_edge_only", "constant", False, "gin"),
                 ("gat_edge_only", "constant", False, "gat"),
+                ("appnp_edge_only", "constant", False, "appnp"),
             ]
         )
 
