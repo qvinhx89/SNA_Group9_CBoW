@@ -1,10 +1,11 @@
-# Vast.ai GPU runbook — MAPR2026 v3.1 GNN surrogate
+# Vast.ai GPU runbook — MAPR2026 v3.2 (A0 + HSCC) GNN surrogates
 
-Mục tiêu: chạy các thí nghiệm GNN (SAGE/GCN/GIN/GAT) để xấp xỉ IC labels và xuất các artifact theo plan v3.1.
+Mục tiêu: chạy các thí nghiệm GNN (SAGE/GCN/GIN/GAT/APPNP) để xấp xỉ IC labels theo **dual-operationalization** (`A0` + `HSCC`) và xuất artifact theo plan v3.2.
 
 Artifacts liên quan
 - Labels/targets:
-  - Primary A0: data/processed/regression_targets.parquet
+  - A0: data/processed/regression_targets_a0.parquet
+  - HSCC: data/processed/regression_targets_hscc_refined.parquet
   - Sensitivity A2: data/processed/regression_targets_a2.parquet
 
 - Split mask (M0-locked): data/processed/split_masks.parquet
@@ -37,6 +38,7 @@ Quick check:
 ```bash
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
 python -c "import torch_geometric; print('pyg ok')"
+python -c "from torch_geometric.nn import APPNP; print('APPNP ok')"
 ```
 
 ## 1.5) Local sanity check (CPU, chạy nhanh)
@@ -65,13 +67,27 @@ Output:
 - outputs/mapr2026_v3_results/ic_scores_hybrid_views.parquet
 - data/processed/regression_targets_hybrid_views.parquet
 
-## 3) Chạy GNN surrogates theo plan
+## 3) Chạy GNN surrogates theo plan v3.2
+
+Gợi ý: chạy riêng từng regime và xuất ra **cùng 1 file** (script sẽ ghi cột `label_regime`) hoặc xuất ra các file riêng tuỳ workflow.
+
+### 3.0 Baselines (khuyến nghị chạy trước để có comparator HSCC)
+```bash
+python src/mapr2026_v3/run_baselines.py \
+  --targets-path data/processed/regression_targets_a0.parquet \
+  --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
+
+python src/mapr2026_v3/run_baselines.py \
+  --targets-path data/processed/regression_targets_hscc_refined.parquet \
+  --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
+```
 ### 3.1 Edge-only (graph-only strict, x=1)
 ```bash
 python src/mapr2026_v3/run_surrogates.py \
   --only-edge-only \
   --early-stop --patience 20 \
-  --out-csv outputs/mapr2026_v3_results/surrogate_edge_only.csv
+  --targets-path data/processed/regression_targets_a0.parquet \
+  --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv
 ```
 
 ### 3.2 C2 architecture comparison (raw_attr)
@@ -79,7 +95,8 @@ python src/mapr2026_v3/run_surrogates.py \
 python src/mapr2026_v3/run_surrogates.py \
   --include-c2-arch \
   --early-stop --patience 20 \
-  --out-csv outputs/mapr2026_v3_results/surrogate_c2_raw_attr.csv
+  --targets-path data/processed/regression_targets_hscc_refined.parquet \
+  --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv
 ```
 
 ### 3.3 C2 trên A2 targets (H2: GNN–A2 alignment)
@@ -88,7 +105,7 @@ python src/mapr2026_v3/run_surrogates.py \
   --targets-path data/processed/regression_targets_a2.parquet \
   --include-c2-arch \
   --early-stop --patience 20 \
-  --out-csv outputs/mapr2026_v3_results/surrogate_c2_a2_raw_attr.csv
+  --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv
 ```
 
 ### 3.4 C2 trên hybrid targets
@@ -105,6 +122,6 @@ Kéo thư mục outputs/mapr2026_v3_results/ (các file CSV) về máy.
 
 ## 5) Checklist sanity trước khi báo cáo
 - Mỗi file surrogate_*.csv có đủ các cột mean/std + runtime/train
-- Có ít nhất các rows C2: gcn_raw_attr, gin_raw_attr, gat_raw_attr (và gnn_raw_attr nếu muốn so sánh)
+- Có ít nhất các rows C2: gcn_raw_attr, gin_raw_attr, gat_raw_attr, **appnp_raw_attr**
 - So sánh với baseline: outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
 - Báo cáo thêm: speedup (runtime_breakdown.csv) nếu cần

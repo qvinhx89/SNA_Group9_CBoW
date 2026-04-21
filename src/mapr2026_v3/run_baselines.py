@@ -52,6 +52,19 @@ MAX_EPOCHS = 200
 TRAINING_SEEDS = [42, 123, 456, 789, 1024]
 
 
+def infer_label_regime_from_targets_path(targets_path: str | Path) -> str:
+    name = Path(str(targets_path)).name.lower()
+    if "hscc" in name:
+        return "hscc"
+    if "a2" in name:
+        return "a2"
+    if "a0" in name:
+        return "a0"
+    if name in {"regression_targets.parquet", "regression_targets.csv"}:
+        return "a0"
+    return "unknown"
+
+
 def resolve_project_path(path_like: str | Path) -> Path:
     path = Path(path_like)
     if path.is_absolute():
@@ -124,6 +137,18 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
     views_log = np.log1p(views_raw)
     views_per_day = views_raw / life_time
 
+    lang_col = None
+    if "language" in df.columns:
+        lang_col = "language"
+    elif "lang" in df.columns:
+        lang_col = "lang"
+
+    lang_dummies = pd.DataFrame(index=df.index)
+    if lang_col is not None:
+        lang_series = df[lang_col].astype(str).fillna("unknown")
+        lang_series = lang_series.replace({"nan": "unknown", "None": "unknown"})
+        lang_dummies = pd.get_dummies(lang_series, prefix="lang", dtype=float)
+
     features = pd.DataFrame(
         {
             "node_id": df["node_id"],
@@ -132,6 +157,8 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
             "life_time": life_time.astype(float),
         }
     )
+    if not lang_dummies.empty:
+        features = pd.concat([features, lang_dummies], axis=1)
     return features
 
 
@@ -209,7 +236,7 @@ def load_baseline_data_bundle(
     val_mask_np = node_ids.isin(split["val"]).to_numpy(dtype=bool)
     test_mask_np = node_ids.isin(split["test"]).to_numpy(dtype=bool)
 
-    feature_cols = ["views_log", "views_per_day", "life_time"]
+    feature_cols = [c for c in features_df.columns if c != "node_id"]
     x_raw = merged[feature_cols].to_numpy(dtype=np.float32)
     y = torch.tensor(merged["y"].to_numpy(dtype=np.float32), dtype=torch.float32)
 
@@ -410,7 +437,7 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
             torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
 
-        model = MLPRegressor(in_features=3, hidden_dim=128, dropout=0.3).to(device)
+        model = MLPRegressor(in_features=int(x.shape[1]), hidden_dim=128, dropout=0.3).to(device)
         model.reset_parameters()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_fn = get_loss_function()
@@ -464,7 +491,12 @@ def train_mlp_5seeds(bundle: BaselineDataBundle, max_epochs: int = MAX_EPOCHS) -
     }
 
 
-def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], key: str = "model_name") -> None:
+def _upsert_rows(
+    csv_path: Path,
+    rows: list[dict[str, float]],
+    cols: list[str],
+    key: str | list[str] = "model_name",
+) -> None:
     new_df = pd.DataFrame(rows)
     for col in cols:
         if col not in new_df.columns:
@@ -481,25 +513,27 @@ def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], 
     else:
         merged = new_df
 
-    merged = merged.drop_duplicates(subset=[key], keep="last")
-    merged = merged.sort_values(key).reset_index(drop=True)
+    key_cols = [key] if isinstance(key, str) else list(key)
+    merged = merged.drop_duplicates(subset=key_cols, keep="last")
+    merged = merged.sort_values(key_cols).reset_index(drop=True)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(csv_path, index=False)
 
 
-def _upsert_runtime_rows(rows: list[dict[str, float]]) -> None:
+def _upsert_runtime_rows(rows: list[dict[str, float]], label_regime: str) -> None:
     runtime_path = resolve_project_path(PATHS.runtime_csv)
-    cols = ["model_name", "inference_sec_full_graph", "train_sec"]
+    cols = ["label_regime", "model_name", "inference_sec_full_graph", "train_sec"]
     runtime_rows = []
     for row in rows:
         runtime_rows.append(
             {
+                "label_regime": str(label_regime),
                 "model_name": row["model_name"],
                 "inference_sec_full_graph": row.get("runtime_sec", np.nan),
                 "train_sec": row.get("train_sec", np.nan),
             }
         )
-    _upsert_rows(runtime_path, runtime_rows, cols=cols, key="model_name")
+    _upsert_rows(runtime_path, runtime_rows, cols=cols, key=["label_regime", "model_name"])
 
 
 def _safe_read_parquet(path_like: str | Path) -> pd.DataFrame | None:
@@ -599,6 +633,11 @@ def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]
             rows.append(eval_linear_combo(bundle, derived, ["views_log", "life_time"], "lr_views_life_time"))
             rows.append(eval_linear_combo(bundle, phi_df, ["phi"], "lr_phi"))
 
+            # Language-aware flat comparators (HSCC fairness requirement when language is present).
+            lang_cols = [c for c in derived.columns if c.startswith("lang_")]
+            if lang_cols:
+                rows.append(eval_linear_combo(bundle, derived, ["views_log", "life_time", *lang_cols], "lr_views_life_time_lang"))
+
         if "degree" in node_attr.columns:
             rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "degree"), "degree"))
 
@@ -625,6 +664,17 @@ def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]
                     "lr_degree_views_life_time",
                 )
             )
+
+            lang_cols = [c for c in combo_df.columns if c.startswith("lang_")]
+            if lang_cols:
+                rows.append(
+                    eval_linear_combo(
+                        bundle,
+                        combo_df,
+                        ["degree", "views_log", "life_time", *lang_cols],
+                        "lr_degree_views_life_time_lang",
+                    )
+                )
 
     kshell = _safe_read_parquet("data/processed/kshell_table.parquet")
     if kshell is not None:
@@ -653,6 +703,14 @@ def parse_args() -> argparse.Namespace:
         default=PATHS.regression_targets,
         help="Regression targets parquet path (default: primary A0).",
     )
+    p.add_argument(
+        "--label-regime",
+        default="",
+        help=(
+            "Label regime tag to record in output (a0|hscc|a2). "
+            "If omitted, inferred from --targets-path filename."
+        ),
+    )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
     p.add_argument("--node2vec-epochs", type=int, default=10)
@@ -668,7 +726,10 @@ def main() -> None:
     out_csv = resolve_project_path(args.out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
+    label_regime = str(args.label_regime).strip().lower() if str(args.label_regime).strip() else infer_label_regime_from_targets_path(args.targets_path)
+
     cols = [
+        "label_regime",
         "model_name",
         "spearman_rho",
         "spearman_rho_std",
@@ -707,8 +768,10 @@ def main() -> None:
     else:
         results_list.append(train_node2vec_5seeds(bundle=bundle, node2vec_epochs=args.node2vec_epochs))
 
-    _upsert_rows(out_csv, rows=results_list, cols=cols, key="model_name")
-    _upsert_runtime_rows(results_list)
+    for row in results_list:
+        row["label_regime"] = label_regime
+    _upsert_rows(out_csv, rows=results_list, cols=cols, key=["label_regime", "model_name"])
+    _upsert_runtime_rows(results_list, label_regime=label_regime)
 
     print("[OK] Baseline training/evaluation completed.")
     print(f" - models_written={len(results_list)}")

@@ -155,7 +155,7 @@ def _compute_two_hop(
 
 
 def _upsert_runtime_row(runtime_csv_path: Path, inference_sec_full_graph: float) -> None:
-    cols = ["model_name", "inference_sec_full_graph", "train_sec"]
+    cols = ["label_regime", "model_name", "inference_sec_full_graph", "train_sec"]
     ensure_parent(runtime_csv_path)
 
     if runtime_csv_path.exists():
@@ -170,6 +170,7 @@ def _upsert_runtime_row(runtime_csv_path: Path, inference_sec_full_graph: float)
     runtime_df = runtime_df[cols].copy()
     runtime_df = runtime_df[runtime_df["model_name"] != "diffusion_proxies"].copy()
     runtime_df.loc[len(runtime_df)] = {
+        "label_regime": "",
         "model_name": "diffusion_proxies",
         "inference_sec_full_graph": float(inference_sec_full_graph),
         "train_sec": np.nan,
