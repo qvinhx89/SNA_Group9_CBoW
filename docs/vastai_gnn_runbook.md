@@ -41,6 +41,29 @@ python -c "import torch_geometric; print('pyg ok')"
 python -c "from torch_geometric.nn import APPNP; print('APPNP ok')"
 ```
 
+### Cài PyG nhanh (khuyến nghị, dùng wheel đúng theo torch)
+Trong container `pytorch/pytorch:latest`, torch đã có sẵn. Cài PyG theo đúng wheel tương thích:
+
+```bash
+python - <<'PY'
+import sys
+import torch
+
+print('python', sys.version)
+print('torch', torch.__version__)
+print('cuda', torch.version.cuda)
+print('pyg_wheel_index', f"https://data.pyg.org/whl/torch-{torch.__version__}.html")
+PY
+
+pip install -U pip
+pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv -f "https://data.pyg.org/whl/torch-$(python -c 'import torch; print(torch.__version__)').html"
+pip install torch-geometric
+
+python -c "import torch_geometric; from torch_geometric.nn import APPNP; print('pyg/appnp ok')"
+```
+
+Nếu bước cài wheel lỗi vì torch trong image là nightly/dev, nên chuyển sang torch stable (để có wheel PyG). Khi đó làm theo hướng dẫn chính thức PyTorch để cài torch stable phù hợp CUDA của image, rồi chạy lại block cài PyG bên trên.
+
 ## 1.5) Local sanity check (CPU, chạy nhanh)
 Lưu ý: training full graph bằng CPU có thể rất chậm. Để “test tín hiệu” nhanh trước khi thuê GPU, chạy trên induced subgraph của 5k labeled nodes:
 
@@ -75,10 +98,12 @@ Gợi ý: chạy riêng từng regime và xuất ra **cùng 1 file** (script s�
 ```bash
 python src/mapr2026_v3/run_baselines.py \
   --targets-path data/processed/regression_targets_a0.parquet \
+  --label-regime a0 \
   --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
 
 python src/mapr2026_v3/run_baselines.py \
   --targets-path data/processed/regression_targets_hscc_refined.parquet \
+  --label-regime hscc \
   --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
 ```
 ### 3.1 Edge-only (graph-only strict, x=1)
@@ -94,9 +119,35 @@ python src/mapr2026_v3/run_surrogates.py \
 ```bash
 python src/mapr2026_v3/run_surrogates.py \
   --include-c2-arch \
+  --label-regime hscc \
   --early-stop --patience 20 \
   --targets-path data/processed/regression_targets_hscc_refined.parquet \
   --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv
+```
+
+### HSCC quickstart (khuyến nghị chạy theo thứ tự này)
+Chạy trong `tmux` để không mất job khi rớt SSH:
+
+```bash
+apt-get update && apt-get install -y tmux
+tmux new -s hscc
+
+# (1) Baselines HSCC
+python src/mapr2026_v3/run_baselines.py \
+  --targets-path data/processed/regression_targets_hscc_refined.parquet \
+  --label-regime hscc \
+  --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics.csv
+
+# (2) GNN surrogates HSCC (bao gồm APPNP + edge-only)
+python src/mapr2026_v3/run_surrogates.py \
+  --targets-path data/processed/regression_targets_hscc_refined.parquet \
+  --label-regime hscc \
+  --include-c2-arch \
+  --include-edge-only \
+  --early-stop --patience 20 \
+  --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv
+
+# detach: Ctrl-b d
 ```
 
 ### 3.3 C2 trên A2 targets (H2: GNN–A2 alignment)
