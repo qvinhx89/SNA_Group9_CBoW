@@ -1,196 +1,216 @@
-# Supervisor Guidance: Writing the MAPR 2026 Paper
+# Hướng dẫn Supervisor: Viết paper MAPR 2026
 
-## 9-Day Execution Plan for a Defensible Dual-Operationalization Paper
-
----
-
-## Part 1: Paper Identity — What This Paper Actually Is
-
-Before writing a single word, the team must internalize what this paper contributes and what it does not claim.
-
-**This paper is:** A comparative empirical study showing that the effectiveness of GNN surrogate learning for IC influence approximation depends critically on the IC operationalization. Under degree-coupled IC (A0), analytical baselines are near-optimal. Under attribute-community IC (HSCC), GNN message passing captures cross-community engagement patterns that flat baselines cannot access. The stability analysis revealing structural binary instability is a secondary but genuinely novel methodological finding.
-
-**This paper is not:** A claim that GNN is universally superior for influence prediction. It is not a claim that HSCC is "the correct" diffusion model for Twitch. It is not a claim that MC-IC scores represent real influence.
-
-**The title should reflect the contrast, not a blanket GNN claim.** Something like: "When Does Graph Learning Outperform Analytical Baselines? A Comparative Study of IC Operationalizations for Influence Approximation" or more concisely: "Regime-Dependent GNN Surrogate Learning for Monte Carlo Influence Estimation on Social Networks."
+## Kế hoạch 9 ngày để hoàn thiện một paper dual-operationalization có thể defend
 
 ---
 
-## Part 2: Section-by-Section Writing Guide
+## Phần 1: Định danh paper - bài này thực chất là gì
 
-### Section 1 — Introduction (0.5 pages, ~400 words)
+Trước khi viết một dòng nào, cả team phải thống nhất thật rõ paper này đóng góp gì và không claim điều gì.
 
-**Paragraph 1 (3-4 sentences).** Identifying influential users in online social networks is critical for viral marketing, community management, and platform recommendation. Monte Carlo Independent Cascade (MC-IC) simulation provides a principled operationalization of influence potential grounded in the diffusion model of Kempe et al. (2003). However, MC-IC is computationally expensive — requiring hundreds of stochastic simulations per node — making it impractical for repeated evaluation on large-scale graphs.
+**Paper này là:** một bài comparative empirical study cho thấy hiệu quả của GNN surrogate learning trong việc xấp xỉ IC influence phụ thuộc mạnh vào cách operationalize IC. Dưới degree-coupled IC (A0), analytical baselines gần như tối ưu. Dưới attribute-community IC (HSCC), GNN message passing có thể khai thác các mẫu cross-community engagement mà flat baselines không truy cập được. Phần stability analysis cho thấy structural binary instability là đóng góp methodological phụ nhưng thực sự mới.
 
-**Paragraph 2 (3-4 sentences).** Graph Neural Networks (GNNs) offer a natural surrogate: learn to approximate IC scores from graph structure and node attributes, then deploy the trained model for fast inference. Prior work on GNN-based influence estimation (Kumar et al., 2022; Ling et al., 2023) has focused on single diffusion models, leaving open the question of when learned representations actually outperform simple analytical baselines such as degree centrality. On dense social networks where cascades die quickly, degree itself may capture most of the diffusion signal, leaving little room for GNN improvement.
+**Paper này không phải:** claim rằng GNN luôn vượt trội cho influence prediction. Đây cũng không phải claim rằng HSCC là diffusion model "đúng" cho Twitch. Và cũng không phải claim rằng MC-IC scores là real influence.
 
-**Paragraph 3 (4-5 sentences — contributions).** In this paper, we investigate how the choice of IC operationalization determines whether GNN surrogate learning adds value over analytical baselines. We compare two defensible operationalizations on the Twitch social network (168K nodes, 6.8M edges): (1) weighted cascade (A0), where transmission probability depends only on target degree, and (2) HSCC, a domain-informed variant incorporating source engagement velocity and cross-community amplification. Our contributions are threefold. First, we show that binary influence classification is structurally unstable on dense networks, motivating continuous regression as the principled prediction formulation. Second, we demonstrate that under degree-coupled IC, all GNN architectures converge to the degree centrality ceiling, confirming that the operationalization — not the model architecture — is the binding constraint. Third, under HSCC, GNN message passing captures cross-community engagement patterns that flat baselines cannot access, achieving Spearman ρ = [X] compared to [Y] for the strongest non-graph baseline.
-
-### Section 2 — Background (0.75 pages)
-
-**2.1 Independent Cascade and Weighted Cascade.** Define the IC model following Kempe et al. (2003). State the weighted cascade parameterization p(u,v) = 1/deg(v) and cite its use in DeepIM (Ling et al., 2023). Explain that MC estimation requires R simulation runs per seed node, producing a mean reach score. Define the surrogate learning problem: given IC scores for a subset of nodes, learn a function f(G, X) → IC scores for all nodes.
-
-**2.2 GNN Architectures.** One paragraph covering the five architectures tested, with one sentence each: GraphSAGE (mean aggregation, Hamilton et al. 2017), GCN (symmetric normalization, Kipf and Welling 2017), GIN (sum aggregation with WL-equivalent expressiveness, Xu et al. 2019), GAT (learned attention weights, Veličković et al. 2018), and APPNP (decoupled embedding and K-step Personalized PageRank propagation, Klicpera et al. 2019). State that all are evaluated with identical hyperparameters for fair comparison.
-
-**2.3 Evaluation Protocol.** State the transductive setting. Define Spearman ρ (primary), NDCG@10% (secondary). State that metrics are computed on held-out labeled nodes only, with full-graph inference reported solely for runtime assessment. Pre-register the practical equivalence bound of |Δ Spearman| ≤ 0.02.
-
-### Section 3 — MC-IC as Operational Metric (1.0 pages)
-
-This section must accomplish three things: justify IC as a metric, present the stability finding, and introduce the two operationalizations.
-
-**3.1 Construct Validity and Operationalization Design.** Use the paragraph from Implementation Plan Section 1.1 almost verbatim — it is well-written. Then introduce A0 and HSCC as two defensible but qualitatively different operationalizations. A0 models attention dilution (each neighbor receives equal probability inversely proportional to target degree). HSCC models engagement-velocity-driven diffusion amplified by cross-community bridging. State explicitly that HSCC is a domain-informed design, not a claim about true Twitch diffusion mechanics.
-
-**3.2 Discriminativeness.** Present the IC reach distribution for A0 (mean 31.1, median 6.25, top-10/median ratio ~8×). State that IC scores follow a heavy-tailed distribution consistent with real influence dynamics where most nodes have limited reach but a small fraction can trigger large cascades. For HSCC, report mean reach 4.83 with CV 0.583.
-
-**3.3 Label Stability — A Structural Finding.** This is the paper's most novel methodological contribution. Present the Jaccard instability (0.307 at 150 runs, never exceeding 0.68 at 1200 runs). Present the structural cause: 84.2% of Louvain communities span the top-10% boundary, and gap-to-noise ratios are near zero at all tested thresholds. State the conclusion: binary influence classification is structurally unstable on dense social networks with heavy-tailed IC distributions. This instability is irreducible by increasing simulation runs — it reflects a property of the graph topology, not simulation variance.
-
-**3.4 Regression Formulation.** State that the stability analysis empirically motivates continuous regression on log-transformed IC scores as the principled prediction formulation. Cite the Spearman stability (0.827 at 1200 runs) as evidence that rank ordering is stable even when binary top-k membership is not. Present this as a positive design choice, not a fallback.
-
-### Section 4 — GNN Surrogate Learning (2.0 pages)
-
-**4.1 Experimental Setup (0.3 pages).** Dataset: Twitch MUSAE, 168,114 nodes, 6,797,557 edges, undirected mutual-follow. IC: 5,000 stratified nodes × 200 runs. Split: 80/20 degree-stratified, shared across operationalizations. GNN: 5 architectures, hidden_dim=128, 2 layers, dropout=0.3, HuberLoss, 200 epochs, 5 seeds. Baselines: degree, PageRank, k-shell, one-hop spread, two-hop spread, LR variants, MLP.
-
-**4.2 A0 Results — Structural Ceiling (0.5 pages).** Present the main results table for A0. Degree achieves 0.826, two-hop 0.804, best GNN approximately 0.82. State the bootstrap CI result. If CI includes zero within ±0.02: "Under A0, all GNN architectures achieve Spearman ρ statistically equivalent to degree centrality (bootstrap 95% CI: [X, Y]). This confirms that when IC transmission probability is a direct function of target degree, analytical baselines capture the dominant signal." Present the +0.099 message passing finding (GNN-raw-attr 0.534 vs MLP 0.435) as evidence that graph structure provides signal, but the signal is already fully captured by precomputed centrality.
-
-**4.3 HSCC Results — Graph-Aware Regime (0.5 pages).** Present the HSCC baseline table. Degree: ~0.04. LR(life_time): ~0.80. LR(views+life_time): ~0.81. MLP(raw attrs): ~0.85-0.87. Best GNN: ~0.88-0.93. Bootstrap CI comparing GNN vs strongest flat baseline. The key narrative: under HSCC, degree is no longer informative (rho=0.037), but life_time is a strong single predictor (rho=-0.801). GNN's advantage comes from learning cross-community structure through language-based message passing — a signal that flat baselines cannot access because it requires aggregating neighborhood community composition.
-
-**If GNN dùng language feature:** You must include LR(views+life_time+language) and MLP(raw attrs+language) as fairness baselines. If these fairness baselines also reach ~0.87-0.89, the GNN advantage narrows to the message passing component only. Report this honestly.
-
-**4.4 Contrast Analysis (0.4 pages).** This is the core intellectual contribution. Why does GNN win under HSCC but not A0? Under A0, R²(IC, degree) = 0.887 — degree explains 89% of variance. Adding any attribute explains less than 0.1% additional variance. There is no signal for GNN to learn beyond what degree already provides. Under HSCC, degree explains only 0.1% of variance. The IC score decomposes into phi(u) (engagement velocity, accessible to MLP from raw attributes) and cross_community_fraction (structural bridging, accessible only to GNN through message passing). The oracle analysis (phi × cross_frac = 0.931) confirms this decomposition.
-
-**4.5 Runtime (0.3 pages).** MC-IC labeling: 480s for 5,000 nodes. GNN inference: 0.067s for 168,114 nodes. Speedup: 7,169×. Frame this as the practical motivation for surrogate learning regardless of whether GNN beats degree: even if GNN only matches degree, it provides the same ranking 7,000× faster.
-
-### Section 5 — Discussion and Limitations (0.5 pages)
-
-**5.1 When Does GNN Add Value?** Only when the diffusion model encodes information that requires neighborhood aggregation to recover — specifically, when IC scores depend on the composition of a node's neighborhood (which neighbors have high engagement, which are in different communities) rather than just the node's local degree. This is a structural condition on the IC formula, not a property of GNN architecture.
-
-**5.2 Limitations.** State all four clearly. First, the follower graph is not observed diffusion — all findings are properties of the simulation, not measurements of real influence. Second, HSCC is a novel, domain-informed formula designed to test whether neighborhood composition matters; it is not validated as the true Twitch diffusion model. Third, HSCC has small mean reach (4.83 nodes) — while realistic for selective social diffusion, this limits the dynamic range of the regression target. Fourth, life_time is a strong baseline predictor under HSCC (rho=-0.801); the GNN advantage depends on fairness of baseline feature access.
-
-**5.3 Why Not Learn p From Data?** One sentence: learning edge-level transmission probabilities requires supervised cascade logs unavailable in this dataset; weighted cascade and HSCC provide principled zero-shot alternatives.
+**Tiêu đề nên phản ánh contrast, không phải blanket GNN claim.** Ví dụ:
+"When Does Graph Learning Outperform Analytical Baselines? A Comparative Study of IC Operationalizations for Influence Approximation"
+hoặc ngắn gọn hơn:
+"Regime-Dependent GNN Surrogate Learning for Monte Carlo Influence Estimation on Social Networks."
 
 ---
 
-## Part 3: Papers to Read and Cite
+## Phần 2: Hướng dẫn viết theo từng mục / section
 
-### Must-Cite (Core Framework)
+### Mục 1 / Section 1 - Introduction (0.5 trang, khoảng 400 từ)
 
-**Kempe, Kleinberg, and Tardos (2003).** "Maximizing the Spread of Influence through a Social Network." KDD. This is the foundational reference for the IC model and weighted cascade parameterization. Cite for the IC model definition, the NP-hardness of influence maximization, and the weighted cascade p(u,v) = 1/in-degree(v) formulation.
+**Đoạn 1 / Paragraph 1 (3-4 câu; có thể draft bằng tiếng Anh như sau).**
+Identifying influential users in online social networks is critical for viral marketing, community management, and platform recommendation. Monte Carlo Independent Cascade (MC-IC) simulation provides a principled operationalization of influence potential grounded in the diffusion model of Kempe et al. (2003). However, MC-IC is computationally expensive — requiring hundreds of stochastic simulations per node — making it impractical for repeated evaluation on large-scale graphs.
 
-**Ling, Jiang, Wang, Thai, Xue, Song, Qiu, and Zhao (2023).** "Deep Graph Representation Learning and Optimization for Influence Maximization." ICML. The DeepIM paper. Cite for two things: (1) the weighted cascade experimental setup that you follow, and (2) as a representative of learning-based influence maximization methods. This paper uses GAT with monotonicity constraints and knowledge distillation for seed set optimization — a different task from yours (they optimize seed sets, you approximate individual IC scores), but the diffusion model setup is the same.
+**Đoạn 2 / Paragraph 2 (3-4 câu; có thể draft bằng tiếng Anh như sau).**
+Graph Neural Networks (GNNs) offer a natural surrogate: learn to approximate IC scores from graph structure and node attributes, then deploy the trained model for fast inference. Prior work on GNN-based influence estimation (Kumar et al., 2022; Ling et al., 2023) has focused on single diffusion models, leaving open the question of when learned representations actually outperform simple analytical baselines such as degree centrality. On dense social networks where cascades die quickly, degree itself may capture most of the diffusion signal, leaving little room for GNN improvement.
 
-**Hamilton, Ying, and Leskovec (2017).** "Inductive Representation Learning on Large Graphs." NeurIPS. GraphSAGE paper. Cite for the SAGE architecture and the inductive learning paradigm.
+**Đoạn 3 / Paragraph 3 (4-5 câu - contributions; có thể draft bằng tiếng Anh như sau).**
+In this paper, we investigate how the choice of IC operationalization determines whether GNN surrogate learning adds value over analytical baselines. We compare two defensible operationalizations on the Twitch social network (168K nodes, 6.8M edges): (1) weighted cascade (A0), where transmission probability depends only on target degree, and (2) HSCC, a domain-informed variant incorporating source engagement velocity and cross-community amplification. Our contributions are threefold. First, we show that binary influence classification is structurally unstable on dense networks, motivating continuous regression as the principled prediction formulation. Second, we demonstrate that under degree-coupled IC, all GNN architectures converge to the degree centrality ceiling, confirming that the operationalization — not the model architecture — is the binding constraint. Third, under HSCC, GNN message passing captures cross-community engagement patterns that flat baselines cannot access, achieving Spearman ρ = [X] compared to [Y] for the strongest non-graph baseline.
 
-**Kipf and Welling (2017).** "Semi-Supervised Classification with Graph Convolutional Networks." ICLR. GCN paper. Cite for the GCN architecture and specifically for the symmetric normalization D^{-1/2}AD^{-1/2} that is structurally analogous to the A2 sensitivity variant.
+### Mục 2 / Section 2 - Background (0.75 trang)
 
-**Xu, Hu, Leskovec, and Jegelka (2019).** "How Powerful are Graph Neural Networks?" ICLR. GIN paper. Cite for the GIN architecture and the WL-equivalence expressiveness result that motivates including GIN as the maximally expressive baseline.
+**2.1 IC và Weighted Cascade.** Ở phần này, hãy định nghĩa mô hình IC theo Kempe et al. (2003). Nêu rõ weighted cascade parameterization `p(u,v) = 1/deg(v)` và cite việc DeepIM (Ling et al., 2023) cũng dùng setup này. Giải thích rằng MC estimation cần `R` simulation runs cho mỗi seed node để tạo ra mean reach score. Sau đó chốt luôn surrogate learning problem: từ IC scores của một tập node con, học một hàm `f(G, X) -> IC scores` cho toàn bộ graph.
 
-**Veličković, Cucurull, Casanova, Romero, Liò, and Bengio (2018).** "Graph Attention Networks." ICLR. GAT paper. Cite for the attention-based aggregation mechanism and the hypothesis that attention could learn degree-inversely-proportional weighting.
+**2.2 GNN Architectures.** Viết một đoạn ngắn bao quát 5 architecture đã test, mỗi architecture một câu: GraphSAGE, GCN, GIN, GAT, và APPNP. Mục tiêu ở đây không phải dạy lại GNN, mà chỉ đủ để reviewer thấy vì sao shortlist này hợp lý và được chạy với cùng hyperparameter setting để đảm bảo fair comparison.
 
-**Klicpera, Bojchevski, and Günnemann (2019).** "Predict Then Propagate: Graph Neural Networks Meet Personalized PageRank." ICLR. APPNP paper. Cite for the decoupled embed-then-propagate architecture and the K-step Personalized PageRank propagation that motivates testing deeper receptive fields for IC approximation.
+**2.3 Evaluation Protocol.** Nêu rõ đây là transductive setting. Định nghĩa Spearman `ρ` là metric chính, `NDCG@10%` là metric phụ. Nhấn mạnh rằng metrics chỉ được tính trên held-out labeled nodes; full-graph inference chỉ dùng để báo runtime. Đồng thời nhắc rõ practical equivalence bound đã pre-register là `|Δ Spearman| ≤ 0.02`.
 
-**Rozemberczki, Allen, and Sarkar (2021).** "Multi-Scale Attributed Node Embedding." Journal of Complex Networks. The Twitch MUSAE dataset paper. Cite for the dataset description, the mutual-follow edge semantics, and the node attributes (views, life_time, language, dead_account).
+### Mục 3 / Section 3 - MC-IC as Operational Metric (1.0 trang)
 
-### Should-Cite (Strengthens Specific Claims)
+Phần này phải làm được 3 việc: biện minh vì sao IC là một metric hợp lý, trình bày phát hiện về stability, và giới thiệu rõ hai operationalization đang active là `A0` và `HSCC`.
 
-**Kitsak, Gallos, Havlin, Liljeros, Muchnik, Stanley, and Makse (2010).** "Identification of Influential Spreaders in Complex Networks." Nature Physics. Cite for the finding that k-shell coreness predicts spreading ability, which provides context for why structural centrality baselines are strong competitors under degree-coupled IC.
+**3.1 Construct Validity và thiết kế operationalization.** Có thể lấy gần nguyên văn đoạn ở `Implementation Plan` Mục 1.1 / Section 1.1 vì đoạn đó đã khá chắc. Sau đó giới thiệu `A0` và `HSCC` như hai operationalization đều defendable nhưng tạo ra hai learning regime khác nhau về bản chất. `A0` mô hình hóa attention dilution thông qua target degree; `HSCC` mô hình hóa source engagement velocity kết hợp cross-community bridging. Phải nói rất rõ rằng `HSCC` là domain-informed design, không phải claim về cơ chế diffusion thật của Twitch.
 
-**Guille, Hacid, Favre, and Zighed (2013).** "Information Diffusion in Online Social Networks: A Survey." ACM SIGMOD Record. Cite specifically Section 4 on evaluation challenges when behavioral ground truth is unavailable. This supports the construct validity discussion.
+**3.2 Tính discriminative.** Trình bày IC reach distribution cho `A0` với các con số mean `31.1`, median `6.25`, top-10/median ratio khoảng `8x`. Sau đó giải thích rằng phân phối này heavy-tailed và phù hợp với trực giác influence dynamics ngoài đời: đa số node reach thấp, chỉ một nhóm nhỏ tạo cascade lớn. Với `HSCC`, báo mean reach `4.83` và `CV = 0.583`.
 
-**Burt (1992).** "Structural Holes: The Social Structure of Competition." Harvard University Press. Cite for the structural holes theory that provides domain justification for the cross-community amplification component of HSCC. Nodes bridging structural holes have disproportionate influence because information through them reaches otherwise disconnected groups.
+**3.3 Label Stability - một phát hiện mang tính cấu trúc.** Đây là điểm methodological mới nhất của paper. Nêu rõ Jaccard instability (`0.307` ở 150 runs, không vượt `0.68` ngay cả ở 1200 runs). Sau đó đưa nguyên nhân cấu trúc: `84.2%` Louvain communities span qua top-10% boundary và gap-to-noise ratio gần như bằng 0 ở mọi threshold đã test. Kết luận phần này nên viết rất dứt khoát bằng tiếng Anh nếu cần đưa vào paper:
+"Binary influence classification is structurally unstable on dense social networks with heavy-tailed IC distributions. This instability is irreducible by increasing simulation runs and reflects a property of the graph topology rather than simulation variance."
 
-**Benjamini and Hochberg (1995).** "Controlling the False Discovery Rate." Journal of the Royal Statistical Society Series B. Cite if you use BH-FDR correction for any multiple testing.
+**3.4 Formulation dạng regression.** Cần nói rằng stability analysis dẫn tới quyết định dùng continuous regression trên log-transformed IC scores như principled prediction formulation. Cite Spearman stability (`0.827` ở 1200 runs) để cho thấy rank ordering vẫn ổn định ngay cả khi binary top-k membership không ổn định. Cách viết phải thể hiện đây là positive design choice, không phải fallback.
 
-**Blondel, Guillaume, Lambiotte, and Lefebvre (2008).** "Fast Unfolding of Communities in Large Networks." Journal of Statistical Mechanics. Cite for the Louvain community detection algorithm used to compute community assignments and cross-community edge fractions.
+### Mục 4 / Section 4 - GNN Surrogate Learning (2.0 trang)
 
-### Consider-Citing (Adds Depth If Space Permits)
+**4.1 Experimental Setup (0.3 trang).** Trình bày ngắn gọn các thành phần cần có trong paper: Twitch MUSAE với `168,114` nodes và `6,797,557` edges, IC labeling trên `5,000` stratified nodes với `200` runs, split `80/20` degree-stratified dùng chung cho cả hai operationalization, GNN gồm 5 architectures với `hidden_dim=128`, `2` layers, `dropout=0.3`, `HuberLoss`, `200` epochs, `5` seeds; baseline stack gồm degree, PageRank, k-shell, one-hop, two-hop, LR variants và MLP.
 
-**Chen, Wang, and Wang (2010).** "Scalable Influence Maximization for Prevalent Viral Marketing in Large-Scale Social Networks." KDD. Cite for the PMIA model showing influence decays exponentially with hop count, supporting your finding that cascades die within 1-3 hops on dense graphs.
+**4.2 A0 Results — Structural Ceiling (0.5 trang).** Ở đây hãy trình bày bảng kết quả chính cho `A0`: degree đạt khoảng `0.826`, two-hop khoảng `0.804`, best GNN khoảng `0.82`. Phải nêu bootstrap CI. Nếu CI chứa 0 trong biên `±0.02`, có thể dùng nguyên câu tiếng Anh sau trong paper:
+"Under A0, all GNN architectures achieve Spearman ρ statistically equivalent to degree centrality (bootstrap 95% CI: [X, Y]). This confirms that when IC transmission probability is a direct function of target degree, analytical baselines capture the dominant signal."
 
-**Kumar, Mallik, Khetarpal, and Panda (2022).** "Influence Maximization in Social Networks Using Graph Embedding and Graph Neural Network." Information Sciences. Cite as a representative of GNN-based influence approaches that use IC-simulated labels for training — the same paradigm you follow, but on smaller networks and without the dual-operationalization comparison.
+Đồng thời nêu thêm phát hiện `+0.099` về message passing (`GNN-raw-attr 0.534` so với `MLP 0.435`) như một bằng chứng rằng graph structure có signal, nhưng signal đó đã được precomputed centrality nắm gần hết.
 
-**Aral and Walker (2012).** "Identifying Influential and Susceptible Members of Social Networks." Science. Cite for the empirical finding that social ties correlate with influence pathways, supporting the construct validity of using follower graphs for diffusion simulation.
+**4.3 HSCC Results — Graph-Aware Regime (0.5 trang).** Hãy trình bày bảng baseline của `HSCC` lấy từ frozen regime-tagged outputs, không dùng ad hoc intermediate runs. Degree được kỳ vọng gần 0, `LR(life_time)` mạnh, `LR(views+life_time)` và `MLP(raw attrs)` mạnh hơn, và best GNN phải được so sánh với strongest flat baseline dưới matched feature access. Narrative chính là: dưới `HSCC`, degree không còn informative, nhưng source-side attributes đã là predictor mạnh; vì vậy mọi lợi thế của GNN phải được diễn giải như incremental value đến từ graph/community structure beyond flat baselines. Nếu frozen outputs cuối cho thấy margin nhỏ, cứ viết trung thực như vậy.
 
-**Grover and Leskovec (2016).** "node2vec: Scalable Feature Learning for Networks." KDD. Cite if Node2Vec is included as a baseline.
+**Nếu GNN dùng pipeline `raw_attr` hiện tại của repo:** hãy mặc định `language` là có mặt whenever cột `language` tồn tại, vì code hiện tại tự mở rộng `lang_*` dummies vào `raw_attr`. Do đó, trừ khi team chủ động tắt và ghi lại quyết định đó trước final run, paper bắt buộc phải có fairness baselines `LR(views+life_time+language)` và `MLP(raw attrs+language)`. Nếu các fairness baselines này tiến rất gần best GNN, paper phải frame phần gain của GNN như residual message-passing component mà thôi.
 
-**Lü, Chen, Ren, Zhang, Zhang, and Zhou (2016).** "Vital Nodes Identification in Complex Networks." Physics Reports. Cite for the comprehensive survey on node importance metrics, providing context for why degree, PageRank, k-shell, and betweenness are standard baselines.
+**4.4 Contrast Analysis (0.4 trang).** Đây là phần cốt lõi về mặt intellectual contribution. Cần trả lời rõ: vì sao GNN thắng dưới `HSCC` nhưng không thắng dưới `A0`? Với `A0`, `R²(IC, degree) = 0.887`, tức degree giải thích gần `89%` variance; thêm attribute gần như không thêm signal đáng kể. Với `HSCC`, degree chỉ giải thích một phần rất nhỏ variance. IC score có thể được tách thành `phi(u)` (engagement velocity, flat attribute models có thể nắm) và `cross_community_fraction` (structural bridging, phải qua neighborhood aggregation mới recover tốt). `phi`, `lr_phi`, và `phi × cross_frac` chỉ nên dùng như diagnostic hoặc oracle-style interpretation tools trừ khi comparator policy được re-lock; comparator chính thức của HSCC trong MAPR paper vẫn là strongest flat baseline từ frozen fairness table với matched feature access.
 
----
+**4.5 Runtime (0.3 trang).** Phần này nên giữ ngắn và thực dụng. Nêu `MC-IC labeling = 480s` cho `5,000` nodes, `GNN inference = 0.067s` cho `168,114` nodes, suy ra speedup khoảng `7,169x`. Cách frame đúng là: surrogate learning có giá trị thực tế vì nhanh hơn rất nhiều so với repeated MC simulation, bất kể GNN có vượt degree hay chỉ ngang degree.
 
-## Part 4: Critical Execution Items for the Next 9 Days
+### Mục 5 / Section 5 - Discussion and Limitations (0.5 trang)
 
-### Day 21 (Today) — Lock and Verify
+**5.1 Khi nào GNN thực sự thêm giá trị?** Câu trả lời ở mức concept là: chỉ khi diffusion model mã hóa loại thông tin buộc phải đi qua neighborhood aggregation mới recover được, cụ thể là khi IC score phụ thuộc vào composition của neighborhood chứ không chỉ vào local degree. Đây là điều kiện cấu trúc của IC formula, không phải phẩm chất bẩm sinh của một GNN architecture nào.
 
-Person 1 must verify that `regression_targets_hscc_refined.parquet` exists and is readable. If it does not exist, regenerate it immediately from the existing HSCC IC scores. This is a one-line operation and blocks everything else. Person 1 must also add the HSCC formula entry to `experiment_registry.md` with the exact parameters (lambda=1.0, gamma=1.0, p_max=1.0).
+**5.2 Limitations.** Phải nêu rõ ít nhất 4 ý: follower graph không phải observed diffusion; `A0` và `HSCC` chỉ là operationalization chứ không phải ground truth; `HSCC` là domain-informed formula mới nhưng chưa được validate như diffusion law thật; và `life_time` là một baseline predictor rất mạnh dưới `HSCC`, nên mọi claim về GNN đều phụ thuộc vào fairness của baseline feature access.
 
-Person 2 must confirm that `community_features.parquet` covers 100% of active nodes with both `community_id` and `cross_community_edge_fraction`. This is an upstream dependency for HSCC interpretation.
-
-Person 3 must update the evaluation harness to accept a `label_regime` parameter so that baseline and GNN results are clearly tagged as A0 or HSCC. This is a code change, not a new experiment.
-
-### Days 22-23 — Baseline Fairness (HSCC) + GNN Training (Both Regimes)
-
-Person 3 runs HSCC flat baselines first, before any GNN: LR(life_time), LR(views+life_time), LR(degree+views+life_time), MLP(views, life_time). If GNN will use language as a feature, also run LR(views+life_time+language) and MLP(views+life_time+language). Record the strongest flat baseline Spearman — this becomes the HSCC bootstrap comparator.
-
-Person 3 simultaneously trains GNN architectures on both A0 and HSCC labels. For A0, raw_attr features (views_log, views_per_day, life_time). For HSCC, same raw_attr plus language if the team decides to include it. Five architectures × five seeds × two regimes = 50 training runs. At ~23 seconds per run, this is approximately 20 minutes total on GPU.
-
-### Day 24 — Bootstrap CI + Result Locking
-
-Person 3 runs bootstrap CI for both regimes. A0: GNN best vs degree. HSCC: GNN best vs strongest flat baseline (identified from Day 22 results). Record both Spearman and NDCG CIs.
-
-All experimental results are frozen after Day 24. No new experiments, no parameter changes, no additional IC formulations.
-
-### Days 25-27 — Paper Writing
-
-Day 25: Draft Sections 1-2 (Introduction + Background). These do not depend on exact numbers.
-
-Day 26: Draft Sections 3-4 (MC-IC Metric + GNN Results) with actual numbers from the frozen result tables. Create Figure 1 (pipeline diagram) and Figure 2 (two-panel results showing A0 and HSCC contrast).
-
-Day 27: Draft Section 5 (Discussion + Limitations). Complete all tables. Internal review pass.
-
-### Days 28-29 — Polish and Format
-
-Day 28: IEEE formatting, double-blind compliance check (remove all author names, affiliations, acknowledgments from PDF), figure readability in grayscale, reference formatting.
-
-Day 29: Final read-through by all team members. Fix any claim that is not supported by the frozen results. Ensure the abstract accurately reflects actual findings, not hoped-for findings.
-
-### Day 30 — Submit
-
-Submit. Do not make last-minute changes to results or claims.
+**5.3 Vì sao không học `p` trực tiếp từ dữ liệu?** Có thể chốt phần này bằng 1 câu tiếng Anh như sau:
+"Learning edge-level transmission probabilities requires supervised cascade logs unavailable in this dataset; weighted cascade and HSCC provide principled zero-shot alternatives."
 
 ---
 
-## Part 5: The Three Claims the Paper Must Support With Evidence
+## Phần 3: Các paper nên đọc và cite
 
-Every claim in the paper must be traceable to a specific artifact. Here is the mapping:
+### Nhóm bắt buộc cite (core framework)
 
-**Claim 1: Binary influence classification is structurally unstable on dense social networks.** Evidence: `stability_explanation.json` (pct_communities_spanning_boundary = 0.842, mean_gap_to_noise near zero), Jaccard stability sweep (0.307 → 0.682, never reaching 0.85), Spearman stability (0.685 → 0.827 — rank ordering stabilizes but binary membership does not).
+**Kempe, Kleinberg, and Tardos (2003).** "Maximizing the Spread of Influence through a Social Network." KDD. Đây là reference nền tảng cho mô hình IC và weighted cascade parameterization. Cần cite cho định nghĩa IC, tính NP-hard của influence maximization, và công thức weighted cascade `p(u,v) = 1/in-degree(v)`.
 
-**Claim 2: Under degree-coupled IC (A0), GNN is practically equivalent to degree centrality.** Evidence: `gnn_vs_degree_bootstrap_ci_a0.json` (bootstrap CI including zero within ±0.02), A0 results table showing degree 0.826 vs best GNN ~0.82. Message passing contribution: GNN-raw-attr 0.534 vs MLP-raw-attr 0.435 = +0.099.
+**Ling, Jiang, Wang, Thai, Xue, Song, Qiu, and Zhao (2023).** "Deep Graph Representation Learning and Optimization for Influence Maximization." ICML. Đây là paper DeepIM. Cần cite cho 2 việc: `(1)` weighted cascade experimental setup mà bạn đang bám theo, và `(2)` như một đại diện của learning-based influence maximization. Paper này giải bài toán seed-set optimization, khác task của bạn, nhưng diffusion setup thì tương thích.
 
-**Claim 3: Under attribute-community IC (HSCC), GNN outperforms flat baselines by capturing cross-community engagement structure.** Evidence: `gnn_vs_baseline_bootstrap_ci_hscc.json` (bootstrap CI for GNN vs strongest flat baseline), HSCC results table showing degree ~0.04 and GNN ~0.88-0.93. Oracle decomposition: phi × cross_frac = 0.931 confirming that the IC signal decomposes into an attribute component and a structural component.
+**Hamilton, Ying, and Leskovec (2017).** "Inductive Representation Learning on Large Graphs." NeurIPS. Cite cho GraphSAGE architecture và inductive learning paradigm.
 
-If any of these three claims cannot be supported by the actual experimental results, the paper must be rewritten to reflect what the data actually shows. The contrast story (Claims 2+3 together) is publishable even if Claim 3 shows only a modest GNN margin, because the contrast itself is the finding.
+**Kipf and Welling (2017).** "Semi-Supervised Classification with Graph Convolutional Networks." ICLR. Cite cho GCN architecture và đặc biệt là symmetric normalization `D^{-1/2}AD^{-1/2}` có sự tương đồng cấu trúc với A2 sensitivity variant.
+
+**Xu, Hu, Leskovec, and Jegelka (2019).** "How Powerful are Graph Neural Networks?" ICLR. Cite cho GIN architecture và lập luận WL-equivalent expressiveness.
+
+**Veličković, Cucurull, Casanova, Romero, Liò, and Bengio (2018).** "Graph Attention Networks." ICLR. Cite cho attention-based aggregation và giả thuyết rằng attention có thể học weighting liên quan đến degree.
+
+**Klicpera, Bojchevski, and Günnemann (2019).** "Predict Then Propagate: Graph Neural Networks Meet Personalized PageRank." ICLR. Cite cho APPNP architecture và Personalized PageRank propagation.
+
+**Rozemberczki, Allen, and Sarkar (2021).** "Multi-Scale Attributed Node Embedding." Journal of Complex Networks. Đây là paper mô tả MUSAE Twitch dataset. Cần cite cho semantics của dataset, mutual-follow edges, và các node attributes như `views`, `life_time`, `language`, `dead_account`.
+
+### Nhóm nên cite (giúp claim chắc hơn)
+
+**Kitsak, Gallos, Havlin, Liljeros, Muchnik, Stanley, and Makse (2010).** "Identification of Influential Spreaders in Complex Networks." Nature Physics. Cite cho finding rằng k-shell coreness có thể dự báo spreading ability, từ đó biện minh vì sao structural centrality baselines là đối thủ mạnh dưới degree-coupled IC.
+
+**Guille, Hacid, Favre, and Zighed (2013).** "Information Diffusion in Online Social Networks: A Survey." ACM SIGMOD Record. Nên cite Section 4 về khó khăn đánh giá khi không có behavioral ground truth; rất hợp cho construct validity discussion.
+
+**Burt (1992).** "Structural Holes: The Social Structure of Competition." Harvard University Press. Cite cho structural holes theory dùng để biện minh về mặt domain cho thành phần cross-community amplification của HSCC.
+
+**Benjamini and Hochberg (1995).** "Controlling the False Discovery Rate." Journal of the Royal Statistical Society Series B. Cite nếu bạn có dùng BH-FDR correction cho multiple testing.
+
+**Blondel, Guillaume, Lambiotte, and Lefebvre (2008).** "Fast Unfolding of Communities in Large Networks." Journal of Statistical Mechanics. Cite cho Louvain community detection algorithm.
+
+### Nhóm có thể cân nhắc cite nếu còn chỗ
+
+**Chen, Wang, and Wang (2010).** "Scalable Influence Maximization for Prevalent Viral Marketing in Large-Scale Social Networks." KDD. Có thể cite cho PMIA và luận điểm influence decay theo hop distance.
+
+**Kumar, Mallik, Khetarpal, and Panda (2022).** "Influence Maximization in Social Networks Using Graph Embedding and Graph Neural Network." Information Sciences. Dùng như một representative của hướng GNN-based influence methods huấn luyện trên IC-simulated labels.
+
+**Aral and Walker (2012).** "Identifying Influential and Susceptible Members of Social Networks." Science. Có thể cite để hỗ trợ luận điểm social ties có liên quan tới influence pathways.
+
+**Grover and Leskovec (2016).** "node2vec: Scalable Feature Learning for Networks." KDD. Cite nếu Node2Vec xuất hiện như baseline.
+
+**Lü, Chen, Ren, Zhang, Zhang, and Zhou (2016).** "Vital Nodes Identification in Complex Networks." Physics Reports. Cite cho survey tổng quan về node importance metrics.
 
 ---
 
-## Part 6: What Reviewers Will Ask and How to Answer
+## Phần 4: Các việc quan trọng phải hoàn tất trong 9 ngày tới
 
-**"Why not use real cascade data?"** Answer: The Twitch dataset does not contain behavioral cascade logs. MC-IC provides a principled simulation-based proxy following established methodology (Kempe et al., 2003; Ling et al., 2023). All findings should be interpreted as properties of the simulation, not measurements of real influence. This is stated explicitly in Section 3.1 and Limitations.
+### Ngày 21 (hôm nay) - khóa và xác minh
 
-**"Why is HSCC a good diffusion model?"** Answer: We do not claim HSCC is the true Twitch diffusion model. HSCC is a domain-informed operationalization designed to test whether neighborhood composition adds learnable value for GNN. The engagement velocity component (views per unit active time) is a reasonable proxy for content production rate. The cross-community amplification is motivated by structural holes theory (Burt, 1992). The paper's contribution is the comparative finding, not a claim about HSCC's realism.
+- **Người 1 / Person 1:** xác minh rằng `regression_targets_hscc_refined.parquet` tồn tại và đọc được. Nếu chưa có thì regenerate ngay từ HSCC IC scores hiện có. Đồng thời kiểm tra `experiment_registry.md` để chắc rằng formula lock của HSCC-refined đang khớp với codebase hiện tại; nếu thiếu hoặc lệch thì sửa trước final HSCC run.
 
-**"Why not compare against published influence maximization methods like DeepIM?"** Answer: DeepIM and similar methods solve a different problem: selecting optimal seed sets to maximize total cascade reach. Our task is node-level IC score regression — predicting individual influence potential, not optimizing a collective seed set. The comparison is not directly applicable, though the diffusion model parameterization follows DeepIM's weighted cascade setup.
+- **Người 2 / Person 2:** xác nhận rằng `community_features.parquet` cover 100% active nodes với cả `community_id` lẫn `cross_community_edge_fraction`. Đây là upstream dependency bắt buộc để diễn giải HSCC.
 
-**"The Twitch dataset is from 2021. Is it still relevant?"** Answer: The MUSAE Twitch dataset is a standard benchmark for graph-level analysis, cited in numerous recent works. The contribution is methodological (when does GNN add value for IC approximation), not findings specific to the Twitch platform circa 2021. Dataset age does not affect the methodological contribution.
+- **Người 3 / Person 3:** xác minh rằng evaluation runners hiện tại đã emit `label_regime` cho cả baseline outputs lẫn surrogate outputs. Nếu các CSV đang có bị stale, bị trộn regime, hoặc thiếu HSCC rows thì phải regenerate lại frozen regime-tagged outputs.
 
-**"Life_time dominates HSCC labels. Isn't GNN just learning life_time?"** Answer: This is addressed through baseline fairness. LR(life_time) achieves rho ~0.80 and MLP(views+life_time) achieves ~0.85-0.87. GNN's additional margin comes from cross-community structure learned through message passing, not from better life_time processing. The oracle analysis (phi × cross_frac = 0.931) decomposes the signal into attribute and structural components, confirming that the structural component is what GNN uniquely captures.
+### Ngày 22-23 - baseline fairness (HSCC) + train GNN cho cả hai regime
+
+- **Người 3 / Person 3:** chạy HSCC flat baselines trước khi chạy GNN: `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(views, life_time)`. Trong repo hiện tại, nếu dùng `raw_attr` và có cột `language` thì language dummies được thêm tự động; vì vậy `LR(views+life_time+language)` và `MLP(views+life_time+language)` là fairness baselines bắt buộc trừ khi team chủ động tắt `language` và ghi lại quyết định đó trước frozen run. Hãy lấy strongest flat baseline từ matched-access table này làm HSCC bootstrap comparator. `phi` và `lr_phi` chỉ nên xem như diagnostic interpretation rows, không phải default paper comparator, trừ khi plans được re-lock lại rõ ràng.
+
+- **Người 3 / Person 3:** đồng thời train GNN architectures trên cả A0 labels và HSCC labels. Với `A0`, dùng raw_attr features `views_log`, `views_per_day`, `life_time`. Với `HSCC`, giả định cùng pipeline raw_attr và nhớ rằng `language` sẽ tự được thêm vào nếu có, trừ khi bị disable có chủ đích và có ghi lại. Tổng cộng `5 architectures × 5 seeds × 2 regimes = 50` runs. Với tốc độ khoảng `23s/run`, tổng thời gian trên GPU vào khoảng `20 phút`.
+
+### Ngày 24 - bootstrap CI và khóa kết quả
+
+- **Người 3 / Person 3:** chạy bootstrap CI cho cả hai regime. Với `A0`: so sánh best GNN với degree. Với `HSCC`: so sánh best GNN với strongest flat baseline từ frozen matched-access fairness table. Record cả Spearman lẫn NDCG CIs. Chỉ sau khi các frozen artifacts này tồn tại thì paper mới được phép dùng claim wording gắn với `gnn_vs_degree_bootstrap_ci_a0.json` hoặc `gnn_vs_baseline_bootstrap_ci_hscc.json`.
+
+Sau ngày 24, toàn bộ experimental results phải được đóng băng. Không mở thêm experiment mới, không đổi parameter, không thêm IC formulation mới.
+
+### Ngày 25-27 - viết paper
+
+Ngày 25: draft Mục 1-2 / Sections 1-2 (`Introduction + Background`). Hai phần này không phụ thuộc vào số liệu cuối.
+
+Ngày 26: draft Mục 3-4 / Sections 3-4 (`MC-IC Metric + GNN Results`) với số liệu thật từ frozen result tables. Đồng thời tạo Hình 1 / Figure 1 (pipeline diagram) và Hình 2 / Figure 2 (two-panel results cho contrast giữa `A0` và `HSCC`).
+
+Ngày 27: draft Mục 5 / Section 5 (`Discussion + Limitations`), hoàn tất tất cả bảng, rồi làm internal review pass.
+
+### Ngày 28-29 - polish và format
+
+Ngày 28: xử lý IEEE formatting, kiểm tra double-blind compliance (xóa author names, affiliations, acknowledgments khỏi PDF), kiểm tra figure readability ở chế độ grayscale, và format reference list.
+
+Ngày 29: cả team đọc lại lần cuối. Sửa mọi claim không được frozen results support. Đảm bảo abstract phản ánh đúng findings thực tế chứ không phải điều team mong sẽ thấy.
+
+### Ngày 30 - nộp
+
+Nộp bài. Không sửa kết quả hay claim vào phút chót.
+
+---
+
+## Phần 5: Ba claim paper bắt buộc phải chống đỡ được bằng evidence
+
+Mỗi claim trong paper phải map được tới một frozen artifact cụ thể. Các mapping dưới đây là evidence requirements cho bản paper cuối, không phải assumption được viết trước khi outputs được khóa.
+
+### Claim 1
+**Có thể dùng nguyên tiếng Anh trong paper:** Binary influence classification is structurally unstable on dense social networks.
+
+Evidence bắt buộc: `stability_explanation.json` (`pct_communities_spanning_boundary = 0.842`, `mean_gap_to_noise` gần 0), Jaccard stability sweep (`0.307 -> 0.682`, không bao giờ chạm `0.85`), và Spearman stability (`0.685 -> 0.827`, tức rank ordering ổn định dần trong khi binary membership thì không). Các artifacts này hiện đã có trong repo, nhưng khi viết paper vẫn phải cite đúng frozen copies được dùng cho bản nộp.
+
+### Claim 2
+**Có thể dùng nguyên tiếng Anh trong paper:** Under degree-coupled IC (A0), GNN is practically equivalent to degree centrality.
+
+Evidence frozen bắt buộc: `gnn_vs_degree_bootstrap_ci_a0.json` (bootstrap CI chứa 0 trong pre-registered equivalence band), một frozen A0 results table cho thấy degree và best GNN trên cùng split, cùng diagnostic về message-passing contribution như `GNN-raw-attr vs MLP-raw-attr`. Không viết claim cuối với số cụ thể cho đến khi regime-tagged A0 tables và bootstrap JSON đã freeze.
+
+### Claim 3
+**Có thể dùng nguyên tiếng Anh trong paper:** Under attribute-community IC (HSCC), GNN outperforms flat baselines by capturing cross-community engagement structure.
+
+Evidence frozen bắt buộc: `gnn_vs_baseline_bootstrap_ci_hscc.json` (bootstrap CI cho GNN so với strongest flat baseline lấy từ frozen HSCC fairness table dưới matched feature access), một frozen HSCC results table cho baseline stack và best GNN, cùng oracle-style decomposition (`phi`, `lr_phi`, `phi × cross_frac`) chỉ dùng để diễn giải signal decomposition. Không được coi `phi` hay `lr_phi` là comparator chính của paper nếu comparator policy chưa được re-lock trong plans.
+
+Nếu một trong ba claim này không được kết quả thực tế support, paper phải được viết lại để phản ánh đúng dữ liệu. Contrast story giữa Claim 2 và Claim 3 vẫn publishable ngay cả khi margin của Claim 3 chỉ nhỏ, vì chính contrast đó mới là finding quan trọng.
+
+---
+
+## Phần 6: Reviewer sẽ hỏi gì và nên trả lời ra sao
+
+**Reviewer hỏi: "Why not use real cascade data?"** Cách trả lời nên là: Twitch dataset không chứa behavioral cascade logs. MC-IC chỉ đóng vai trò như một simulation-based proxy có cơ sở phương pháp luận từ Kempe et al. (2003) và Ling et al. (2023). Mọi findings trong paper đều phải được hiểu là properties của simulation, không phải measurement của real influence. Điểm này phải được nói rõ ở Mục 3.1 / Section 3.1 và phần Limitations.
+
+**Reviewer hỏi: "Why is HSCC a good diffusion model?"** Cách trả lời nên là: paper không claim `HSCC` là Twitch diffusion model thật. `HSCC` chỉ là một domain-informed operationalization được thiết kế để kiểm tra xem neighborhood composition có tạo thêm learnable value cho GNN hay không. Engagement velocity là proxy hợp lý cho content production rate, còn cross-community amplification được biện minh bởi structural holes theory của Burt (1992). Đóng góp của paper là comparative finding, không phải claim về realism của HSCC.
+
+**Reviewer hỏi: "Why not compare against published influence maximization methods like DeepIM?"** Cách trả lời nên là: DeepIM và các phương pháp tương tự giải một bài toán khác, đó là chọn seed set tối ưu để tối đa total cascade reach. Task của paper này là node-level IC score regression, tức dự đoán influence potential của từng node riêng lẻ, không phải tối ưu một seed set tập thể. Vì vậy comparison trực tiếp không phù hợp, dù diffusion setup của paper có theo weighted cascade tradition giống DeepIM.
+
+**Reviewer hỏi: "The Twitch dataset is from 2021. Is it still relevant?"** Cách trả lời nên là: MUSAE Twitch vẫn là benchmark chuẩn cho graph-level analysis và vẫn được cite trong nhiều công trình gần đây. Đóng góp của paper này là methodological - khi nào GNN thêm giá trị cho IC approximation - chứ không phải một kết luận đặc thù cho nền tảng Twitch ở thời điểm 2021.
+
+**Reviewer hỏi: "Life_time dominates HSCC labels. Isn't GNN just learning life_time?"** Cách trả lời nên là: vấn đề này được xử lý bằng baseline fairness dưới matched feature access. Nếu pipeline `raw_attr` hiện tại có `language`, thì HSCC fairness table cũng phải có các LR/MLP baselines dùng `language` trước khi được phép claim lợi thế cho GNN. Chỉ phần residual margin sau matched baselines mới được diễn giải là graph/community message-passing gain. Khi đó, `phi`, `lr_phi`, và `phi × cross_frac` mới được dùng để giải thích tại sao residual structural component này tồn tại.
 
 ---
 
 Dưới đây là hướng dẫn của mình với vai trò **supervisor SNA + AI/ML**, dựa trên:
 
-- `MAPR2026_Implementation_Plan_updated`
-- `MAPR2026_v3_team_parallel_coding_plan_updated`
-- và `Paper guide` của supervisor khác
+- `MAPR2026_Implementation_Plan_v3.md`
+- `docs/MAPR2026_v3_team_parallel_coding_plan.md`
+- và một supervisor guide trước đó
 
 Mình sẽ đi theo tinh thần: **practical, defendable, nộp được MAPR**, không lan man.
 
@@ -226,7 +246,7 @@ Mà là:
 
 Đây là điểm phải chốt trước khi viết.
 
-## Identity của paper
+## Định danh / Identity của paper
 **Paper này là một bài empirical comparative study về operationalization của influence và surrogate learning.**
 
 ### Nó KHÔNG phải:
@@ -263,13 +283,13 @@ Mình đồng ý mạnh với hướng đi của supervisor guide, nhưng sẽ l
 
 ---
 
-# 4. Hướng dẫn viết paper theo từng section
+# 4. Hướng dẫn viết paper theo từng mục / section
 
 Mình sẽ cho luôn hướng viết cụ thể, gần như có thể dùng để drafting.
 
 ---
 
-## Section 1 — Introduction (0.5 trang)
+## Mục 1 / Section 1 - Introduction (0.5 trang)
 
 ## Mục tiêu
 Trả lời 4 câu:
@@ -280,17 +300,17 @@ Trả lời 4 câu:
 
 ## Cấu trúc đề xuất
 
-### Paragraph 1 — Problem
+### Đoạn 1 / Paragraph 1 - Problem
 - identify influential users / power users trong static social graph
 - thiếu behavioral cascade logs
 - nên phải operationalize influence gián tiếp
 
-### Paragraph 2 — Tension
+### Đoạn 2 / Paragraph 2 - Tension
 - MC-IC là proxy hợp lý nhưng đắt
 - GNN là surrogate candidate
 - nhưng chưa rõ khi nào GNN thực sự hơn các heuristic/baseline đơn giản
 
-### Paragraph 3 — Core idea
+### Đoạn 3 / Paragraph 3 - Core idea
 - compare two IC operationalizations:
   - A0: structural weighted cascade
   - HSCC: source-velocity + cross-community amplification
@@ -310,7 +330,7 @@ Mình khuyên viết như sau:
 
 ---
 
-## Section 2 — Background / Related Work (0.5–0.75 trang)
+## Mục 2 / Section 2 - Background / Related Work (0.5–0.75 trang)
 
 ## Nên chia 3 cụm rất ngắn
 
@@ -332,16 +352,16 @@ Mình khuyên viết như sau:
 - APPNP
 - surrogate / graph regression framing
 
-## Important note
+## Lưu ý quan trọng
 Không đi sâu influence maximization literature quá nhiều.  
 Bài của bạn không optimize seed set; bài của bạn **approximate node-level IC scores**.
 
 ---
 
-## Section 3 — MC-IC as Operational Metric (đây là section quan trọng nhất)  
+## Mục 3 / Section 3 - MC-IC as Operational Metric (đây là section quan trọng nhất)  
 **~1.0–1.25 trang**
 
-Mình đồng ý với supervisor guide: **Section 3 phải được mở rộng hơn Section 4 so với bản plan cũ**, vì đây mới là contribution methodological mạnh nhất.
+Mình đồng ý với supervisor guide: **Mục 3 / Section 3 phải được mở rộng hơn Mục 4 / Section 4 so với bản plan cũ**, vì đây mới là contribution methodological mạnh nhất.
 
 ## 3.1 Construct validity
 Dùng gần nguyên văn đoạn bạn đã chuẩn bị:
@@ -410,7 +430,7 @@ Bạn viết đúng hơn:
 
 ---
 
-## Section 4 — Surrogate Learning Across Operationalizations  
+## Mục 4 / Section 4 - Surrogate Learning Across Operationalizations  
 **~2.0 trang**
 
 Đây là section kết quả chính, nhưng phải viết gọn và có logic.
@@ -432,7 +452,7 @@ Ngắn gọn:
 ## 4.2 A0 results — “structural ceiling”
 Đây phải là subsection riêng và **không được xem là thất bại**.
 
-### Main message:
+### Thông điệp chính
 - degree / two-hop are already near-optimal
 - GNNs converge toward that ceiling
 - bootstrap comparator = degree
@@ -454,7 +474,7 @@ Câu chuẩn:
 ## 4.3 HSCC results — “graph-aware regime”
 Đây là subsection main-claim.
 
-### Main message:
+### Thông điệp chính
 - degree không còn là comparator đúng
 - strongest flat baseline mới là comparator thật
 - GNN có thể thêm giá trị nếu học được phần graph/community structure beyond raw attrs
@@ -465,9 +485,11 @@ Bảng HSCC phải có:
 - LR(views + life_time)
 - LR(degree + views + life_time)
 - MLP(raw attrs)
-- nếu GNN dùng language:
+- nếu GNN dùng pipeline `raw_attr` hiện tại:
   - LR(... + language)
   - MLP(... + language)
+
+**Lưu ý cho codebase hiện tại:** `raw_attr` currently auto-includes `language` dummies when the column exists. Vì vậy, nếu team không tắt rõ ràng và không ghi lại quyết định đó trước run cuối, hãy mặc định rằng fairness baselines với `language` là bắt buộc.
 
 ### Nếu GNN thắng strongest flat baseline:
 Câu chuẩn:
@@ -482,6 +504,8 @@ Vẫn viết được:
 > Under HSCC, most of the predictive signal is already captured by source-side engagement attributes, with only limited incremental benefit from graph message passing.
 
 => paper vẫn ổn nếu contrast A0 vs HSCC còn mạnh.
+
+**Comparator lock cho bản MAPR:** `phi`, `lr_phi`, và `phi × (1+cross_frac)` chỉ dùng để giải thích cơ chế hoặc làm oracle-style upper bound. Comparator chính trong main paper vẫn là **strongest flat baseline từ frozen HSCC fairness table với matched feature access**.
 
 ---
 
@@ -504,7 +528,7 @@ Vẫn viết được:
 ### Đây là nơi dùng:
 - `phi`
 - `phi × (1+cross_frac)`
-- nhưng chỉ như **ceiling / interpretation**, không phải main baseline
+- nhưng chỉ như **ceiling / interpretation**, không phải main baseline trừ khi comparator policy được re-lock rõ ràng trong 2 plan
 
 ### Câu rất hay để dùng:
 > The contrast between A0 and HSCC shows that surrogate learnability is not a property of the model alone; it is jointly determined by the diffusion operationalization and the information already recoverable by simple baselines.
@@ -519,13 +543,13 @@ Giữ ngắn và sạch:
 - GNN inference cost
 - analytical baseline cost (near-zero inference)
 
-### Important wording
+### Cách diễn đạt quan trọng
 - speedup **vs MC-IC**
 - not vs degree
 
 ---
 
-## Section 5 — Discussion & Limitations (0.5 trang)
+## Mục 5 / Section 5 - Discussion & Limitations (0.5 trang)
 
 Đây là nơi bạn “khóa” reviewer.
 
@@ -550,12 +574,12 @@ Giữ câu này:
 
 ---
 
-# 5. Figures và tables nên có gì
+# 5. Hình và bảng nên có gì
 
 Do MAPR chỉ có 6 trang, đừng tham.
 
-## Must-have figures
-### Figure 1
+## Hình bắt buộc nên có
+### Hình 1 / Figure 1
 Pipeline diagram:
 - graph
 - A0 / HSCC
@@ -563,7 +587,7 @@ Pipeline diagram:
 - regression target
 - baselines + GNN surrogates
 
-### Figure 2
+### Hình 2 / Figure 2
 **Two-panel results figure**
 - trái: A0
 - phải: HSCC
@@ -574,23 +598,23 @@ Pipeline diagram:
 
 Đây là figure quan trọng nhất của paper.
 
-## Must-have tables
-### Table 1
+## Bảng bắt buộc nên có
+### Bảng 1 / Table 1
 Dataset + operationalizations
 - nodes, edges
 - A0 formula
 - HSCC formula
 - mean/median/CV
 
-### Table 2
+### Bảng 2 / Table 2
 A0 results (main subset)
 - degree, one-hop, two-hop, MLP, GNNs
 
-### Table 3
+### Bảng 3 / Table 3
 HSCC results
 - LR(life_time), LR(views+life_time), LR(deg+views+lt), MLP, GNNs
 
-### Table 4 (nếu còn chỗ)
+### Bảng 4 / Table 4 (nếu còn chỗ)
 Runtime mini-table
 
 Nếu thiếu chỗ:
@@ -627,7 +651,7 @@ Nếu thiếu chỗ:
 
 ---
 
-## Case 1 — Tốt nhất
+## Kịch bản 1 / Case 1 - Tốt nhất
 ### A0: GNN ≈ degree  
 ### HSCC: GNN > strongest flat baseline
 
@@ -641,7 +665,7 @@ Nếu thiếu chỗ:
 
 ---
 
-## Case 2 — A0: GNN ≈ degree  
+## Kịch bản 2 / Case 2 - A0: GNN ≈ degree  
 ### HSCC: GNN ≈ strongest flat baseline
 => paper vẫn publishable
 
@@ -653,7 +677,7 @@ Nếu thiếu chỗ:
 
 ---
 
-## Case 3 — A0: GNN < degree  
+## Kịch bản 3 / Case 3 - A0: GNN < degree  
 ### HSCC: GNN < strong flat baseline
 => vẫn cứu được paper nếu viết đúng
 
@@ -762,27 +786,27 @@ Chúng tốt cho extended version, không cần nhồi vào MAPR 6 trang.
 
 Mình khuyên abstract theo template này:
 
-### Sentence 1
+### Câu 1 / Sentence 1
 Problem + difficulty:
 > Identifying influential users on static social networks without behavioral cascade logs requires simulation-based operationalizations of influence, but the learnability of such operationalizations remains poorly understood.
 
-### Sentence 2
+### Câu 2 / Sentence 2
 Method:
 > We study two Monte Carlo Independent Cascade (MC-IC) operationalizations on the Twitch social network: a structural weighted-cascade regime (A0) and a domain-informed source-community regime (HSCC).
 
-### Sentence 3
+### Câu 3 / Sentence 3
 Stability/regression:
 > We show that binary top-k influence labels are structurally unstable, motivating continuous regression on simulation-derived influence scores.
 
-### Sentence 4
+### Câu 4 / Sentence 4
 Main contrast:
 > Under A0, analytical structural baselines are already near-optimal, whereas under HSCC the strongest baselines shift to flat source-attribute models.
 
-### Sentence 5
+### Câu 5 / Sentence 5
 GNN result:
 > Across GraphSAGE, GCN, GIN, GAT, and APPNP, GNN surrogates provide regime-dependent value, ranging from practical equivalence to structural baselines under A0 to measurable gains over flat baselines under HSCC.
 
-### Sentence 6
+### Câu 6 / Sentence 6
 Runtime:
 > In all cases, learned surrogates provide orders-of-magnitude faster inference than repeated MC simulation.
 
@@ -791,27 +815,27 @@ Runtime:
 # 10. Những việc mình yêu cầu team làm ngay trước khi viết
 
 ## Must-do ngay hôm nay
-### Person 1
-- fix HSCC regression target file
-- registry entry for HSCC
+### Người 1 / Person 1
+- verify HSCC regression target file còn đúng và readable
+- verify registry entry for HSCC vẫn khớp formula lock hiện tại
 - freeze config
 
-### Person 2
+### Người 2 / Person 2
 - verify community feature coverage
 - ensure diffusion proxies file clean
 - provide quick note on language-community alignment if already available
 
-### Person 3
+### Người 3 / Person 3
 - implement **all HSCC fairness baselines**
-- run regime-tagged output tables
-- ensure bootstrap comparators are regime-specific
+- rerun or refresh regime-tagged output tables nếu file hiện có còn stale / thiếu regime rows
+- ensure bootstrap comparators are regime-specific and tied to frozen outputs only
 
 ---
 
 # 11. Kết luận cuối của supervisor
 
-## Supervisor verdict
-**Hai plan update mới nhất đã đủ tốt để viết một paper defensible cho MAPR, nếu bạn giữ đúng đường `A0 + HSCC` và không mở thêm scope.**
+## Kết luận của supervisor
+**Hai file plan hiện tại đã đủ tốt để viết một paper defensible cho MAPR, nếu bạn giữ đúng đường `A0 + HSCC` và không mở thêm scope.**
 
 ### Điểm mạnh nhất của paper:
 - stability finding
