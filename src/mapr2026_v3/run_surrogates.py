@@ -35,13 +35,14 @@ from sklearn.preprocessing import MinMaxScaler
 
 try:
     from torch_geometric.data import Data
-    from torch_geometric.nn import SAGEConv, GATConv, GCNConv, GINConv
+    from torch_geometric.nn import SAGEConv, GATConv, GCNConv, GINConv, APPNP
 except Exception:
     Data = None
     SAGEConv = None
     GATConv = None
     GCNConv = None
     GINConv = None
+    APPNP = None
 
 from _shared import PATHS, ensure_dir, now_iso, read_edgelist_pairs, require_columns
 from eval_ranking_harness import (
@@ -54,6 +55,20 @@ from eval_ranking_harness import (
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAX_EPOCHS = 200
 TRAINING_SEEDS = [42, 123, 456, 789, 1024]
+
+
+def infer_label_regime_from_targets_path(targets_path: str | Path) -> str:
+    name = Path(str(targets_path)).name.lower()
+    if "hscc" in name:
+        return "hscc"
+    if "a2" in name:
+        return "a2"
+    if "a0" in name:
+        return "a0"
+    # Backward-compat: legacy default targets were A0 primary.
+    if name in {"regression_targets.parquet", "regression_targets.csv"}:
+        return "a0"
+    return "unknown"
 
 
 def resolve_project_path(path_like: str | Path) -> Path:
@@ -151,21 +166,45 @@ class GNNSurrogateRegressor(nn.Module):
             self.conv1 = GATConv(in_channels, hidden_channels, heads=heads, concat=True, dropout=dropout)
             self.conv2 = GATConv(hidden_channels * heads, hidden_channels, heads=1, concat=True, dropout=dropout)
             self.head = nn.Linear(hidden_channels, 1)
+        elif self.arch == "appnp":
+            if APPNP is None:
+                raise ImportError("torch_geometric is required for APPNP but is not available.")
+            # APPNP: MLP feature transform + personalized propagation.
+            self.lin1 = nn.Linear(in_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+            self.propagation = APPNP(K=10, alpha=0.1, dropout=dropout)
+            self.head = nn.Linear(hidden_channels, 1)
         else:
-            raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat")
+            raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat, appnp")
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x, edge_index)
-        x = torch.relu(x)
-        x = self.dropout(x)
-        x = self.conv2(x, edge_index)
-        x = torch.relu(x)
-        x = self.dropout(x)
+        if self.arch == "appnp":
+            x = self.lin1(x)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.lin2(x)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.propagation(x, edge_index)
+        else:
+            x = self.conv1(x, edge_index)
+            x = torch.relu(x)
+            x = self.dropout(x)
+            x = self.conv2(x, edge_index)
+            x = torch.relu(x)
+            x = self.dropout(x)
         out = self.head(x)
         return out.squeeze(-1)
 
     def reset_parameters(self) -> None:
-        for mod in [getattr(self, "conv1", None), getattr(self, "conv2", None), getattr(self, "head", None)]:
+        for mod in [
+            getattr(self, "conv1", None),
+            getattr(self, "conv2", None),
+            getattr(self, "lin1", None),
+            getattr(self, "lin2", None),
+            getattr(self, "propagation", None),
+            getattr(self, "head", None),
+        ]:
             if mod is None:
                 continue
             reset = getattr(mod, "reset_parameters", None)
@@ -558,7 +597,12 @@ def train_surrogate_5seeds(
     return row, mean_prediction
 
 
-def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], key: str = "model_name") -> None:
+def _upsert_rows(
+    csv_path: Path,
+    rows: list[dict[str, float]],
+    cols: list[str],
+    key: str | list[str] = "model_name",
+) -> None:
     new_df = pd.DataFrame(rows)
     for col in cols:
         if col not in new_df.columns:
@@ -575,25 +619,27 @@ def _upsert_rows(csv_path: Path, rows: list[dict[str, float]], cols: list[str], 
     else:
         merged = new_df
 
-    merged = merged.drop_duplicates(subset=[key], keep="last")
-    merged = merged.sort_values(key).reset_index(drop=True)
+    key_cols = [key] if isinstance(key, str) else list(key)
+    merged = merged.drop_duplicates(subset=key_cols, keep="last")
+    merged = merged.sort_values(key_cols).reset_index(drop=True)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(csv_path, index=False)
 
 
-def _upsert_runtime_rows(rows: list[dict[str, float]]) -> None:
+def _upsert_runtime_rows(rows: list[dict[str, float]], label_regime: str) -> None:
     runtime_path = resolve_project_path(PATHS.runtime_csv)
-    cols = ["model_name", "inference_sec_full_graph", "train_sec"]
+    cols = ["label_regime", "model_name", "inference_sec_full_graph", "train_sec"]
     runtime_rows = []
     for row in rows:
         runtime_rows.append(
             {
+                "label_regime": str(label_regime),
                 "model_name": row["model_name"],
                 "inference_sec_full_graph": row.get("runtime_sec", np.nan),
                 "train_sec": row.get("train_sec", np.nan),
             }
         )
-    _upsert_rows(runtime_path, runtime_rows, cols=cols, key="model_name")
+    _upsert_rows(runtime_path, runtime_rows, cols=cols, key=["label_regime", "model_name"])
 
 
 def _write_per_group_prediction_error(
@@ -668,6 +714,14 @@ def parse_args() -> argparse.Namespace:
         help="Regression targets parquet (default: primary A0 targets). Use for A2 reruns.",
     )
     p.add_argument(
+        "--label-regime",
+        default="",
+        help=(
+            "Label regime tag to record in output (a0|hscc|a2). "
+            "If omitted, inferred from --targets-path filename."
+        ),
+    )
+    p.add_argument(
         "--split-mask-path",
         default=PATHS.split_masks,
         help="Shared split mask parquet (M0-locked).",
@@ -686,7 +740,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--include-c2-arch",
         action="store_true",
-        help="Also run GCN/GIN/GAT on raw_attr features (C2 architecture comparison).",
+        help="Also run GCN/GIN/GAT/APPNP on raw_attr features (C2 architecture comparison).",
     )
     p.add_argument(
         "--include-edge-only",
@@ -717,6 +771,7 @@ def main() -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     cols = [
+        "label_regime",
         "model_name",
         "spearman_rho_mean",
         "spearman_rho_std",
@@ -733,6 +788,8 @@ def main() -> None:
         print(f"[OK] Wrote dry-run surrogate metrics header: {out_csv} (timestamp={now_iso()})")
         return
 
+    label_regime = str(args.label_regime).strip().lower() if str(args.label_regime).strip() else infer_label_regime_from_targets_path(args.targets_path)
+
     seed_list: list[int] | None = None
     if str(args.seeds).strip():
         parts = [p.strip() for p in str(args.seeds).split(",") if p.strip()]
@@ -747,6 +804,7 @@ def main() -> None:
             ("gcn_edge_only", "constant", False, "gcn"),
             ("gin_edge_only", "constant", False, "gin"),
             ("gat_edge_only", "constant", False, "gat"),
+            ("appnp_edge_only", "constant", False, "appnp"),
         ]
     else:
         model_specs = [
@@ -768,6 +826,7 @@ def main() -> None:
                 ("gcn_raw_attr", "raw_attr", False, "gcn"),
                 ("gin_raw_attr", "raw_attr", False, "gin"),
                 ("gat_raw_attr", "raw_attr", False, "gat"),
+                ("appnp_raw_attr", "raw_attr", False, "appnp"),
             ]
         )
 
@@ -778,6 +837,7 @@ def main() -> None:
                 ("gcn_edge_only", "constant", False, "gcn"),
                 ("gin_edge_only", "constant", False, "gin"),
                 ("gat_edge_only", "constant", False, "gat"),
+                ("appnp_edge_only", "constant", False, "appnp"),
             ]
         )
 
@@ -805,6 +865,7 @@ def main() -> None:
                 patience=int(args.patience),
                 seeds=seed_list,
             )
+            row["label_regime"] = label_regime
             results_list.append(row)
             predictions_by_model[model_name] = pred
         except Exception as exc:
@@ -813,8 +874,8 @@ def main() -> None:
     if not results_list:
         raise RuntimeError("No surrogate models produced results.")
 
-    _upsert_rows(out_csv, rows=results_list, cols=cols, key="model_name")
-    _upsert_runtime_rows(results_list)
+    _upsert_rows(out_csv, rows=results_list, cols=cols, key=["label_regime", "model_name"])
+    _upsert_runtime_rows(results_list, label_regime=label_regime)
 
     if base_bundle is not None and predictions_by_model:
         per_group_path = resolve_project_path(args.per_group_error_csv)

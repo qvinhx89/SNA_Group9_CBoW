@@ -76,6 +76,7 @@ data/processed/*
 !data/processed/ic_scores_primary_with_ci.parquet
 !data/processed/diffusion_proxies.parquet
 !data/processed/regression_targets.parquet
+!data/processed/regression_targets_a0.parquet
 !data/processed/regression_targets_ia.parquet
 !data/processed/regression_targets_hscc_refined.parquet
 !data/processed/regression_targets_hscc_refined_smoke.parquet
