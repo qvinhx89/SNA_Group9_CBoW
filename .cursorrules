@@ -1,0 +1,13 @@
+# GitNexus Integration
+
+This project is indexed by GitNexus. Always start by:
+
+1. Reading gitnexus://repo/{name}/context to check staleness
+2. Using the appropriate skill for your task (see AGENTS.md)
+3. Following the skill's workflow and checklist
+
+Available skills:
+- gitnexus-exploring: Understand architecture
+- gitnexus-debugging: Trace bugs
+- gitnexus-impact-analysis: Blast radius before changes
+- gitnexus-refactoring: Safe refactoring workflows
