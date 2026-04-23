@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import gc
 import math
 from pathlib import Path
 import time
@@ -701,7 +702,31 @@ def train_surrogate_5seeds(
         seed_metrics.append(metrics)
         seed_inference_runtimes.append(inference_runtime_sec)
         seed_train_runtimes.append(float(t_train_1 - t_train_0))
-        seed_predictions.append(y_pred.detach().cpu().numpy().astype(np.float32))
+        seed_pred_np = y_pred.detach().cpu().numpy().astype(np.float32)
+        seed_predictions.append(seed_pred_np)
+
+        if "loss" in locals():
+            del loss
+        if "pred" in locals():
+            del pred
+        if "val_pred" in locals():
+            del val_pred
+        if "val_loss" in locals():
+            del val_loss
+        if "best_state" in locals():
+            del best_state
+        if "train_idx" in locals():
+            del train_idx
+        if "perm" in locals():
+            del perm
+        del seed_pred_np
+        del y_pred
+        del y_train_target
+        del optimizer
+        del model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     rho_values = np.array([m["spearman_rho"] for m in seed_metrics], dtype=float)
     ndcg_values = np.array([m["ndcg_at_10pct"] for m in seed_metrics], dtype=float)
@@ -719,6 +744,10 @@ def train_surrogate_5seeds(
         "train_sec": float(np.mean(np.array(seed_train_runtimes, dtype=float))),
     }
     mean_prediction = np.mean(np.stack(seed_predictions, axis=0), axis=0)
+    del data
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return row, mean_prediction
 
 
@@ -987,6 +1016,8 @@ def main() -> None:
     base_bundle: SurrogateDataBundle | None = None
 
     for model_name, feature_mode, randomize_train_target, arch in model_specs:
+        bundle: SurrogateDataBundle | None = None
+        pred: np.ndarray | None = None
         try:
             bundle = load_surrogate_data_bundle(
                 feature_mode=feature_mode,
@@ -1013,8 +1044,18 @@ def main() -> None:
             predictions_by_model[model_name] = pred
         except Exception as exc:
             print(f"[WARN] Skipping {model_name}: {exc}")
+        finally:
+            if pred is not None:
+                del pred
+            if bundle is not None and bundle is not base_bundle:
+                del bundle
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     if args.include_c3_rankloss:
+        bundle_rank: SurrogateDataBundle | None = None
+        pred_rank: np.ndarray | None = None
         try:
             best_arch, source_model = _select_best_arch_for_rankloss(
                 in_run_rows=results_list,
@@ -1048,6 +1089,14 @@ def main() -> None:
             print(f"[INFO] C3 rankloss used best_arch={best_arch} (source={source_model}).")
         except Exception as exc:
             print(f"[WARN] Skipping best_arch_raw_attr_rankloss: {exc}")
+        finally:
+            if pred_rank is not None:
+                del pred_rank
+            if bundle_rank is not None and bundle_rank is not base_bundle:
+                del bundle_rank
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     if not results_list:
         raise RuntimeError("No surrogate models produced results.")
