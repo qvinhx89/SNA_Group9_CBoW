@@ -23,12 +23,14 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import math
 from pathlib import Path
 import time
 from typing import Any
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
@@ -55,6 +57,18 @@ from eval_ranking_harness import (
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAX_EPOCHS = 200
 TRAINING_SEEDS = [42, 123, 456, 789, 1024]
+ARCH_TIEBREAK_PRIORITY = ["appnp", "gat", "gin", "gcn", "sage"]
+
+
+def _model_name_to_arch(model_name: str) -> str | None:
+    mapping = {
+        "gnn_raw_attr": "sage",
+        "gcn_raw_attr": "gcn",
+        "gin_raw_attr": "gin",
+        "gat_raw_attr": "gat",
+        "appnp_raw_attr": "appnp",
+    }
+    return mapping.get(str(model_name).strip())
 
 
 def infer_label_regime_from_targets_path(targets_path: str | Path) -> str:
@@ -214,6 +228,111 @@ class GNNSurrogateRegressor(nn.Module):
 
 def get_loss_function() -> nn.Module:
     return nn.HuberLoss(delta=1.0)
+
+
+def _pairwise_ranking_loss_topk_focused(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    train_mask: torch.Tensor,
+    margin: float = 0.1,
+    n_pairs: int = 512,
+    top_frac: float = 0.2,
+) -> torch.Tensor:
+    idx = torch.where(train_mask)[0]
+    if idx.numel() < 2:
+        return torch.zeros((), device=pred.device)
+
+    p = pred[idx]
+    t = target[idx]
+    order = torch.argsort(t, descending=True)
+    k = max(1, int(math.ceil(float(top_frac) * int(order.numel()))))
+
+    top_pool = order[:k]
+    rest_pool = order[k:]
+    if top_pool.numel() == 0 or rest_pool.numel() == 0:
+        return torch.zeros((), device=pred.device)
+
+    top_pick = top_pool[torch.randint(0, int(top_pool.numel()), (int(n_pairs),), device=pred.device)]
+    rest_pick = rest_pool[torch.randint(0, int(rest_pool.numel()), (int(n_pairs),), device=pred.device)]
+    y = torch.ones(int(n_pairs), device=pred.device)
+    return F.margin_ranking_loss(p[top_pick], p[rest_pick], y, margin=float(margin))
+
+
+def _compute_train_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    train_mask: torch.Tensor,
+    loss_mode: str,
+    rankloss_alpha: float,
+) -> torch.Tensor:
+    base = get_loss_function()(pred[train_mask], target[train_mask])
+    mode = str(loss_mode).strip().lower()
+    if mode == "huber":
+        return base
+    if mode == "rankloss_combined":
+        rank = _pairwise_ranking_loss_topk_focused(pred, target, train_mask=train_mask)
+        alpha = float(rankloss_alpha)
+        alpha = min(1.0, max(0.0, alpha))
+        return alpha * base + (1.0 - alpha) * rank
+    raise ValueError(f"Unsupported loss_mode={loss_mode}")
+
+
+def _select_best_arch_for_rankloss(
+    in_run_rows: list[dict[str, float]],
+    out_csv_path: Path,
+    label_regime: str,
+    best_arch_override: str,
+) -> tuple[str, str]:
+    override = str(best_arch_override).strip().lower()
+    if override:
+        if override not in {"sage", "gcn", "gin", "gat", "appnp"}:
+            raise ValueError("--best-arch must be one of: sage,gcn,gin,gat,appnp")
+        return override, "override"
+
+    candidates = [r for r in in_run_rows if _model_name_to_arch(str(r.get("model_name", ""))) is not None]
+    if not candidates and out_csv_path.exists():
+        hist = pd.read_csv(out_csv_path)
+        if "label_regime" in hist.columns:
+            hist = hist.loc[hist["label_regime"].astype(str).str.lower() == str(label_regime).lower()].copy()
+        keep = ["gnn_raw_attr", "gcn_raw_attr", "gin_raw_attr", "gat_raw_attr", "appnp_raw_attr"]
+        hist = hist.loc[hist["model_name"].astype(str).isin(keep)].copy()
+        for _, row in hist.iterrows():
+            candidates.append(
+                {
+                    "model_name": str(row["model_name"]),
+                    "spearman_rho_mean": float(row["spearman_rho_mean"]),
+                }
+            )
+
+    if not candidates:
+        raise RuntimeError(
+            "Cannot infer best architecture for C3 rankloss. "
+            "Run C2 first (include raw_attr arch rows) or pass --best-arch explicitly."
+        )
+
+    score_df = pd.DataFrame(candidates)
+    score_df = score_df.dropna(subset=["spearman_rho_mean"]).copy()
+    if score_df.empty:
+        raise RuntimeError("No valid C2 scores found to infer best architecture.")
+
+    score_df["arch"] = score_df["model_name"].map(_model_name_to_arch)
+    score_df = score_df.dropna(subset=["arch"]).copy()
+    if score_df.empty:
+        raise RuntimeError("No valid architecture rows found for C3 selection.")
+
+    best_score = float(score_df["spearman_rho_mean"].max())
+    tie_df = score_df.loc[(best_score - score_df["spearman_rho_mean"]).abs() < 0.001].copy()
+
+    if tie_df.shape[0] == 1:
+        best_arch = str(tie_df.iloc[0]["arch"])
+        source = str(tie_df.iloc[0]["model_name"])
+        return best_arch, source
+
+    tie_df["priority"] = tie_df["arch"].apply(lambda a: ARCH_TIEBREAK_PRIORITY.index(str(a)))
+    tie_df = tie_df.sort_values(["priority", "model_name"], ascending=[True, True])
+    best_arch = str(tie_df.iloc[0]["arch"])
+    source = str(tie_df.iloc[0]["model_name"])
+    return best_arch, source
 
 
 def _ensure_node_id_str(df: pd.DataFrame) -> pd.DataFrame:
@@ -493,6 +612,8 @@ def train_surrogate_5seeds(
     early_stop: bool = False,
     patience: int = 20,
     seeds: list[int] | None = None,
+    loss_mode: str = "huber",
+    rankloss_alpha: float = 0.5,
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -515,8 +636,6 @@ def train_surrogate_5seeds(
         model = GNNSurrogateRegressor(arch=arch, in_channels=data.x.shape[1], hidden_channels=128, dropout=0.3).to(device)
         model.reset_parameters()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        loss_fn = get_loss_function()
-
         y_train_target = data.y.clone()
         if randomize_train_target:
             train_idx = torch.where(data.train_mask)[0]
@@ -533,7 +652,13 @@ def train_surrogate_5seeds(
             model.train()
             optimizer.zero_grad()
             pred = model(data.x, data.edge_index)
-            loss = loss_fn(pred[data.train_mask], y_train_target[data.train_mask])
+            loss = _compute_train_loss(
+                pred=pred,
+                target=y_train_target,
+                train_mask=data.train_mask,
+                loss_mode=loss_mode,
+                rankloss_alpha=rankloss_alpha,
+            )
             loss.backward()
             optimizer.step()
 
@@ -541,7 +666,7 @@ def train_surrogate_5seeds(
                 model.eval()
                 with torch.no_grad():
                     val_pred = model(data.x, data.edge_index)
-                    val_loss = loss_fn(val_pred[data.val_mask], y_train_target[data.val_mask]).item()
+                    val_loss = get_loss_function()(val_pred[data.val_mask], y_train_target[data.val_mask]).item()
                 if val_loss + 1e-12 < best_val:
                     best_val = float(val_loss)
                     best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -710,8 +835,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--targets-path",
-        default=PATHS.regression_targets,
-        help="Regression targets parquet (default: primary A0 targets). Use for A2 reruns.",
+        default="data/processed/regression_targets_a0.parquet",
+        help="Regression targets parquet (default: A0 targets). Use HSCC/A2 target files for regime reruns.",
     )
     p.add_argument(
         "--label-regime",
@@ -758,6 +883,22 @@ def parse_args() -> argparse.Namespace:
         "--seeds",
         default="",
         help="Comma-separated training seeds (e.g. '42,123'). Default uses [42,123,456,789,1024].",
+    )
+    p.add_argument(
+        "--include-c3-rankloss",
+        action="store_true",
+        help="Run C3 rankloss on best raw-attr architecture and write `best_arch_raw_attr_rankloss` row.",
+    )
+    p.add_argument(
+        "--best-arch",
+        default="",
+        help="Optional best architecture override for C3 rankloss: sage|gcn|gin|gat|appnp.",
+    )
+    p.add_argument(
+        "--rankloss-alpha",
+        type=float,
+        default=0.5,
+        help="Alpha in combined loss: alpha*Huber + (1-alpha)*PairwiseRank.",
     )
     return p.parse_args()
 
@@ -864,12 +1005,49 @@ def main() -> None:
                 early_stop=bool(args.early_stop),
                 patience=int(args.patience),
                 seeds=seed_list,
+                loss_mode="huber",
+                rankloss_alpha=float(args.rankloss_alpha),
             )
             row["label_regime"] = label_regime
             results_list.append(row)
             predictions_by_model[model_name] = pred
         except Exception as exc:
             print(f"[WARN] Skipping {model_name}: {exc}")
+
+    if args.include_c3_rankloss:
+        try:
+            best_arch, source_model = _select_best_arch_for_rankloss(
+                in_run_rows=results_list,
+                out_csv_path=out_csv,
+                label_regime=label_regime,
+                best_arch_override=args.best_arch,
+            )
+            bundle_rank = load_surrogate_data_bundle(
+                feature_mode="raw_attr",
+                targets_path=args.targets_path,
+                split_mask_path=args.split_mask_path,
+                node_scope=args.node_scope,
+            )
+            if base_bundle is None:
+                base_bundle = bundle_rank
+            row_rank, pred_rank = train_surrogate_5seeds(
+                bundle=bundle_rank,
+                max_epochs=args.max_epochs,
+                model_name="best_arch_raw_attr_rankloss",
+                randomize_train_target=False,
+                arch=best_arch,
+                early_stop=bool(args.early_stop),
+                patience=int(args.patience),
+                seeds=seed_list,
+                loss_mode="rankloss_combined",
+                rankloss_alpha=float(args.rankloss_alpha),
+            )
+            row_rank["label_regime"] = label_regime
+            results_list.append(row_rank)
+            predictions_by_model["best_arch_raw_attr_rankloss"] = pred_rank
+            print(f"[INFO] C3 rankloss used best_arch={best_arch} (source={source_model}).")
+        except Exception as exc:
+            print(f"[WARN] Skipping best_arch_raw_attr_rankloss: {exc}")
 
     if not results_list:
         raise RuntimeError("No surrogate models produced results.")

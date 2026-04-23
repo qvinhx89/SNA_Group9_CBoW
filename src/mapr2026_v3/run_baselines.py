@@ -700,8 +700,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out-csv", default=str(Path(PATHS.results_dir) / "baseline_ranking_metrics.csv"))
     p.add_argument(
         "--targets-path",
-        default=PATHS.regression_targets,
-        help="Regression targets parquet path (default: primary A0).",
+        default="data/processed/regression_targets_a0.parquet",
+        help="Regression targets parquet path (default: A0). Use HSCC/A2 files for regime reruns.",
     )
     p.add_argument(
         "--label-regime",
