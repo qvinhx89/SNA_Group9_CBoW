@@ -67,6 +67,26 @@ Giữ chặt 4 bước này làm xương sống cho mọi section:
 
 Nếu giữ đúng backbone này, paper vẫn defensible kể cả khi biên lợi thế của GNN dưới `HSCC` chỉ nhỏ.
 
+### 1.5 Main-paper freeze rule
+
+Để paper không bị quá tải trong giới hạn 6 trang IEEE, main paper chỉ nên xoay quanh 4 khối evidence đã được plans chống đỡ rõ:
+
+1. **construct validity + stability/regression justification**,
+2. **A0 results + bootstrap vs degree**,
+3. **HSCC results + fairness-complete strongest-flat comparison**,
+4. **runtime + một đoạn contrast interpretation ngắn**.
+
+Những thứ sau chỉ nên để ở appendix/supplementary hoặc cắt trước nếu thiếu chỗ:
+
+- full correlation matrix,
+- mọi architecture-by-feature ablation dài,
+- `phi`, `lr_phi`, và các oracle-style decomposition chi tiết,
+- `A2` hoặc archive regimes,
+- extended reviewer-defense prose,
+- sensitivity notes không đi thẳng vào 3 claims chính.
+
+Rule vận hành rất quan trọng: review skeleton có thể gợi ý cấu trúc mạnh hơn, nhưng main paper không được mở thêm narrative branch mới ngoài 4 khối trên nếu artifacts freeze chưa chống đỡ được.
+
 ---
 
 ## Phần 2: Hướng dẫn viết theo từng mục / section
@@ -197,6 +217,16 @@ với:
 - không phải "true Twitch diffusion model",
 - chỉ là một comparative operationalization hợp lý để kiểm tra khi nào graph structure tạo thêm learnable value.
 
+**Ba câu reviewer gần như chắc chắn sẽ hỏi và phải được trả lời ngắn ngay trong Section 3.2:**
+
+- **Vì sao dùng rank thay vì raw value?** Vì `views` có phân phối heavy-tailed; rank normalization giúp hạn chế việc một số account cực lớn kéo toàn bộ scale và làm cho source term ổn định hơn giữa các rerun.
+- **Vì sao dùng `log1p(views)/(1+life_time)`?** Vì paper cần một proxy gần với engagement velocity hơn cumulative popularity thuần túy; `log1p` nén outlier, còn chia cho `1+life_time` giúp tránh reward tuyệt đối cho account chỉ vì tồn tại lâu.
+- **Vì sao khóa `lambda`, `gamma`, `p_max` thay vì tune?** Vì HSCC trong paper này là comparative operationalization đã freeze để kiểm tra regime learnability, không phải tham số được tối ưu để tạo ra GNN win lớn nhất.
+
+**Paste-ready English để giải thích HSCC ngắn gọn nhưng defensible:**
+
+> HSCC is introduced as a domain-informed comparative operationalization rather than as a validated generative law of Twitch diffusion. The rank-based source term improves robustness to the heavy-tailed views distribution, while the `log1p(views)/(1+life_time)` form is intended to approximate engagement velocity rather than cumulative popularity. The fixed community-amplification configuration is kept as a transparent, frozen comparative setting instead of being tuned to maximize downstream surrogate gains.
+
 #### 3.3 Discriminativeness
 
 Nên có một bảng ngắn kiểu này:
@@ -210,6 +240,7 @@ Nên có một bảng ngắn kiểu này:
 
 - `A0`: broad nhưng degree-dominated,
 - `HSCC`: mean nhỏ hơn nhưng vẫn discriminative,
+- mean reach nhỏ dưới `HSCC` phải được diễn giải như **selective local-community diffusion**, không phải bằng chứng rằng operationalization vô nghĩa,
 - không kéo `I-A` vào main text; nếu cần chỉ nhắc như archive note một câu.
 
 #### 3.4 Stability and regression
@@ -257,6 +288,13 @@ Giữ ngắn gọn:
 - metrics: Spearman, NDCG@10, P@10
 - runtime reported separately
 
+**Feature-access lock phải được chốt trước frozen run và giữ nhất quán trong toàn paper:**
+
+- **Mode A:** nếu GNN main comparison dùng `language`, thì các flat baselines tương ứng trong fairness table cũng phải được cấp `language`.
+- **Mode B:** nếu team không muốn `language` đi vào fairness stack, thì phải bỏ `language` khỏi tất cả model của main comparison, không chỉ bỏ khỏi LR/MLP.
+
+Không được viết paper trong trạng thái lửng lơ kiểu GNN có `language` nhưng baseline chính thì không.
+
 #### 4.2 A0 results - structural ceiling
 
 Phần này **không được viết như một failure**.
@@ -293,7 +331,7 @@ Ngoài ra, vẫn nên nêu diagnostic kiểu `GNN-raw-attr vs MLP` để cho th�
 
 **Bảng HSCC bắt buộc nên có:**
 
-- `LR(life_time)`
+- `LR(life_time)` ở vị trí nổi bật đầu tiên trong nhóm flat baselines
 - `LR(views + life_time)`
 - `LR(degree + views + life_time)`
 - `MLP(raw attrs)`
@@ -302,6 +340,15 @@ Ngoài ra, vẫn nên nêu diagnostic kiểu `GNN-raw-attr vs MLP` để cho th�
   - `MLP(... + language)`
 
 **Lưu ý bắt buộc cho codebase hiện tại:** nếu `raw_attr` dùng cột `language`, language dummies sẽ được đưa vào features tự động. Vì vậy, trừ khi team chủ động disable và ghi lại quyết định đó trước frozen run, fairness baselines có `language` là bắt buộc.
+
+**Comparator rule cho HSCC phải viết thật rõ trong guide và trong paper:**
+
+- comparator chính trong main paper là **strongest frozen flat baseline dưới matched node-level feature access**,
+- `LR(life_time)` phải được hiện diện nổi bật vì đây là reviewer-risk baseline mạnh nhất ở HSCC,
+- degree chỉ còn là contextual evidence cho regime shift, không phải comparator quyết định claim,
+- `phi`, `lr_phi`, `phi × (1 + cross_community_fraction)`, và mọi formula-derived oracle row chỉ được dùng như interpretation / ceiling / appendix diagnostics.
+
+**Rule cho main baseline table:** không đặt các oracle-style rows cạnh LR/MLP/GNN như thể đó là comparator công bằng của main paper. Nếu cần dùng, tách thành diagnostic note hoặc appendix mini-table riêng.
 
 **Nếu GNN thắng strongest flat baseline:**
 
@@ -396,11 +443,14 @@ Nếu paper dùng `language` trong GNN, phải nói rõ rằng fairness của ba
 
 Pipeline diagram:
 
-- graph
-- `A0 / HSCC`
-- MC-IC labels
-- regression targets
-- baselines + GNN surrogates
+- graph / node attributes / community context
+- `A0 / HSCC` operationalization branch
+- MC-IC labels trên labeled subset
+- regression targets + split masks
+- analytical / flat / GNN evaluation
+- regime-specific claims + runtime outputs
+
+**Figure 1 nên trả lời được đúng một câu hỏi:** từ cùng một graph, khi đổi operationalization thì downstream surrogate-learning story đổi như thế nào. Không nhét `I-A`, `A2`, hoặc archive branches vào figure chính nếu chúng không nằm trong active paper path.
 
 #### Hình 2 / Figure 2
 
@@ -408,10 +458,14 @@ Two-panel results figure:
 
 - trái: `A0`
 - phải: `HSCC`
-- bar chart hoặc dot plot với CI
+- ưu tiên **dot plot với CI** hơn bar chart nếu đủ đẹp ở grayscale
+- trục dọc: cùng một tập model/baseline rows ở cả hai panel
+- trục ngang: metric chính trên held-out test set, ưu tiên **Spearman rho**
 - comparator line:
   - `A0`: degree
   - `HSCC`: strongest flat baseline
+
+Nếu còn chỗ, NDCG@10 có thể để trong table thay vì figure. Figure chính nên ưu tiên làm rõ regime contrast thay vì nhồi nhiều metric.
 
 ### 3.2 Bảng bắt buộc nên có
 
@@ -431,18 +485,24 @@ A0 results:
 - degree
 - one-hop
 - two-hop
+- strongest flat baseline
 - MLP
 - GNNs
+
+Nếu thiếu chỗ, giữ đủ các rows để reviewer vẫn thấy được 3 lớp comparator: analytical, flat, GNN.
 
 #### Bảng 3 / Table 3
 
 HSCC results:
 
-- `LR(life_time)`
+- `LR(life_time)` ở vị trí nổi bật đầu tiên
 - `LR(views+life_time)`
 - `LR(degree+views+life_time)`
+- nếu có `language` trong main GNN features thì thêm matched `LR(... + language)` và `MLP(... + language)`
 - `MLP`
 - GNNs
+
+Không để `phi`, `lr_phi`, hoặc oracle decomposition rows trong main Table 3. Nếu cần dùng để giải thích cơ chế, chuyển chúng sang note diễn giải hoặc appendix.
 
 #### Bảng 4 / Table 4 (nếu còn chỗ)
 
@@ -451,6 +511,8 @@ Runtime mini-table.
 Nếu thiếu chỗ, merge runtime vào main results table dưới dạng cột cuối.
 
 ### 3.3 Abstract template
+
+Abstract nên giữ khoảng **5-6 câu**, lý tưởng **không quá 150 từ**, và chỉ được điền số sau khi frozen artifacts đã khóa.
 
 **Câu 1 / Sentence 1 - Problem + difficulty**
 
@@ -476,9 +538,26 @@ Nếu thiếu chỗ, merge runtime vào main results table dưới dạng cột 
 
 > In all cases, learned surrogates provide inference that is orders of magnitude faster than repeated MC simulation.
 
+**Rule bắt buộc cho abstract:**
+
+- không viết `"outperforms"` hoặc `"significantly improves"` nếu chưa có bootstrap artifact đúng regime chống đỡ,
+- câu về `HSCC` phải so với **strongest frozen flat baseline**, không so với degree,
+- nếu GNN dưới `HSCC` chỉ xấp xỉ hoặc thua strongest flat baseline, phải rewrite Sentence 5 theo framing comparative-regime thay vì superiority framing.
+
 ---
 
 ## Phần 4: Claims, evidence, và wording guardrails
+
+### Claim-to-artifact map bắt buộc
+
+| Claim / paper sentence type | Required artifact(s) tối thiểu |
+|---|---|
+| Binary instability là structural | `stability_explanation.json`, Jaccard stability sweep, Spearman stability sweep |
+| `A0` là structural ceiling / GNN practical equivalence | `gnn_vs_degree_bootstrap_ci_a0.json`, frozen A0 results table, diagnostic `GNN-raw-attr vs MLP-raw-attr` |
+| `HSCC` là graph-aware regime / GNN gain beyond flat baselines | `gnn_vs_baseline_bootstrap_ci_hscc.json`, frozen HSCC fairness table, matched-access feature policy đã khóa |
+| Runtime / speedup claim | frozen runtime artifact(s) và bảng runtime dùng đúng cùng protocol |
+
+**Universal wording rule:** mọi câu có từ như `"outperforms"`, `"significantly improves"`, `"practically equivalent"`, `"ceiling"`, hoặc `"dominates"` đều phải map được về đúng artifact freeze của regime tương ứng. Nếu chưa map được, hạ câu đó xuống mức mô tả mềm hơn hoặc bỏ.
 
 ### 4.1 Claim 1
 
@@ -523,6 +602,10 @@ Comparator bootstrap chính thức của `A0` là **degree**. one-hop và two-ho
 
 `phi`, `lr_phi`, và related oracle rows không phải comparator chính của main paper.
 
+Nếu strongest frozen flat baseline thắng hoặc hòa GNN, phải đổi claim này sang bản mềm hơn, ví dụ:
+
+> Under attribute-community IC (HSCC), flat baselines already capture much of the source-driven signal, while graph-based models provide at most limited additional value from community-mediated structure.
+
 ### 4.4 Những claim được phép
 
 - `"MC-IC is a principled operational metric"`
@@ -546,6 +629,10 @@ Thay `"feature-agnostic"` bằng:
 > without precomputed structural summaries
 
 ### 4.6 Kịch bản viết paper theo kết quả cuối
+
+**Rewrite rule bắt buộc trước khi draft title và abstract:**
+
+Nếu best GNN dưới `HSCC` **không beat strongest frozen flat baseline** với comparator và bootstrap đúng regime, paper phải được viết như một **comparative operationalization paper** chứ không phải một **GNN-superiority paper**. Khi đó title, abstract, và introduction phải chuyển trọng tâm sang regime contrast, fairness-complete baselines, và điều kiện mà graph learning có hoặc không có giá trị.
 
 #### Kịch bản 1 / Case 1 - Tốt nhất
 
@@ -611,7 +698,15 @@ Framing:
 - **Chen, Wang & Wang (2010)** cho hop-decay / local influence approximation
 - **Grover & Leskovec (2016)** nếu Node2Vec xuất hiện như baseline
 
-### 5.3 Read but probably not cite cho MAPR version
+### 5.3 Reference budget rule
+
+MAPR version nên cố giữ khoảng **12 references cốt lõi** trong main paper. Nếu thiếu chỗ:
+
+1. bỏ các reference chỉ để tăng background nhưng không đỡ claim chính,
+2. chỉ giữ reference cho baseline nào thực sự xuất hiện ở main table,
+3. để `Aral & Walker (2012)` hoặc các survey phụ ở trạng thái cut-first nếu narrative hiện tại đã đủ được chống đỡ bởi các nguồn chính.
+
+### 5.4 Read but probably not cite cho MAPR version
 
 - GCNII
 - HGT
@@ -655,6 +750,9 @@ Framing:
 - reference formatting
 - claim-to-artifact cross-check lần cuối
 - abstract phải phản ánh findings thật, không phản ánh điều team kỳ vọng
+- mọi con số trong bảng/abstract phải trace được về frozen CSV/JSON đúng regime
+- không dùng `"outperforms"` nếu chưa có bootstrap support tương ứng
+- nếu quá 6 trang, cắt appendix-style diagnostics trước khi cắt 4 evidence blocks chính
 
 ### 6.4 Freeze rules bắt buộc
 
