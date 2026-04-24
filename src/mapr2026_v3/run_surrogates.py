@@ -177,10 +177,11 @@ class GNNSurrogateRegressor(nn.Module):
         elif self.arch == "gat":
             if GATConv is None:
                 raise ImportError("torch_geometric is required for GAT but is not available.")
-            heads = int(gat_heads)
-            self.conv1 = GATConv(in_channels, hidden_channels, heads=heads, concat=True, dropout=dropout)
-            self.conv2 = GATConv(hidden_channels * heads, hidden_channels, heads=1, concat=True, dropout=dropout)
-            self.head = nn.Linear(hidden_channels, 1)
+            # VRAM Trade-off for 13.5M edges: 
+            # Use 64 hidden channels and 2 heads to slash edge-lifting memory from ~28GB to ~7GB
+            self.conv1 = GATConv(in_channels, 64, heads=2, concat=True, dropout=dropout)
+            self.conv2 = GATConv(64 * 2, 64, heads=1, concat=True, dropout=dropout)
+            self.head = nn.Linear(64, 1)
         elif self.arch == "appnp":
             if APPNP is None:
                 raise ImportError("torch_geometric is required for APPNP but is not available.")
@@ -1010,6 +1011,9 @@ def main() -> None:
                 ("appnp_edge_only", "constant", False, "appnp"),
             ]
         )
+
+    # Temporary hack to ONLY run gat_raw_attr
+    model_specs = [("gat_raw_attr", "raw_attr", False, "gat")]
 
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
