@@ -146,13 +146,17 @@ class GNNSurrogateRegressor(nn.Module):
         hidden_channels: int = 128,
         dropout: float = 0.3,
         gat_heads: int = 4,
+        feature_mode: str = "raw_attr",
     ) -> None:
         super().__init__()
         if Data is None:
             raise ImportError("torch_geometric is required for GNN surrogates but is not available.")
 
         self.arch = str(arch).lower()
-        self.dropout = nn.Dropout(dropout)
+        self.feature_mode = str(feature_mode).lower().strip()
+        self.use_dropout = self.feature_mode not in {"graph_only", "centrality"}
+        effective_dropout = float(dropout) if self.use_dropout else 0.0
+        self.dropout = nn.Dropout(effective_dropout)
 
         if self.arch == "sage":
             if SAGEConv is None:
@@ -179,8 +183,8 @@ class GNNSurrogateRegressor(nn.Module):
                 raise ImportError("torch_geometric is required for GAT but is not available.")
             # VRAM Trade-off for 13.5M edges: 
             # Use 64 hidden channels and 2 heads to slash edge-lifting memory from ~28GB to ~7GB
-            self.conv1 = GATConv(in_channels, 64, heads=2, concat=True, dropout=dropout)
-            self.conv2 = GATConv(64 * 2, 64, heads=1, concat=True, dropout=dropout)
+            self.conv1 = GATConv(in_channels, 64, heads=2, concat=True, dropout=effective_dropout)
+            self.conv2 = GATConv(64 * 2, 64, heads=1, concat=True, dropout=effective_dropout)
             self.head = nn.Linear(64, 1)
         elif self.arch == "appnp":
             if APPNP is None:
@@ -188,7 +192,7 @@ class GNNSurrogateRegressor(nn.Module):
             # APPNP: MLP feature transform + personalized propagation.
             self.lin1 = nn.Linear(in_channels, hidden_channels)
             self.lin2 = nn.Linear(hidden_channels, hidden_channels)
-            self.propagation = APPNP(K=10, alpha=0.1, dropout=dropout)
+            self.propagation = APPNP(K=15, alpha=0.1, dropout=effective_dropout)
             self.head = nn.Linear(hidden_channels, 1)
         else:
             raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat, appnp")
@@ -507,6 +511,11 @@ def load_surrogate_data_bundle(
             centrality_sel = centrality_sel.rename(columns={kshell_col: "kshell"})
             selected = ["kshell" if c == kshell_col else c for c in selected]
 
+        for centrality_col in ["degree", "pagerank", "kshell"]:
+            if centrality_col in centrality_sel.columns:
+                centrality_raw = pd.to_numeric(centrality_sel[centrality_col], errors="coerce").fillna(0.0)
+                centrality_sel[centrality_col] = np.log1p(centrality_raw.clip(lower=0.0)).astype(float)
+
         if feature_mode == "centrality":
             required = ["degree", "pagerank", "kshell"]
             missing = [c for c in required if c not in centrality_sel.columns]
@@ -616,6 +625,7 @@ def train_surrogate_5seeds(
     seeds: list[int] | None = None,
     loss_mode: str = "huber",
     rankloss_alpha: float = 0.5,
+    feature_mode: str = "raw_attr",
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -635,7 +645,13 @@ def train_surrogate_5seeds(
             torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
 
-        model = GNNSurrogateRegressor(arch=arch, in_channels=data.x.shape[1], hidden_channels=128, dropout=0.3).to(device)
+        model = GNNSurrogateRegressor(
+            arch=arch,
+            in_channels=data.x.shape[1],
+            hidden_channels=128,
+            dropout=0.3,
+            feature_mode=feature_mode,
+        ).to(device)
         model.reset_parameters()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         y_train_target = data.y.clone()
@@ -798,6 +814,7 @@ def _upsert_runtime_rows(rows: list[dict[str, float]], label_regime: str) -> Non
 
 
 def _write_per_group_prediction_error(
+    label_regime: str,
     node_ids: pd.Series,
     y_true: torch.Tensor,
     split_mask_df: pd.DataFrame,
@@ -842,6 +859,7 @@ def _write_per_group_prediction_error(
             rho = float(compute_metrics(g["y_true"].to_numpy(dtype=float), g["y_pred"].to_numpy(dtype=float)).spearman_rho)
             rows.append(
                 {
+                    "label_regime": str(label_regime),
                     "model_name": model_name,
                     "typology_group": str(group_label),
                     "n_nodes": n_nodes,
@@ -850,9 +868,17 @@ def _write_per_group_prediction_error(
                 }
             )
 
+    cols_order = ["label_regime", "model_name", "typology_group", "n_nodes", "spearman_rho", "mae"]
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_df = pd.DataFrame(rows, columns=["model_name", "typology_group", "n_nodes", "spearman_rho", "mae"])
-    out_df.sort_values(["model_name", "typology_group"]).to_csv(out_path, index=False)
+    if rows:
+        _upsert_rows(
+            out_path,
+            rows=rows,
+            cols=cols_order,
+            key=["label_regime", "model_name", "typology_group"],
+        )
+    elif not out_path.exists():
+        pd.DataFrame(columns=cols_order).to_csv(out_path, index=False)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1042,6 +1068,7 @@ def main() -> None:
                 seeds=seed_list,
                 loss_mode="huber",
                 rankloss_alpha=float(args.rankloss_alpha),
+                feature_mode=feature_mode,
             )
             row["label_regime"] = label_regime
             results_list.append(row)
@@ -1086,6 +1113,7 @@ def main() -> None:
                 seeds=seed_list,
                 loss_mode="rankloss_combined",
                 rankloss_alpha=float(args.rankloss_alpha),
+                feature_mode="raw_attr",
             )
             row_rank["label_regime"] = label_regime
             results_list.append(row_rank)
@@ -1111,6 +1139,7 @@ def main() -> None:
     if base_bundle is not None and predictions_by_model:
         per_group_path = resolve_project_path(args.per_group_error_csv)
         _write_per_group_prediction_error(
+            label_regime=label_regime,
             node_ids=base_bundle.node_ids,
             y_true=base_bundle.graph_data.y,
             split_mask_df=base_bundle.split_mask_df,
