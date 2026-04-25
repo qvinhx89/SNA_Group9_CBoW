@@ -3,46 +3,55 @@ description:
 alwaysApply: true
 ---
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+# Code review graph (code-review-graph)
 
-This project is indexed by GitNexus as **SNA_Group9_CBoW** (3599 symbols, 5020 relationships, 95 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This repo uses **code-review-graph** (local graph under `.code-review-graph/`). **GitNexus MCP is disabled** — do not call GitNexus tools or `gitnexus://` resources.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+> If tools fail or the graph is missing, run from repo root: `code-review-graph build` (or `code-review-graph update`). On **Cursor**, hooks do not refresh the graph; use **`crg-daemon`** or run `update` / `build` after large changes.
 
-## Always Do
+## Always do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+- **Start token-light:** call **`get_minimal_context_tool`** first with a short `task` description; use minimal detail until you need more.
+- **Before editing** a function/class/method: use **`query_graph_tool`** / **`get_impact_radius_tool`** (and **`get_review_context_tool`** if you need snippets) so callers and blast radius are known.
+- **Before commit:** run **`detect_changes_tool`** and summarize risk and affected flows.
+- **Warn the user** on high-risk `detect_changes` output before large edits.
 
-## Never Do
+## Never do
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+- Do not rely on **GitNexus** MCP, `gitnexus_*` calls, or `gitnexus://` URIs.
+- Do not **rename** across files with blind find-and-replace — use **`refactor_tool`** (preview) / graph-aware steps.
+- Do not explore only with Grep/Read when the graph can answer structure, impact, or tests.
 
-## Resources
+## MCP tools (code-review-graph)
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/SNA_Group9_CBoW/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/SNA_Group9_CBoW/clusters` | All functional areas |
-| `gitnexus://repo/SNA_Group9_CBoW/processes` | All execution flows |
-| `gitnexus://repo/SNA_Group9_CBoW/process/{name}` | Step-by-step execution trace |
+Use the names your MCP server lists (often `*_tool`). Common set:
 
-## CLI
+| Tool | Use when |
+|------|----------|
+| `get_minimal_context_tool` | First call for any task — tiny context |
+| `build_or_update_graph_tool` | No graph yet or after major refactors |
+| `list_graph_stats_tool` | Health / size of index |
+| `query_graph_tool` | Callers, callees, imports, tests |
+| `semantic_search_nodes_tool` | Find symbols by name / keyword |
+| `get_impact_radius_tool` | Blast radius |
+| `get_review_context_tool` | Token-efficient review snippets |
+| `get_affected_flows_tool` | Execution paths impacted by changes |
+| `detect_changes_tool` | Risk-scored diff analysis |
+| `get_architecture_overview_tool` | High-level structure |
+| `list_communities_tool` / `get_community_tool` | Module-style clusters |
+| `refactor_tool` | Rename preview, dead code hints |
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+Fall back to Grep/Glob/Read only when the graph does not cover the need.
 
-<!-- gitnexus:end -->
+If a call fails with “unknown tool”, use the **exact tool names** listed under Cursor → MCP for the `code-review-graph` server (some builds use a `_tool` suffix, others may not).
+
+## Skills (workflows)
+
+| Task | File |
+|------|------|
+| Explore / architecture | `.claude/skills/explore-codebase.md` |
+| Review / PR mindset | `.claude/skills/review-changes.md` |
+| Debug | `.claude/skills/debug-issue.md` |
+| Refactor safely | `.claude/skills/refactor-safely.md` |
+
+Optional prompts from CRG (if exposed): `review_changes`, `architecture_map`, `debug_issue`, `onboard_developer`, `pre_merge_check`.

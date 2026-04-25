@@ -1,13 +1,7 @@
-# GitNexus Integration
+# Project rules (token-efficient)
 
-This project is indexed by GitNexus. Always start by:
-
-1. Reading gitnexus://repo/{name}/context to check staleness
-2. Using the appropriate skill for your task (see AGENTS.md)
-3. Following the skill's workflow and checklist
-
-Available skills:
-- gitnexus-exploring: Understand architecture
-- gitnexus-debugging: Trace bugs
-- gitnexus-impact-analysis: Blast radius before changes
-- gitnexus-refactoring: Safe refactoring workflows
+- **MCP:** `code-review-graph` only. No GitNexus, `gitnexus_*`, or `gitnexus://`.
+- **Shell (Windows PowerShell):** use `;` not `&&`. Prefix noisy CLIs with **`rtk`**: `git` (status/diff/log/show), `pytest` / `python -m pytest`, `ruff check`, `mypy`, `pip list`/`pip install`, `rg`/`grep`, `find`, `ls`/big dirs, `docker`/`kubectl` if used, `npm test`/`pnpm` in JS subfolders — else `rtk --help` / `rtk discover` on this machine.
+- **Explore / change:** `get_minimal_context_tool` first (short `task`). Prefer `query_graph_tool` / `semantic_search_nodes_tool` over repo-wide Grep/Read when structure matters. Before shared or risky edits: `get_impact_radius_tool` (+ `get_review_context_tool` if you need excerpts). Before commit: `detect_changes_tool`. Renames: `refactor_tool` preview, not blind multi-file replace.
+- **Graph freshness:** From repo root: `code-review-graph build` or `update`. Cursor has no CRG file-save hooks — use `crg-daemon` or manual `update` after large edits.
+- **Skills:** **AGENTS.md**; deeper steps: `.claude/skills/explore-codebase.md`, `review-changes.md`, `debug-issue.md`, `refactor-safely.md`.

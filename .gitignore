@@ -89,3 +89,16 @@ data/processed/*
 Thumbs.db
 .vscode/
 .gitnexus
+
+# code-review-graph (local SQLite graph)
+.code-review-graph/
+
+# Personal / local AI & IDE (MCP, Cursor hooks, Claude — do not push)
+.claude/
+.cursor/
+.mcp.json
+.opencode.json
+undefined/
+
+# Local eval / CR harness (large clones + reports — keep off remote unless you choose)
+evaluate/

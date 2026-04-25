@@ -169,6 +169,9 @@ def _predict_gnn_best(
     model_name: str,
     max_epochs: int,
     seeds: list[int] | None,
+    include_language: bool,
+    gat_heads: int,
+    appnp_alpha: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     surrogate_symbols = _import_run_surrogates_symbols()
     load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
@@ -180,6 +183,7 @@ def _predict_gnn_best(
         targets_path=targets_path,
         split_mask_path=split_mask_path,
         node_scope="all",
+        include_language=include_language,
     )
     _, y_pred = train_surrogate_5seeds(
         bundle=bundle,
@@ -192,6 +196,8 @@ def _predict_gnn_best(
         seeds=seeds,
         loss_mode="huber",
         rankloss_alpha=0.5,
+        gat_heads=int(gat_heads),
+        appnp_alpha=float(appnp_alpha),
     )
     prediction_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
     return bundle.split_mask_df, prediction_df
@@ -202,11 +208,12 @@ def _build_linear_predictions(
     split_mask_df: pd.DataFrame,
     node_attributes: pd.DataFrame,
     feature_cols: list[str],
+    include_language: bool,
 ) -> np.ndarray:
     baseline_symbols = _import_run_baselines_symbols()
     derive_features = baseline_symbols["derive_features"]
 
-    feature_frame = derive_features(node_attributes)
+    feature_frame = derive_features(node_attributes, include_language=include_language)
     if "degree" in feature_cols:
         degree_source = _ensure_node_id_str(node_attributes)[["node_id", "degree"]].copy()
         feature_frame = feature_frame.merge(degree_source, on="node_id", how="left")
@@ -233,6 +240,7 @@ def _predict_mlp_raw_attr(
     node_attributes: pd.DataFrame,
     max_epochs: int,
     seeds: list[int] | None,
+    include_language: bool,
 ) -> np.ndarray:
     import torch
 
@@ -242,7 +250,7 @@ def _predict_mlp_raw_attr(
     get_loss_function = baseline_symbols["get_loss_function"]
     BASELINE_SEEDS = baseline_symbols["BASELINE_SEEDS"]
 
-    features = derive_features(node_attributes)
+    features = derive_features(node_attributes, include_language=include_language)
     merged = targets_df[["node_id", "y"]].merge(features, on="node_id", how="left")
     feature_cols = [c for c in merged.columns if c not in {"node_id", "y"}]
     for col in feature_cols:
@@ -297,6 +305,7 @@ def _select_strongest_flat_baseline_hscc(
     node_attributes: pd.DataFrame,
     max_epochs: int,
     seeds: list[int] | None,
+    include_language: bool,
 ) -> tuple[str, np.ndarray, float]:
     baseline_symbols = _import_run_baselines_symbols()
     derive_features = baseline_symbols["derive_features"]
@@ -309,7 +318,7 @@ def _select_strongest_flat_baseline_hscc(
         ("lr_degree_views_life_time", ["degree", "views_log", "life_time"]),
     ]
 
-    derived = derive_features(node_attributes)
+    derived = derive_features(node_attributes, include_language=include_language)
     lang_cols = [col for col in derived.columns if col.startswith("lang_")]
     if len(lang_cols) > 0:
         linear_specs.extend(
@@ -325,6 +334,7 @@ def _select_strongest_flat_baseline_hscc(
             split_mask_df=split_mask_df,
             node_attributes=node_attributes,
             feature_cols=feature_cols,
+            include_language=include_language,
         )
         candidates.append((model_name, pred))
 
@@ -334,6 +344,7 @@ def _select_strongest_flat_baseline_hscc(
         node_attributes=node_attributes,
         max_epochs=max_epochs,
         seeds=seeds,
+        include_language=include_language,
     )
     candidates.append(("mlp_raw_attr", mlp_pred))
 
@@ -378,6 +389,8 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MAPR2026 v3.2 bootstrap CI runner for Person 3")
     parser.add_argument("--surrogate-csv", default=str(Path(PATHS.results_dir) / "surrogate_ranking_metrics.csv"))
+    parser.add_argument("--surrogate-csv-a0", default="", help="Optional A0-specific surrogate CSV. Falls back to --surrogate-csv.")
+    parser.add_argument("--surrogate-csv-hscc", default="", help="Optional HSCC-specific surrogate CSV. Falls back to --surrogate-csv.")
     parser.add_argument("--targets-a0", default="data/processed/regression_targets_a0.parquet")
     parser.add_argument("--targets-hscc", default="data/processed/regression_targets_hscc_refined.parquet")
     parser.add_argument("--split-mask-path", default=PATHS.split_masks)
@@ -387,6 +400,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equivalence-bound", type=float, default=0.02)
     parser.add_argument("--max-epochs", type=int, default=200)
     parser.add_argument("--seeds", default="", help="Comma-separated training seeds override.")
+    parser.add_argument("--gat-heads", type=int, default=4, help="GAT heads used when bootstrap reruns a GAT best-model.")
+    parser.add_argument("--appnp-alpha", type=float, default=0.15, help="APPNP alpha used when bootstrap reruns an APPNP best-model.")
     parser.add_argument(
         "--out-a0",
         default=str(Path(PATHS.results_dir) / "gnn_vs_degree_bootstrap_ci_a0.json"),
@@ -395,6 +410,7 @@ def parse_args() -> argparse.Namespace:
         "--out-hscc",
         default=str(Path(PATHS.results_dir) / "gnn_vs_baseline_bootstrap_ci_hscc.json"),
     )
+    parser.add_argument("--include-language-hscc", action="store_true", help="Use language-aware raw_attr/full features for HSCC comparators and GNN reruns.")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -402,18 +418,26 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    surrogate_csv = resolve_project_path(args.surrogate_csv)
+    surrogate_csv_legacy = resolve_project_path(args.surrogate_csv)
+    surrogate_csv_a0 = resolve_project_path(args.surrogate_csv_a0) if str(args.surrogate_csv_a0).strip() else surrogate_csv_legacy
+    surrogate_csv_hscc = resolve_project_path(args.surrogate_csv_hscc) if str(args.surrogate_csv_hscc).strip() else surrogate_csv_legacy
     split_mask_path = resolve_project_path(args.split_mask_path)
     targets_a0_path = resolve_project_path(args.targets_a0)
     targets_hscc_path = resolve_project_path(args.targets_hscc)
     node_attributes_path = resolve_project_path(args.node_attributes_path)
+    include_language_hscc = bool(args.include_language_hscc)
 
     if args.dry_run:
         print("[OK] bootstrap_ci dry-run")
-        print(f" - surrogate_csv={surrogate_csv}")
+        print(f" - surrogate_csv_legacy={surrogate_csv_legacy}")
+        print(f" - surrogate_csv_a0={surrogate_csv_a0}")
+        print(f" - surrogate_csv_hscc={surrogate_csv_hscc}")
         print(f" - split_mask={split_mask_path}")
         print(f" - targets_a0={targets_a0_path}")
         print(f" - targets_hscc={targets_hscc_path}")
+        print(f" - include_language_hscc={include_language_hscc}")
+        print(f" - gat_heads={int(args.gat_heads)}")
+        print(f" - appnp_alpha={float(args.appnp_alpha)}")
         return
 
     split_mask_df = load_split_mask(split_mask_path)
@@ -432,13 +456,16 @@ def main() -> None:
     node_attributes = pd.read_parquet(node_attributes_path)
     node_attributes = _ensure_node_id_str(node_attributes)
 
-    best_a0_name = _select_best_gnn_model_name(surrogate_csv, label_regime="a0")
+    best_a0_name = _select_best_gnn_model_name(surrogate_csv_a0, label_regime="a0")
     _, gnn_pred_a0_df = _predict_gnn_best(
         targets_path=targets_a0_path,
         split_mask_path=split_mask_path,
         model_name=best_a0_name,
         max_epochs=int(args.max_epochs),
         seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+        include_language=False,
+        gat_heads=int(args.gat_heads),
+        appnp_alpha=float(args.appnp_alpha),
     )
 
     targets_a0 = _load_targets_df(targets_a0_path)
@@ -465,6 +492,11 @@ def main() -> None:
         "label_regime": "a0",
         "gnn_model": best_a0_name,
         "comparator_model": "degree",
+        "surrogate_csv_used": str(surrogate_csv_a0),
+        "feature_policy": {
+            "include_language": False,
+            "gnn_model": best_a0_name,
+        },
         "n_test": int(merged_a0.shape[0]),
         "n_bootstrap": int(args.n_bootstrap),
         "equivalence_bound": float(args.equivalence_bound),
@@ -491,13 +523,16 @@ def main() -> None:
     }
     _write_json(resolve_project_path(args.out_a0), payload_a0)
 
-    best_hscc_name = _select_best_gnn_model_name(surrogate_csv, label_regime="hscc")
+    best_hscc_name = _select_best_gnn_model_name(surrogate_csv_hscc, label_regime="hscc")
     _, gnn_pred_hscc_df = _predict_gnn_best(
         targets_path=targets_hscc_path,
         split_mask_path=split_mask_path,
         model_name=best_hscc_name,
         max_epochs=int(args.max_epochs),
         seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+        include_language=include_language_hscc,
+        gat_heads=int(args.gat_heads),
+        appnp_alpha=float(args.appnp_alpha),
     )
 
     targets_hscc = _load_targets_df(targets_hscc_path)
@@ -507,6 +542,7 @@ def main() -> None:
         node_attributes=node_attributes,
         max_epochs=int(args.max_epochs),
         seeds=seed_list if seed_list is not None else list(BASELINE_SEEDS),
+        include_language=include_language_hscc,
     )
 
     y_hscc_df = apply_test_mask(targets_hscc[["node_id", "y"]], split_mask_df, node_id_col="node_id")
@@ -531,6 +567,11 @@ def main() -> None:
         "gnn_model": best_hscc_name,
         "comparator_model": strongest_name,
         "comparator_spearman_on_test": float(strongest_rho),
+        "surrogate_csv_used": str(surrogate_csv_hscc),
+        "feature_policy": {
+            "include_language": include_language_hscc,
+            "gnn_model": best_hscc_name,
+        },
         "n_test": int(merged_hscc.shape[0]),
         "n_bootstrap": int(args.n_bootstrap),
         "equivalence_bound": float(args.equivalence_bound),

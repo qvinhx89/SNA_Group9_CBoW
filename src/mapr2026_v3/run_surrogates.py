@@ -102,6 +102,7 @@ class SurrogateDataBundle:
     test_mask: torch.Tensor
     scaler: Any
     split_mask_df: pd.DataFrame
+    feature_names: list[str]
 
 
 class IdentityScaler:
@@ -146,6 +147,7 @@ class GNNSurrogateRegressor(nn.Module):
         hidden_channels: int = 128,
         dropout: float = 0.3,
         gat_heads: int = 4,
+        appnp_alpha: float = 0.15,
         feature_mode: str = "raw_attr",
     ) -> None:
         super().__init__()
@@ -181,18 +183,23 @@ class GNNSurrogateRegressor(nn.Module):
         elif self.arch == "gat":
             if GATConv is None:
                 raise ImportError("torch_geometric is required for GAT but is not available.")
-            # VRAM Trade-off for 13.5M edges: 
-            # Use 64 hidden channels and 2 heads to slash edge-lifting memory from ~28GB to ~7GB
-            self.conv1 = GATConv(in_channels, 64, heads=2, concat=True, dropout=effective_dropout)
-            self.conv2 = GATConv(64 * 2, 64, heads=1, concat=True, dropout=effective_dropout)
-            self.head = nn.Linear(64, 1)
+            per_head_dim = max(1, hidden_channels // max(1, int(gat_heads)))
+            self.conv1 = GATConv(in_channels, per_head_dim, heads=int(gat_heads), concat=True, dropout=effective_dropout)
+            self.conv2 = GATConv(
+                per_head_dim * int(gat_heads),
+                per_head_dim,
+                heads=int(gat_heads),
+                concat=True,
+                dropout=effective_dropout,
+            )
+            self.head = nn.Linear(per_head_dim * int(gat_heads), 1)
         elif self.arch == "appnp":
             if APPNP is None:
                 raise ImportError("torch_geometric is required for APPNP but is not available.")
             # APPNP: MLP feature transform + personalized propagation.
             self.lin1 = nn.Linear(in_channels, hidden_channels)
             self.lin2 = nn.Linear(hidden_channels, hidden_channels)
-            self.propagation = APPNP(K=15, alpha=0.1, dropout=effective_dropout)
+            self.propagation = APPNP(K=10, alpha=float(appnp_alpha), dropout=effective_dropout)
             self.head = nn.Linear(hidden_channels, 1)
         else:
             raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat, appnp")
@@ -347,7 +354,10 @@ def _ensure_node_id_str(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
+def _derive_features(
+    node_attributes: pd.DataFrame,
+    include_language: bool = False,
+) -> pd.DataFrame:
     df = _ensure_node_id_str(node_attributes)
     require_columns(df, ["node_id"], "node_attributes")
 
@@ -374,10 +384,12 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
         lang_col = "lang"
 
     lang_dummies = pd.DataFrame(index=df.index)
-    if lang_col is not None:
+    if include_language and lang_col is not None:
         lang_series = df[lang_col].astype(str).fillna("unknown")
         lang_series = lang_series.replace({"nan": "unknown", "None": "unknown"})
         lang_dummies = pd.get_dummies(lang_series, prefix="lang", dtype=float)
+    elif include_language and lang_col is None:
+        print("[WARN] --include-language set but no 'language'/'lang' column found in node_attributes.")
 
     features = pd.DataFrame(
         {
@@ -441,6 +453,7 @@ def load_surrogate_data_bundle(
     split_mask_path: str | Path = PATHS.split_masks,
     edgelist_path: str | Path = PATHS.graph_edgelist,
     node_scope: str = "all",
+    include_language: bool = False,
 ) -> SurrogateDataBundle:
     if Data is None:
         raise ImportError("torch_geometric is required for surrogate data bundle construction.")
@@ -478,7 +491,7 @@ def load_surrogate_data_bundle(
     y_df = targets[["node_id", "y"]].copy()
     y_df["y"] = pd.to_numeric(y_df["y"], errors="coerce")
 
-    raw_features_df = _derive_features(node_attributes)
+    raw_features_df = _derive_features(node_attributes, include_language=include_language)
     merged = base_df.merge(y_df, on="node_id", how="left")
 
     if feature_mode == "constant":
@@ -582,7 +595,28 @@ def load_surrogate_data_bundle(
         test_mask=graph_data.test_mask,
         scaler=scaler,
         split_mask_df=split_mask_df,
+        feature_names=list(feature_cols),
     )
+
+
+def _print_feature_audit(
+    bundle: SurrogateDataBundle,
+    model_name: str,
+    label_regime: str,
+    feature_mode: str,
+    include_language: bool,
+) -> None:
+    in_dim = int(bundle.graph_data.x.shape[1])
+    n_nodes = int(bundle.graph_data.x.shape[0])
+    n_edges = int(bundle.graph_data.edge_index.shape[1])
+    print(
+        f"[FEATURE AUDIT] model={model_name} | regime={label_regime} | "
+        f"feature_mode={feature_mode} | include_language={bool(include_language)} | "
+        f"in_dim={in_dim} | features={bundle.feature_names} | "
+        f"n_nodes={n_nodes} | n_edges={n_edges}"
+    )
+    if len(bundle.feature_names) > 10:
+        print(f"[FEATURE AUDIT] first_features={bundle.feature_names[:10]}")
 
 
 def evaluate_on_test_mask(
@@ -626,6 +660,8 @@ def train_surrogate_5seeds(
     loss_mode: str = "huber",
     rankloss_alpha: float = 0.5,
     feature_mode: str = "raw_attr",
+    gat_heads: int = 4,
+    appnp_alpha: float = 0.15,
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -650,6 +686,8 @@ def train_surrogate_5seeds(
             in_channels=data.x.shape[1],
             hidden_channels=128,
             dropout=0.3,
+            gat_heads=int(gat_heads),
+            appnp_alpha=float(appnp_alpha),
             feature_mode=feature_mode,
         ).to(device)
         model.reset_parameters()
@@ -915,6 +953,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
+    p.add_argument("--include-language", action="store_true", help="Include language dummy features in raw_attr/full features.")
     p.add_argument("--run-random-sanity", action="store_true")
     p.add_argument("--only-random", action="store_true")
     p.add_argument("--skip-gnn-full", action="store_true")
@@ -956,6 +995,8 @@ def parse_args() -> argparse.Namespace:
         default=0.5,
         help="Alpha in combined loss: alpha*Huber + (1-alpha)*PairwiseRank.",
     )
+    p.add_argument("--gat-heads", type=int, default=4, help="Number of attention heads for GAT (plan default: 4).")
+    p.add_argument("--appnp-alpha", type=float, default=0.15, help="APPNP alpha (plan default: 0.15).")
     return p.parse_args()
 
 
@@ -986,6 +1027,16 @@ def main() -> None:
         return
 
     label_regime = str(args.label_regime).strip().lower() if str(args.label_regime).strip() else infer_label_regime_from_targets_path(args.targets_path)
+    include_language = bool(args.include_language)
+
+    if label_regime == "a0" and include_language:
+        print("[GOVERNANCE WARN] A0 is expected to run with include_language=False.")
+    if label_regime == "hscc" and not include_language:
+        print("[GOVERNANCE WARN] HSCC is expected to run with include_language=True for fairness-aligned raw_attr/full features.")
+    if int(args.gat_heads) != 4:
+        print(f"[GOVERNANCE WARN] Overriding GAT heads from plan default 4 to {int(args.gat_heads)}.")
+    if not math.isclose(float(args.appnp_alpha), 0.15, rel_tol=0.0, abs_tol=1e-12):
+        print(f"[GOVERNANCE WARN] Overriding APPNP alpha from plan default 0.15 to {float(args.appnp_alpha)}.")
 
     seed_list: list[int] | None = None
     if str(args.seeds).strip():
@@ -1038,9 +1089,6 @@ def main() -> None:
             ]
         )
 
-    # Temporary hack to ONLY run gat_raw_attr
-    model_specs = [("gat_raw_attr", "raw_attr", False, "gat")]
-
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
     base_bundle: SurrogateDataBundle | None = None
@@ -1054,6 +1102,14 @@ def main() -> None:
                 targets_path=args.targets_path,
                 split_mask_path=args.split_mask_path,
                 node_scope=args.node_scope,
+                include_language=include_language,
+            )
+            _print_feature_audit(
+                bundle=bundle,
+                model_name=model_name,
+                label_regime=label_regime,
+                feature_mode=feature_mode,
+                include_language=include_language,
             )
             if base_bundle is None:
                 base_bundle = bundle
@@ -1069,6 +1125,8 @@ def main() -> None:
                 loss_mode="huber",
                 rankloss_alpha=float(args.rankloss_alpha),
                 feature_mode=feature_mode,
+                gat_heads=int(args.gat_heads),
+                appnp_alpha=float(args.appnp_alpha),
             )
             row["label_regime"] = label_regime
             results_list.append(row)
@@ -1099,6 +1157,14 @@ def main() -> None:
                 targets_path=args.targets_path,
                 split_mask_path=args.split_mask_path,
                 node_scope=args.node_scope,
+                include_language=include_language,
+            )
+            _print_feature_audit(
+                bundle=bundle_rank,
+                model_name="best_arch_raw_attr_rankloss",
+                label_regime=label_regime,
+                feature_mode="raw_attr",
+                include_language=include_language,
             )
             if base_bundle is None:
                 base_bundle = bundle_rank
@@ -1114,6 +1180,8 @@ def main() -> None:
                 loss_mode="rankloss_combined",
                 rankloss_alpha=float(args.rankloss_alpha),
                 feature_mode="raw_attr",
+                gat_heads=int(args.gat_heads),
+                appnp_alpha=float(args.appnp_alpha),
             )
             row_rank["label_regime"] = label_regime
             results_list.append(row_rank)

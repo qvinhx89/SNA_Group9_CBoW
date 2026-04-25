@@ -117,7 +117,10 @@ def _ensure_node_id_str(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
+def _derive_features(
+    node_attributes: pd.DataFrame,
+    include_language: bool = False,
+) -> pd.DataFrame:
     df = _ensure_node_id_str(node_attributes)
     require_columns(df, ["node_id"], "node_attributes")
 
@@ -144,10 +147,12 @@ def _derive_features(node_attributes: pd.DataFrame) -> pd.DataFrame:
         lang_col = "lang"
 
     lang_dummies = pd.DataFrame(index=df.index)
-    if lang_col is not None:
+    if include_language and lang_col is not None:
         lang_series = df[lang_col].astype(str).fillna("unknown")
         lang_series = lang_series.replace({"nan": "unknown", "None": "unknown"})
         lang_dummies = pd.get_dummies(lang_series, prefix="lang", dtype=float)
+    elif include_language and lang_col is None:
+        print("[WARN] --include-language set but no 'language'/'lang' column found in node_attributes.")
 
     features = pd.DataFrame(
         {
@@ -209,13 +214,14 @@ def load_baseline_data_bundle(
     targets_path: str | Path = PATHS.regression_targets,
     split_mask_path: str | Path = PATHS.split_masks,
     edgelist_path: str | Path = PATHS.graph_edgelist,
+    include_language: bool = False,
 ) -> BaselineDataBundle:
     node_attributes = pd.read_parquet(resolve_project_path(node_attributes_path))
     targets = pd.read_parquet(resolve_project_path(targets_path))
     targets = _ensure_node_id_str(targets)
     require_columns(targets, ["node_id", "y"], "regression_targets")
 
-    features_df = _derive_features(node_attributes)
+    features_df = _derive_features(node_attributes, include_language=include_language)
     merged = features_df.merge(targets[["node_id", "y"]], on="node_id", how="left")
     merged["y"] = pd.to_numeric(merged["y"], errors="coerce").fillna(0.0)
 
@@ -600,7 +606,10 @@ def eval_linear_combo(bundle: BaselineDataBundle, feature_df: pd.DataFrame, cols
     }
 
 
-def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]:
+def collect_heuristic_rows(
+    bundle: BaselineDataBundle,
+    include_language: bool = False,
+) -> list[dict[str, float]]:
     rows: list[dict[str, float]] = []
 
     node_attr = _safe_read_parquet(PATHS.node_attributes)
@@ -609,7 +618,7 @@ def collect_heuristic_rows(bundle: BaselineDataBundle) -> list[dict[str, float]]
 
     if node_attr is not None:
         node_attr = _ensure_node_id_str(node_attr)
-        derived = _derive_features(node_attr)
+        derived = _derive_features(node_attr, include_language=include_language)
 
         if "views" in node_attr.columns:
             rows.append(eval_heuristic(bundle, _align_series_to_nodes(node_attr, bundle.node_ids, "views"), "views"))
@@ -715,6 +724,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-epochs", type=int, default=MAX_EPOCHS)
     p.add_argument("--node2vec-epochs", type=int, default=10)
     p.add_argument("--skip-node2vec", action="store_true")
+    p.add_argument("--include-language", action="store_true", help="Include language dummy features in raw_attr / fairness baselines.")
     return p.parse_args()
 
 
@@ -727,6 +737,12 @@ def main() -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     label_regime = str(args.label_regime).strip().lower() if str(args.label_regime).strip() else infer_label_regime_from_targets_path(args.targets_path)
+    include_language = bool(args.include_language)
+
+    if label_regime == "a0" and include_language:
+        print("[GOVERNANCE WARN] A0 is expected to run with include_language=False.")
+    if label_regime == "hscc" and not include_language:
+        print("[GOVERNANCE WARN] HSCC is expected to run with include_language=True for fairness-aligned flat baselines.")
 
     cols = [
         "label_regime",
@@ -749,7 +765,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Training device: {device}")
 
-    bundle = load_baseline_data_bundle(targets_path=args.targets_path)
+    bundle = load_baseline_data_bundle(targets_path=args.targets_path, include_language=include_language)
     if args.skip_node2vec:
         print("[INFO] Node2Vec dependency check skipped by flag (--skip-node2vec).")
     elif Node2Vec is None:
@@ -761,7 +777,7 @@ def main() -> None:
             print(f"[WARN] Node2Vec dependency missing ({exc}); continuing without Node2Vec.")
             args.skip_node2vec = True
 
-    results_list = collect_heuristic_rows(bundle)
+    results_list = collect_heuristic_rows(bundle, include_language=include_language)
     results_list.append(train_mlp_5seeds(bundle=bundle, max_epochs=args.max_epochs))
     if args.skip_node2vec:
         print("[INFO] Skipping Node2Vec+LR by flag (--skip-node2vec).")
