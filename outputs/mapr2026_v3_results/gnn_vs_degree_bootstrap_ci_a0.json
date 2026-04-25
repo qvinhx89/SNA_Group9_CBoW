@@ -1,0 +1,20 @@
+{
+  "label_regime": "a0",
+  "gnn_model": "gcn_raw_attr",
+  "comparator_model": "degree",
+  "n_test": 1000,
+  "n_bootstrap": 1000,
+  "equivalence_bound": 0.02,
+  "spearman": {
+    "delta_mean": -0.015794784180411168,
+    "ci_95_lower": -0.02479951605418058,
+    "ci_95_upper": -0.006807622078078729,
+    "interpretation": "gnn_significantly_worse"
+  },
+  "ndcg_at_10pct": {
+    "delta_mean": -0.034493331640394344,
+    "ci_95_lower": -0.05704644923930016,
+    "ci_95_upper": -0.013456963536007883,
+    "interpretation": "gnn_significantly_worse"
+  }
+}

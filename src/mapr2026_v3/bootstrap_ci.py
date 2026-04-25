@@ -169,7 +169,7 @@ def _predict_gnn_best(
     model_name: str,
     max_epochs: int,
     seeds: list[int] | None,
-) -> tuple[pd.DataFrame, np.ndarray]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     surrogate_symbols = _import_run_surrogates_symbols()
     load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
     train_surrogate_5seeds = surrogate_symbols["train_surrogate_5seeds"]
@@ -194,7 +194,7 @@ def _predict_gnn_best(
         rankloss_alpha=0.5,
     )
     prediction_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
-    return bundle.split_mask_df, prediction_df["y_pred"].to_numpy(dtype=float)
+    return bundle.split_mask_df, prediction_df
 
 
 def _build_linear_predictions(
@@ -433,7 +433,7 @@ def main() -> None:
     node_attributes = _ensure_node_id_str(node_attributes)
 
     best_a0_name = _select_best_gnn_model_name(surrogate_csv, label_regime="a0")
-    _, gnn_pred_a0 = _predict_gnn_best(
+    _, gnn_pred_a0_df = _predict_gnn_best(
         targets_path=targets_a0_path,
         split_mask_path=split_mask_path,
         model_name=best_a0_name,
@@ -445,11 +445,7 @@ def main() -> None:
     degree_pred = _build_degree_predictions(targets_a0, node_attributes=node_attributes)
 
     y_a0_df = apply_test_mask(targets_a0[["node_id", "y"]], split_mask_df, node_id_col="node_id")
-    pred_gnn_a0_df = apply_test_mask(
-        pd.DataFrame({"node_id": targets_a0["node_id"].astype(str), "y_pred": gnn_pred_a0}),
-        split_mask_df,
-        node_id_col="node_id",
-    )
+    pred_gnn_a0_df = apply_test_mask(gnn_pred_a0_df, split_mask_df, node_id_col="node_id")
     pred_degree_df = apply_test_mask(
         pd.DataFrame({"node_id": targets_a0["node_id"].astype(str), "y_pred": degree_pred}),
         split_mask_df,
@@ -496,7 +492,7 @@ def main() -> None:
     _write_json(resolve_project_path(args.out_a0), payload_a0)
 
     best_hscc_name = _select_best_gnn_model_name(surrogate_csv, label_regime="hscc")
-    _, gnn_pred_hscc = _predict_gnn_best(
+    _, gnn_pred_hscc_df = _predict_gnn_best(
         targets_path=targets_hscc_path,
         split_mask_path=split_mask_path,
         model_name=best_hscc_name,
@@ -514,11 +510,7 @@ def main() -> None:
     )
 
     y_hscc_df = apply_test_mask(targets_hscc[["node_id", "y"]], split_mask_df, node_id_col="node_id")
-    pred_gnn_hscc_df = apply_test_mask(
-        pd.DataFrame({"node_id": targets_hscc["node_id"].astype(str), "y_pred": gnn_pred_hscc}),
-        split_mask_df,
-        node_id_col="node_id",
-    )
+    pred_gnn_hscc_df = apply_test_mask(gnn_pred_hscc_df, split_mask_df, node_id_col="node_id")
     pred_cmp_hscc_df = apply_test_mask(
         pd.DataFrame({"node_id": targets_hscc["node_id"].astype(str), "y_pred": strongest_pred}),
         split_mask_df,
