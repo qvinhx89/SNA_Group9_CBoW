@@ -148,6 +148,7 @@ class GNNSurrogateRegressor(nn.Module):
         dropout: float = 0.3,
         gat_heads: int = 4,
         appnp_alpha: float = 0.15,
+        appnp_k: int = 10,
         feature_mode: str = "raw_attr",
     ) -> None:
         super().__init__()
@@ -199,7 +200,7 @@ class GNNSurrogateRegressor(nn.Module):
             # APPNP: MLP feature transform + personalized propagation.
             self.lin1 = nn.Linear(in_channels, hidden_channels)
             self.lin2 = nn.Linear(hidden_channels, hidden_channels)
-            self.propagation = APPNP(K=10, alpha=float(appnp_alpha), dropout=effective_dropout)
+            self.propagation = APPNP(K=int(appnp_k), alpha=float(appnp_alpha), dropout=effective_dropout)
             self.head = nn.Linear(hidden_channels, 1)
         else:
             raise ValueError(f"Unsupported arch={arch}. Choose from: sage, gcn, gin, gat, appnp")
@@ -662,6 +663,8 @@ def train_surrogate_5seeds(
     feature_mode: str = "raw_attr",
     gat_heads: int = 4,
     appnp_alpha: float = 0.15,
+    appnp_k: int = 10,
+    hidden_channels: int = 128,
 ) -> tuple[dict[str, float], np.ndarray]:
     seed_metrics: list[dict[str, float]] = []
     seed_inference_runtimes: list[float] = []
@@ -684,10 +687,11 @@ def train_surrogate_5seeds(
         model = GNNSurrogateRegressor(
             arch=arch,
             in_channels=data.x.shape[1],
-            hidden_channels=128,
+            hidden_channels=int(hidden_channels),
             dropout=0.3,
             gat_heads=int(gat_heads),
             appnp_alpha=float(appnp_alpha),
+            appnp_k=int(appnp_k),
             feature_mode=feature_mode,
         ).to(device)
         model.reset_parameters()
@@ -716,6 +720,11 @@ def train_surrogate_5seeds(
                 rankloss_alpha=rankloss_alpha,
             )
             loss.backward()
+            # Gradient clipping for APPNP: K-step propagation on dense graphs can
+            # cause gradient explosion across seeds. Clip only for appnp to avoid
+            # touching other architectures' dynamics.
+            if arch == "appnp":
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             if early_stop and bool(data.val_mask.any()):
@@ -997,6 +1006,26 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--gat-heads", type=int, default=4, help="Number of attention heads for GAT (plan default: 4).")
     p.add_argument("--appnp-alpha", type=float, default=0.15, help="APPNP alpha (plan default: 0.15).")
+    p.add_argument(
+        "--appnp-k",
+        type=int,
+        default=10,
+        help="APPNP propagation steps K (plan default: 10). Reduce to 5 if APPNP is unstable on dense graphs.",
+    )
+    p.add_argument(
+        "--hidden-channels",
+        type=int,
+        default=128,
+        help=(
+            "Hidden dim for all GNN architectures (plan default: 128). "
+            "GAT VRAM ∝ E×hidden_channels; reduce to 64 if GAT OOMs (observed threshold ~28-34GB)."
+        ),
+    )
+    p.add_argument(
+        "--skip-gat",
+        action="store_true",
+        help="Exclude gat_raw_attr and gat_edge_only from model_specs. Use when GAT OOMs and --hidden-channels 64 is not viable.",
+    )
     return p.parse_args()
 
 
@@ -1037,6 +1066,15 @@ def main() -> None:
         print(f"[GOVERNANCE WARN] Overriding GAT heads from plan default 4 to {int(args.gat_heads)}.")
     if not math.isclose(float(args.appnp_alpha), 0.15, rel_tol=0.0, abs_tol=1e-12):
         print(f"[GOVERNANCE WARN] Overriding APPNP alpha from plan default 0.15 to {float(args.appnp_alpha)}.")
+    if int(args.appnp_k) != 10:
+        print(f"[GOVERNANCE WARN] Overriding APPNP K from plan default 10 to {int(args.appnp_k)}. Document in experiment_registry.md.")
+    if int(args.hidden_channels) != 128:
+        print(
+            f"[GOVERNANCE WARN] Overriding hidden_channels from plan default 128 to {int(args.hidden_channels)}. "
+            "GAT will use a non-standard hidden dim — note in experiment_registry.md that architectures are not directly comparable."
+        )
+    if getattr(args, "skip_gat", False):
+        print("[GOVERNANCE WARN] --skip-gat active: gat_raw_attr excluded from this run. Document reason in experiment_registry.md.")
 
     seed_list: list[int] | None = None
     if str(args.seeds).strip():
@@ -1089,6 +1127,14 @@ def main() -> None:
             ]
         )
 
+    # --skip-gat: exclude any spec with arch="gat" after all model_specs are assembled.
+    if getattr(args, "skip_gat", False):
+        before_count = len(model_specs)
+        model_specs = [spec for spec in model_specs if spec[3] != "gat"]
+        skipped = before_count - len(model_specs)
+        if skipped:
+            print(f"[INFO] --skip-gat: removed {skipped} GAT model(s) from run.")
+
     results_list: list[dict[str, float]] = []
     predictions_by_model: dict[str, np.ndarray] = {}
     base_bundle: SurrogateDataBundle | None = None
@@ -1127,6 +1173,8 @@ def main() -> None:
                 feature_mode=feature_mode,
                 gat_heads=int(args.gat_heads),
                 appnp_alpha=float(args.appnp_alpha),
+                appnp_k=int(args.appnp_k),
+                hidden_channels=int(args.hidden_channels),
             )
             row["label_regime"] = label_regime
             results_list.append(row)
@@ -1182,6 +1230,8 @@ def main() -> None:
                 feature_mode="raw_attr",
                 gat_heads=int(args.gat_heads),
                 appnp_alpha=float(args.appnp_alpha),
+                appnp_k=int(args.appnp_k),
+                hidden_channels=int(args.hidden_channels),
             )
             row_rank["label_regime"] = label_regime
             results_list.append(row_rank)

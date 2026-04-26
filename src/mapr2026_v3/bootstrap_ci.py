@@ -126,7 +126,11 @@ def _load_targets_df(targets_path: str | Path) -> pd.DataFrame:
     return targets
 
 
-def _select_best_gnn_model_name(surrogate_csv: Path, label_regime: str) -> str:
+def _select_best_gnn_model_name(
+    surrogate_csv: Path,
+    label_regime: str,
+    std_threshold: float = float("inf"),
+) -> str:
     df = pd.read_csv(surrogate_csv)
     if "label_regime" in df.columns:
         df = df.loc[df["label_regime"].astype(str).str.lower() == str(label_regime).lower()].copy()
@@ -141,6 +145,23 @@ def _select_best_gnn_model_name(surrogate_csv: Path, label_regime: str) -> str:
     df = df.loc[df["model_name"].astype(str).isin(allowed)].copy()
     if df.empty:
         raise RuntimeError(f"No C2 GNN rows found for label_regime={label_regime} in {surrogate_csv}")
+
+    # Std gate: exclude models whose spearman_rho_std exceeds threshold.
+    # Catches APPNP catastrophic instability (std=0.697 observed on A0 dense graph).
+    if std_threshold < float("inf") and "spearman_rho_std" in df.columns:
+        before = len(df)
+        df = df.loc[df["spearman_rho_std"].fillna(0.0) <= float(std_threshold)].copy()
+        excluded = before - len(df)
+        if excluded:
+            print(
+                f"[INFO] _select_best_gnn_model_name: excluded {excluded} model(s) with "
+                f"spearman_rho_std > {std_threshold} (regime={label_regime})"
+            )
+        if df.empty:
+            raise RuntimeError(
+                f"All C2 GNN models excluded by --gnn-std-threshold {std_threshold} for "
+                f"label_regime={label_regime}. Lower the threshold or rerun surrogates."
+            )
 
     priority = {"appnp_raw_attr": 0, "gat_raw_attr": 1, "gin_raw_attr": 2, "gcn_raw_attr": 3, "gnn_raw_attr": 4}
     best_score = float(df["spearman_rho_mean"].max())
@@ -172,6 +193,8 @@ def _predict_gnn_best(
     include_language: bool,
     gat_heads: int,
     appnp_alpha: float,
+    appnp_k: int = 10,
+    hidden_channels: int = 128,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     surrogate_symbols = _import_run_surrogates_symbols()
     load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
@@ -198,6 +221,8 @@ def _predict_gnn_best(
         rankloss_alpha=0.5,
         gat_heads=int(gat_heads),
         appnp_alpha=float(appnp_alpha),
+        appnp_k=int(appnp_k),
+        hidden_channels=int(hidden_channels),
     )
     prediction_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
     return bundle.split_mask_df, prediction_df
@@ -403,6 +428,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gat-heads", type=int, default=4, help="GAT heads used when bootstrap reruns a GAT best-model.")
     parser.add_argument("--appnp-alpha", type=float, default=0.15, help="APPNP alpha used when bootstrap reruns an APPNP best-model.")
     parser.add_argument(
+        "--appnp-k",
+        type=int,
+        default=10,
+        help="APPNP K propagation steps — must match the value used in run_surrogates.py (plan default: 10).",
+    )
+    parser.add_argument(
+        "--hidden-channels",
+        type=int,
+        default=128,
+        help=(
+            "Hidden dim for all GNN architectures — must match the value used in run_surrogates.py (plan default: 128). "
+            "If surrogates were run with --hidden-channels 64, pass the same value here."
+        ),
+    )
+    parser.add_argument(
+        "--gnn-std-threshold",
+        type=float,
+        default=float("inf"),
+        help=(
+            "Exclude C2 GNN models with spearman_rho_std > threshold from best-model selection. "
+            "Use 0.1 to exclude catastrophically unstable models (e.g. APPNP std=0.697 on A0). "
+            "Default: inf (no filtering, backward compatible)."
+        ),
+    )
+    parser.add_argument(
         "--out-a0",
         default=str(Path(PATHS.results_dir) / "gnn_vs_degree_bootstrap_ci_a0.json"),
     )
@@ -438,6 +488,9 @@ def main() -> None:
         print(f" - include_language_hscc={include_language_hscc}")
         print(f" - gat_heads={int(args.gat_heads)}")
         print(f" - appnp_alpha={float(args.appnp_alpha)}")
+        print(f" - appnp_k={int(args.appnp_k)}")
+        print(f" - hidden_channels={int(args.hidden_channels)}")
+        print(f" - gnn_std_threshold={float(args.gnn_std_threshold)}")
         return
 
     split_mask_df = load_split_mask(split_mask_path)
@@ -456,7 +509,9 @@ def main() -> None:
     node_attributes = pd.read_parquet(node_attributes_path)
     node_attributes = _ensure_node_id_str(node_attributes)
 
-    best_a0_name = _select_best_gnn_model_name(surrogate_csv_a0, label_regime="a0")
+    best_a0_name = _select_best_gnn_model_name(
+        surrogate_csv_a0, label_regime="a0", std_threshold=float(args.gnn_std_threshold)
+    )
     _, gnn_pred_a0_df = _predict_gnn_best(
         targets_path=targets_a0_path,
         split_mask_path=split_mask_path,
@@ -466,6 +521,8 @@ def main() -> None:
         include_language=False,
         gat_heads=int(args.gat_heads),
         appnp_alpha=float(args.appnp_alpha),
+        appnp_k=int(args.appnp_k),
+        hidden_channels=int(args.hidden_channels),
     )
 
     targets_a0 = _load_targets_df(targets_a0_path)
@@ -496,6 +553,11 @@ def main() -> None:
         "feature_policy": {
             "include_language": False,
             "gnn_model": best_a0_name,
+            "hidden_channels": int(args.hidden_channels),
+            "appnp_k": int(args.appnp_k),
+            "gat_heads": int(args.gat_heads),
+            "appnp_alpha": float(args.appnp_alpha),
+            "gnn_std_threshold": float(args.gnn_std_threshold),
         },
         "n_test": int(merged_a0.shape[0]),
         "n_bootstrap": int(args.n_bootstrap),
@@ -523,7 +585,9 @@ def main() -> None:
     }
     _write_json(resolve_project_path(args.out_a0), payload_a0)
 
-    best_hscc_name = _select_best_gnn_model_name(surrogate_csv_hscc, label_regime="hscc")
+    best_hscc_name = _select_best_gnn_model_name(
+        surrogate_csv_hscc, label_regime="hscc", std_threshold=float(args.gnn_std_threshold)
+    )
     _, gnn_pred_hscc_df = _predict_gnn_best(
         targets_path=targets_hscc_path,
         split_mask_path=split_mask_path,
@@ -533,6 +597,8 @@ def main() -> None:
         include_language=include_language_hscc,
         gat_heads=int(args.gat_heads),
         appnp_alpha=float(args.appnp_alpha),
+        appnp_k=int(args.appnp_k),
+        hidden_channels=int(args.hidden_channels),
     )
 
     targets_hscc = _load_targets_df(targets_hscc_path)
@@ -571,6 +637,11 @@ def main() -> None:
         "feature_policy": {
             "include_language": include_language_hscc,
             "gnn_model": best_hscc_name,
+            "hidden_channels": int(args.hidden_channels),
+            "appnp_k": int(args.appnp_k),
+            "gat_heads": int(args.gat_heads),
+            "appnp_alpha": float(args.appnp_alpha),
+            "gnn_std_threshold": float(args.gnn_std_threshold),
         },
         "n_test": int(merged_hscc.shape[0]),
         "n_bootstrap": int(args.n_bootstrap),
