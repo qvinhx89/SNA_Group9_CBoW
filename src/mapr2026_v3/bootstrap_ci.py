@@ -228,6 +228,65 @@ def _predict_gnn_best(
     return bundle.split_mask_df, prediction_df
 
 
+def _predict_rankloss_best(
+    surrogate_csv: Path,
+    label_regime: str,
+    targets_path: str | Path,
+    split_mask_path: str | Path,
+    include_language: bool,
+    max_epochs: int,
+    seeds: list[int] | None,
+    gat_heads: int,
+    appnp_alpha: float,
+    appnp_k: int = 10,
+    hidden_channels: int = 128,
+    std_threshold: float = float("inf"),
+    rankloss_alpha: float = 0.5,
+) -> tuple[str, pd.DataFrame]:
+    """Retrain the C2-winning architecture with rankloss_combined (C3) for bootstrap CI comparison.
+
+    Selects the best C2 raw-attr architecture from surrogate_csv, retrains it with
+    loss_mode='rankloss_combined' (alpha*Huber + (1-alpha)*PairwiseRank) — matching the
+    exact mode used in run_surrogates.py --include-c3-rankloss. Returns a
+    (model_label, prediction_df) pair ready for bootstrap CI against the strongest flat baseline.
+    HSCC only.
+    """
+    surrogate_symbols = _import_run_surrogates_symbols()
+    load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
+    train_surrogate_5seeds = surrogate_symbols["train_surrogate_5seeds"]
+
+    best_arch_name = _select_best_gnn_model_name(
+        surrogate_csv, label_regime=label_regime, std_threshold=std_threshold
+    )
+    arch = _model_name_to_arch(best_arch_name)
+
+    bundle = load_surrogate_data_bundle(
+        feature_mode="raw_attr",
+        targets_path=targets_path,
+        split_mask_path=split_mask_path,
+        node_scope="all",
+        include_language=include_language,
+    )
+    _, y_pred = train_surrogate_5seeds(
+        bundle=bundle,
+        max_epochs=int(max_epochs),
+        model_name=best_arch_name,
+        arch=arch,
+        randomize_train_target=False,
+        early_stop=False,
+        patience=20,
+        seeds=seeds,
+        loss_mode="rankloss_combined",
+        rankloss_alpha=float(rankloss_alpha),
+        gat_heads=int(gat_heads),
+        appnp_alpha=float(appnp_alpha),
+        appnp_k=int(appnp_k),
+        hidden_channels=int(hidden_channels),
+    )
+    pred_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
+    return f"best_arch_raw_attr_rankloss({arch})", pred_df
+
+
 def _build_linear_predictions(
     targets_df: pd.DataFrame,
     split_mask_df: pd.DataFrame,
@@ -461,6 +520,30 @@ def parse_args() -> argparse.Namespace:
         default=str(Path(PATHS.results_dir) / "gnn_vs_baseline_bootstrap_ci_hscc.json"),
     )
     parser.add_argument("--include-language-hscc", action="store_true", help="Use language-aware raw_attr/full features for HSCC comparators and GNN reruns.")
+    parser.add_argument(
+        "--rankloss-alpha",
+        type=float,
+        default=0.5,
+        help=(
+            "Alpha in combined rankloss: alpha*Huber + (1-alpha)*PairwiseRank. "
+            "Must match the value used in run_surrogates.py --rankloss-alpha (plan default: 0.5). "
+            "Only used when --include-rankloss-comparison is set."
+        ),
+    )
+    parser.add_argument(
+        "--include-rankloss-comparison",
+        action="store_true",
+        help=(
+            "Also run bootstrap CI for best_arch_raw_attr_rankloss vs strongest flat baseline (HSCC only). "
+            "Retrains the C2-winning architecture with loss_mode=rankloss_combined. "
+            "Adds C3 validation. Default: off (backward compatible)."
+        ),
+    )
+    parser.add_argument(
+        "--out-hscc-rankloss",
+        default=str(Path(PATHS.results_dir) / "gnn_vs_rankloss_bootstrap_ci_hscc.json"),
+        help="Output path for rankloss bootstrap CI JSON (HSCC only; only written when --include-rankloss-comparison is set).",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -491,6 +574,10 @@ def main() -> None:
         print(f" - appnp_k={int(args.appnp_k)}")
         print(f" - hidden_channels={int(args.hidden_channels)}")
         print(f" - gnn_std_threshold={float(args.gnn_std_threshold)}")
+        print(f" - include_rankloss_comparison={bool(args.include_rankloss_comparison)}")
+        if args.include_rankloss_comparison:
+            print(f" - rankloss_alpha={float(args.rankloss_alpha)}")
+            print(f" - out_hscc_rankloss={resolve_project_path(args.out_hscc_rankloss)}")
         return
 
     split_mask_df = load_split_mask(split_mask_path)
@@ -669,9 +756,84 @@ def main() -> None:
     }
     _write_json(resolve_project_path(args.out_hscc), payload_hscc)
 
+    # C3/C4 rankloss comparison: best_arch_raw_attr_rankloss vs strongest flat baseline (HSCC only)
+    if args.include_rankloss_comparison:
+        print("[INFO] Running rankloss bootstrap comparison (C3 validation) ...")
+        rankloss_label, rankloss_pred_df = _predict_rankloss_best(
+            surrogate_csv=surrogate_csv_hscc,
+            label_regime="hscc",
+            targets_path=targets_hscc_path,
+            split_mask_path=split_mask_path,
+            include_language=include_language_hscc,
+            max_epochs=int(args.max_epochs),
+            seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+            gat_heads=int(args.gat_heads),
+            appnp_alpha=float(args.appnp_alpha),
+            appnp_k=int(args.appnp_k),
+            hidden_channels=int(args.hidden_channels),
+            std_threshold=float(args.gnn_std_threshold),
+            rankloss_alpha=float(args.rankloss_alpha),
+        )
+        pred_rankloss_hscc_df = apply_test_mask(rankloss_pred_df, split_mask_df, node_id_col="node_id")
+        # Reuse y_hscc_df and pred_cmp_hscc_df from the HSCC C4 block above (same test set, same comparator)
+        merged_rankloss = y_hscc_df.merge(pred_rankloss_hscc_df, on="node_id", how="inner", suffixes=("", "_gnn"))
+        merged_rankloss = merged_rankloss.merge(pred_cmp_hscc_df, on="node_id", how="inner", suffixes=("_gnn", "_cmp"))
+
+        ci_rankloss = _bootstrap_spearman_ndcg_ci(
+            y_true=merged_rankloss["y"].to_numpy(dtype=float),
+            y_pred_a=merged_rankloss["y_pred_gnn"].to_numpy(dtype=float),
+            y_pred_b=merged_rankloss["y_pred_cmp"].to_numpy(dtype=float),
+            n_bootstrap=int(args.n_bootstrap),
+            seed=int(args.seed),
+        )
+        payload_rankloss = {
+            "label_regime": "hscc",
+            "gnn_model": rankloss_label,
+            "comparator_model": strongest_name,
+            "comparator_spearman_on_test": float(strongest_rho),
+            "surrogate_csv_used": str(surrogate_csv_hscc),
+            "feature_policy": {
+                "include_language": include_language_hscc,
+                "gnn_model": rankloss_label,
+                "loss_mode": "rankloss_combined",
+                "rankloss_alpha": float(args.rankloss_alpha),
+                "hidden_channels": int(args.hidden_channels),
+                "appnp_k": int(args.appnp_k),
+                "gat_heads": int(args.gat_heads),
+                "appnp_alpha": float(args.appnp_alpha),
+                "gnn_std_threshold": float(args.gnn_std_threshold),
+            },
+            "n_test": int(merged_rankloss.shape[0]),
+            "n_bootstrap": int(args.n_bootstrap),
+            "equivalence_bound": float(args.equivalence_bound),
+            "spearman": {
+                "delta_mean": ci_rankloss["spearman_delta_mean"],
+                "ci_95_lower": ci_rankloss["spearman_ci_95_lower"],
+                "ci_95_upper": ci_rankloss["spearman_ci_95_upper"],
+                "interpretation": _interpret_ci(
+                    ci_rankloss["spearman_ci_95_lower"],
+                    ci_rankloss["spearman_ci_95_upper"],
+                    equivalence_bound=float(args.equivalence_bound),
+                ),
+            },
+            "ndcg_at_10pct": {
+                "delta_mean": ci_rankloss["ndcg_delta_mean"],
+                "ci_95_lower": ci_rankloss["ndcg_ci_95_lower"],
+                "ci_95_upper": ci_rankloss["ndcg_ci_95_upper"],
+                "interpretation": _interpret_ci(
+                    ci_rankloss["ndcg_ci_95_lower"],
+                    ci_rankloss["ndcg_ci_95_upper"],
+                    equivalence_bound=float(args.equivalence_bound),
+                ),
+            },
+        }
+        _write_json(resolve_project_path(args.out_hscc_rankloss), payload_rankloss)
+
     print("[OK] Bootstrap CI artifacts written")
     print(f" - a0={resolve_project_path(args.out_a0)}")
     print(f" - hscc={resolve_project_path(args.out_hscc)}")
+    if args.include_rankloss_comparison:
+        print(f" - hscc_rankloss={resolve_project_path(args.out_hscc_rankloss)}")
 
 
 if __name__ == "__main__":

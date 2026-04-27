@@ -255,7 +255,7 @@ np.savez(
 Schema bắt buộc (mean±std trên 5 training seeds `[42, 123, 456, 789, 1024]`):
 
 - `label_regime`: string — `a0`, `hscc`, hoặc `a2` nếu chạy sensitivity
-- `model_name`: string — tên chuẩn: `gnn_raw_attr`, `gnn_graph_only`, `gnn_centrality`, `gnn_full`, `gcn_raw_attr` (C2), `gin_raw_attr` (C2), `gat_raw_attr` (C2), `appnp_raw_attr` (C2 — **H3 expected best**), `best_arch_raw_attr_rankloss` (C3 — UPDATE tên thực tế sau C2, e.g., `appnp_raw_attr_rankloss`)
+- `model_name`: string — tên chuẩn cho current MAPR rerun: `gnn_raw_attr`, `gnn_graph_only`, `gnn_centrality`, `gnn_full`, `gcn_raw_attr` (C2), `gin_raw_attr` (C2), `appnp_raw_attr` (C2 — **H3 expected best**), `best_arch_raw_attr_rankloss` (C3). `gat_raw_attr` chỉ còn là legacy/archived candidate; **không mong đợi xuất hiện trong official rerun** vì GAT đã bị drop do OOM và current execution dùng `--skip-gat`.
 - `spearman_rho_mean`, `spearman_rho_std`: float
 - `ndcg_mean`, `ndcg_std`: float
 - `precision_mean`, `precision_std`: float
@@ -265,7 +265,7 @@ Schema bắt buộc (mean±std trên 5 training seeds `[42, 123, 456, 789, 1024]
 
 Schema bắt buộc — dùng để tính "Speedup: MC IC vs GNN inference" trong Table runtime của paper:
 
-- `model_name`: string — dùng tên chuẩn (vd. `gnn_raw_attr`, `diffusion_proxies`, `node2vec_ridge`, `mc_ic_labeling`, ...)
+- `model_name`: string — dùng tên chuẩn (vd. `gnn_raw_attr`, `diffusion_proxies`, `node2vec_lr`, `mc_ic_labeling`, ...)
 - `inference_sec_full_graph`: float — thời gian inference trên toàn bộ active graph (~168k nodes); với `mc_ic_labeling` = tổng IC labeling time tính bằng giây
 - `train_sec`: float or null — thời gian training (embed + Ridge.fit cho Node2Vec; training 1 seed cho GNN). null cho Group 1–3 và diffusion proxies (không có training phase riêng)
 
@@ -1172,7 +1172,7 @@ def two_hop(node, G_neighbors, degrees):
    | `betweenness` | 2 | ApproxBetweenness2 |
    | `one_hop_spread` | 3 | one-hop proxy |
    | `two_hop_spread` | 3 | two-hop proxy |
-   | `node2vec_ridge` | 4 | Node2Vec + Ridge LR |
+   | `node2vec_lr` | 4 | Node2Vec + Ridge LR |
    | `mlp_raw_attr` | 4 | MLP raw attributes |
    | `gnn_raw_attr` | 5 | GraphSAGE raw-attr / `sage_raw_attr` (backward compat — → surrogate CSV) |
    | `gnn_graph_only` | 5 | GraphSAGE graph-only (→ surrogate CSV) |
@@ -1180,7 +1180,7 @@ def two_hop(node, G_neighbors, degrees):
    | `gnn_full` | 5 | GraphSAGE full features (→ surrogate CSV) |
    | `gcn_raw_attr` | 5 | GCN raw-attr ← **NEW v3.1 (C2)** |
    | `gin_raw_attr` | 5 | GIN raw-attr ← **NEW v3.1 (C2)** |
-   | `gat_raw_attr` | 5 | GAT raw-attr ← **NEW v3.1 (C2)** |
+   | `gat_raw_attr` | 5 | GAT raw-attr — **legacy C2 candidate; dropped in current official rerun due to OOM (`--skip-gat`)** |
    | `appnp_raw_attr` | 5 | APPNP raw-attr ← **NEW v3.1 (C2)** |
    | `best_arch_raw_attr_rankloss` | 5 | Best arch + ranking loss ← **NEW v3.1 (C3)** |
 
@@ -1263,16 +1263,16 @@ def two_hop(node, G_neighbors, degrees):
 > _v3.1: GNN architecture comparison là unconditionally MUST theo professor's framing. `gnn_branch_viable` gate từ M2 không còn áp dụng cho architecture comparison (C2) và bootstrap CI (C4)._
 
 **[NEW v3.1 — MUST] Architecture Comparison (C2):**
-Chạy với `raw_attr` features, 5 seeds mỗi arch — **5 architectures total** (SAGE + GCN + GIN + GAT + **APPNP**):
+Chạy với `raw_attr` features, 5 seeds mỗi arch — **4 active architectures total** trong current official rerun (SAGE + GCN + GIN + **APPNP**). `GAT` được giữ lại như historical/archived candidate trong docs nhưng **không còn thuộc active execution path** vì official rerun dùng `--skip-gat` sau quyết định drop do OOM.
 
-> **⚠ Naming canonical rule:** SAGE raw-attr baseline **phải được ghi vào surrogate CSV với tên `gnn_raw_attr`** (không phải `sage_raw_attr`) để backward compatibility với existing artifacts và consumer scripts. `sage_raw_attr` chỉ là alias giải thích trong table này; **KHÔNG ghi tên `sage_raw_attr` vào file CSV**. Các arch mới dùng prefix arch: `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, `appnp_raw_attr`.
+> **⚠ Naming canonical rule:** SAGE raw-attr baseline **phải được ghi vào surrogate CSV với tên `gnn_raw_attr`** (không phải `sage_raw_attr`) để backward compatibility với existing artifacts và consumer scripts. `sage_raw_attr` chỉ là alias giải thích trong table này; **KHÔNG ghi tên `sage_raw_attr` vào file CSV**. Current active C2 arch names: `gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr`; `gat_raw_attr` chỉ là legacy name trong archive notes, không phải expectation của official rerun.
 
 | Architecture      | **CSV model_name (canonical)**                                                  | Priority             | Inductive bias hypothesis                                                                                                |
 | ----------------- | ------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | GraphSAGE (đã có) | **`gnn_raw_attr`** ← tên CSV chuẩn (alias: sage_raw_attr — chỉ dùng trong docs) | ✅ Done              | Mean agg. — baseline                                                                                                     |
 | **GCN**           | `gcn_raw_attr`                                                                  | **MUST (C2)**        | **H2: `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric diffusion — expected better under A2 labels (nếu chạy sensitivity S1)**         |
 | GIN               | `gin_raw_attr`                                                                  | **MUST (C2)**        | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics        |
-| **GAT**           | `gat_raw_attr`                                                                  | **MUST (C2)**        | **H1: learned attention có thể học 1/deg(v) weighting** _(hypothesis — C2 decides)_                                      |
+| **GAT**           | `gat_raw_attr`                                                                  | Archive / dropped current rerun | Historical H1 candidate; official MAPR rerun dùng `--skip-gat` vì GAT OOM ở `hidden_channels=128`.                         |
 | **🆕 APPNP**      | `appnp_raw_attr`                                                                | **MUST (C2) — H3 ★** | **H3: K-step PPR propagation + teleport/restart (structural analogy/inductive bias) — STRONGEST theoretical motivation** |
 
 > **Ba inductive bias hypotheses — pre-registered trước C2 (để report theo framing đúng):**
@@ -1695,7 +1695,7 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 | **SAGE** (mean agg.)    | ✅ **Trong C2-A0** (baseline) | C2-A0 row `gnn_raw_attr`   | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr).                                                                           |
 | **GCN**                 | ✅ **MUST C2-A0** (H2)        | C2-A0 `gcn_raw_attr`       | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2.                                                                                             |
 | **GIN**                 | ✅ **MUST C2-A0**             | C2-A0 `gin_raw_attr`       | Sum agg. — highest WL expressiveness; preserves hop counts.                                                                                                  |
-| **GAT v1**              | ✅ **MUST C2-A0** (H1)        | C2-A0 `gat_raw_attr`       | H1: static attention có thể học 1/deg(v). Static = đúng cho A0.                                                                                              |
+| **GAT v1**              | Archive / dropped current rerun | Legacy `gat_raw_attr` note | Historical H1 candidate. Official MAPR rerun không yêu cầu row `gat_raw_attr`; current execution dùng `--skip-gat` do OOM.                                   |
 | **APPNP**               | ✅ **MUST C2-A0** (H3)        | C2-A0 `appnp_raw_attr`     | H3: K-step PPR ≈ IC cascade. Expected best arch.                                                                                                             |
 | **GATv2**               | 🔵 **Archive only**           | Không thuộc MAPR path      | Giữ như historical note cho I-A branch cũ. Không implement trong current `A0 + HSCC` execution cycle.                                                          |
 | **GINE + IC edge feat** | ✅ **C5 [IF TIME]**           | `gine_ic_a0_raw_attr`      | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment.                                                        |
@@ -1950,7 +1950,7 @@ print(metrics)
 - `load_split_mask()` + `apply_test_mask()` chạy không lỗi với mock artifacts (M1).
 - `baseline_ranking_metrics.csv` có đủ rows theo **regime** (M4): `A0` có Group 1-3 + shallow baselines; `HSCC` có flat fairness baselines tối thiểu `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)`, và nếu dùng `language` thì có fairness rows tương ứng.
 - `surrogate_ranking_metrics.csv` có `label_regime`, `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `runtime_sec` cho từng regime đã chạy (M5).
-- `C2` architecture comparison trên regime active có đủ rows `gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, `appnp_raw_attr` (5 seeds each, mean±std) theo đúng regime đang đánh giá.
+- `C2` architecture comparison trên regime active có đủ rows `gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr` (5 seeds each, mean±std) theo đúng regime đang đánh giá; **không mong đợi `gat_raw_attr` trong official rerun** vì GAT đã bị drop và run dùng `--skip-gat`.
 - `C3` rank-loss row chỉ áp dụng sau khi đã chọn best arch trong đúng regime; không block nếu team cắt rank-loss để giữ `A0 + HSCC` core path.
 - `A0`: `gnn_vs_degree_bootstrap_ci_a0.json` tồn tại với `n_bootstrap=1000`, `ci_95_lower`, `ci_95_upper`, `interpretation`.
 - `HSCC`: `gnn_vs_baseline_bootstrap_ci_hscc.json` tồn tại với comparator = strongest valid flat baseline sau khi fairness complete.
@@ -2147,16 +2147,18 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 
 ### Person 3 — Baselines + GNN + CI
 
-| # | Việc | Artifact output | Deadline |
-| - | ---- | --------------- | -------- |
-| 1 | Deterministic evaluation harness, regime-aware | harness fixed | ngay |
-| 2 | Chạy HSCC flat baselines bắt buộc | HSCC rows in `baseline_ranking_metrics.csv` | **22/4** |
-| 3 | Nếu dùng `language`, thêm fairness baselines | extra HSCC rows | **22/4** |
-| 4 | Chạy GNN trên `A0` | A0 rows in `surrogate_ranking_metrics.csv` | 23/4 |
-| 5 | Chạy GNN trên `HSCC` | HSCC rows in `surrogate_ranking_metrics.csv` | 23–24/4 |
-| 6 | Bootstrap `A0`: GNN vs degree | `gnn_vs_degree_bootstrap_ci_a0.json` | **24/4** |
-| 7 | Bootstrap `HSCC`: GNN vs strongest flat baseline | `gnn_vs_baseline_bootstrap_ci_hscc.json` | **24/4** |
-| 8 | Runtime assembly + table handoff | `runtime_breakdown.csv` | 25/4 |
+| # | Việc | Artifact output | Deadline | Tier |
+| - | ---- | --------------- | -------- | ---- |
+| 1 | Deterministic evaluation harness, regime-aware | harness fixed | ngay | [🔴] |
+| 2 | **C1** — Chạy A0 + HSCC flat baselines (degree-controlled variance check) | `baseline_ranking_metrics_a0_clean.csv`, `baseline_ranking_metrics_hscc_clean.csv` | **22/4** | [🔴 C1] |
+| 3 | **C1** — Nếu dùng `language`, thêm HSCC fairness baselines | extra HSCC rows in baseline CSV | **22/4** | [🔴 C1] |
+| 4 | **C2** — Chạy GNN architecture comparison trên `A0` (`--skip-gat`) | A0 rows in `surrogate_ranking_metrics_a0_clean.csv` | 23/4 | [🔴 C2] |
+| 5 | **C2** — Chạy GNN architecture comparison trên `HSCC` (`--skip-gat`) | HSCC rows in `surrogate_ranking_metrics_hscc_clean.csv` | 23–24/4 | [🔴 C2] |
+| 6 | **C3** — Rankloss variant của best C2 arch trên HSCC (sau khi C2 xong) | via `bootstrap_ci.py --include-rankloss-comparison` | 24/4 | [🟡 C3] |
+| 7 | **C4** — Bootstrap `A0`: GNN vs degree baseline | `gnn_vs_degree_bootstrap_ci_a0.json` | **24/4** | [🔴 C4] |
+| 8 | **C4** — Bootstrap `HSCC`: GNN vs strongest flat baseline | `gnn_vs_baseline_bootstrap_ci_hscc.json` | **24/4** | [🔴 C4] |
+| 9 | Runtime assembly + table handoff (không có row `gat_raw_attr`) | `runtime_breakdown.csv` | 25/4 | [🔴] |
+| 10 | **C5** — GINE + IC edge features supplemental | post-MAPR artifact | POST-MAPR | [🔵 FUTURE:TKDE/WWW2027] |
 
 ### Handoff tối thiểu
 

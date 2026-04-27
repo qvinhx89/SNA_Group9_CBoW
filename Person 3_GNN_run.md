@@ -15,9 +15,10 @@ Muc tieu cua file nay la giup Person 3 rerun pipeline sau khi code da duoc sua t
   - `appnp_alpha = 0.15`
   - `appnp_k = 10`
   - `hidden_channels = 128`
-- **A100 default path (team da chot)**: Person 3 phai chay NHANH MAC DINH truoc, tuc la giu `hidden_channels=128`, `appnp_k=10`, KHONG them `--skip-gat`, KHONG them `--hidden-channels 64`. Chi xem cac nhanh fallback neu lenh mac dinh that su OOM / fail vi memory.
-- **Neu GAT bi OOM**: KHONG dung `--gat-heads 2` (khong giam duoc VRAM). Dung `--hidden-channels 64` hoac `--skip-gat`. Xem chi tiet o Buoc 3.
-- **Governance bat buoc**: bootstrap CI phai dung CUNG cau hinh voi run surrogate cho moi tham so co anh huong den retrain best C2 model: `--gat-heads`, `--appnp-alpha`, `--appnp-k`, `--hidden-channels`, va (neu dung paper filter) `--gnn-std-threshold`. Neu surrogate dung `--hidden-channels 64`, bootstrap cung phai co `--hidden-channels 64`; neu surrogate/paper workflow dung `--gnn-std-threshold 0.1`, bootstrap cung phai dung `--gnn-std-threshold 0.1`.
+  - `rankloss_alpha = 0.5` (chi can giu khop khi bat C3 rankloss/bootstrap)
+- **Quyet dinh chinh thuc (30/4)**: GAT da bi drop chinh thuc do OOM tren A100-40GB o `hidden_channels=128`. LUON them `--skip-gat` vao lenh GNN. Ghi registry: `gat_excluded_reason: OOM_A100_40GB_hidden128`.
+- **Cau hinh GNN chinh thuc**: `hidden_channels=128`, `appnp_k=10`, `--skip-gat`. Chi dung `--hidden-channels 64` neu cac model KHAC (SAGE/GCN/GIN/APPNP) van OOM sau khi da drop GAT.
+- **Governance bat buoc**: bootstrap CI phai dung CUNG cau hinh voi run surrogate cho moi tham so co anh huong den retrain best C2 model: `--gat-heads`, `--appnp-alpha`, `--appnp-k`, `--hidden-channels`, va (neu dung paper filter) `--gnn-std-threshold`; neu bat `--include-rankloss-comparison` thi phai giu khop ca `--rankloss-alpha`. Neu surrogate dung `--hidden-channels 64`, bootstrap cung phai co `--hidden-channels 64`; neu surrogate/paper workflow dung `--gnn-std-threshold 0.1`, bootstrap cung phai dung `--gnn-std-threshold 0.1`.
 
 ## 2. Mo terminal va vao dung thu muc
 
@@ -34,11 +35,11 @@ python run_baselines.py --dry-run --targets-path data/processed/regression_targe
 
 python run_baselines.py --dry-run --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/baseline_hscc_DRYRUN.csv
 
-python run_surrogates.py --dry-run --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_a0_DRYRUN.csv
+python run_surrogates.py --dry-run --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_a0_DRYRUN.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
 
-python run_surrogates.py --dry-run --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_hscc_DRYRUN.csv
+python run_surrogates.py --dry-run --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_hscc_DRYRUN.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
 
-python bootstrap_ci.py --dry-run --surrogate-csv-a0 outputs/mapr2026_v3_results/surrogate_a0_DRYRUN.csv --surrogate-csv-hscc outputs/mapr2026_v3_results/surrogate_hscc_DRYRUN.csv --include-language-hscc
+python bootstrap_ci.py --dry-run --surrogate-csv-a0 outputs/mapr2026_v3_results/surrogate_a0_DRYRUN.csv --surrogate-csv-hscc outputs/mapr2026_v3_results/surrogate_hscc_DRYRUN.csv --include-language-hscc --include-rankloss-comparison --rankloss-alpha 0.5
 ```
 
 Tat ca 5 lenh phai in `[OK]` hoac hien paths dung. Neu co loi ImportError/FileNotFoundError thi fix truoc.
@@ -68,13 +69,12 @@ for p in files:
 
 > Neu chi can xoa 1 file cu the, dung `missing_ok=True` — lenh khong bao loi neu file khong ton tai.
 
-## 4. Debug rerun chinh
+## 4. Rerun chinh
 
 > **THU TU RA QUYET DINH CHO PERSON 3**
-> 1. Luon chay **LENH MAC DINH** truoc.
-> 2. Chi neu lenh mac dinh bi **OOM / CUDA out of memory / fail vi memory** thi moi chuyen sang **LENH FALLBACK A**.
-> 3. Chi neu **LENH FALLBACK A** van OOM thi moi dung **LENH FALLBACK B (LAST RESORT)**.
-> 4. Sau khi da dung fallback nao o surrogate run, bootstrap phai dung lai DUNG hyperparameters / rules tuong ung.
+> 1. LUON chay **LENH CHINH THUC** (co `--skip-gat`, hidden=128) — GAT da bi drop chinh thuc 30/4.
+> 2. Chi neu SAGE/GCN/GIN/APPNP bi OOM sau khi da drop GAT thi moi dung **LENH FALLBACK** (`--skip-gat --hidden-channels 64`).
+> 3. Sau khi da dung fallback, bootstrap phai them `--hidden-channels 64` tuong ung.
 
 ### Buoc 1 — A0 Baselines (khong node2vec, fast pass)
 
@@ -106,53 +106,38 @@ Verify:
 
 ### Buoc 3 — A0 GNN
 
-**LENH MAC DINH — chay truoc tren A100-40GB**
+> ⚠️ **QUYET DINH CHINH THUC (30/4):** GAT da bi drop do OOM tren A100-40GB o hidden=128. LUON them `--skip-gat`. Ghi registry: `gat_excluded_reason: OOM_A100_40GB_hidden128`.
+
+**LENH CHINH THUC**
 
 ```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15
+python run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
 ```
-
-> **DAY LA LENH MAC DINH PHAI THU TRUOC TREN A100-40GB.**
-> Khong nhay sang fallback neu lenh nay chua thuc su bi OOM / CUDA out of memory / fail vi memory.
 
 Verify trong terminal:
 
 - `[FEATURE AUDIT] include_language=False`
 - `feature_names` chi gom `views_log`, `views_per_day`, `life_time` cho `raw_attr`
 - `in_dim=3` voi `raw_attr`
+- KHONG co dong `Training gat_raw_attr` trong output (xac nhan GAT da bi skip)
 
-## FALLBACK CHI DUNG NEU LENH MAC DINH O TREN THAT SU OOM
-
-Neu GAT OOM — **`--gat-heads 2` KHONG phai fix**. Ly do: `hidden_channels=128` la constant, memory ∝ `E × hidden_channels` khong doi khi giam heads. Co 2 option dung:
-
-**LENH FALLBACK A — Giam `hidden_channels` (chi dung neu LENH MAC DINH OOM):**
+**LENH FALLBACK — chi dung neu SAGE/GCN/GIN/APPNP van OOM sau khi da drop GAT**
 
 ```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --hidden-channels 64
+python run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat --hidden-channels 64
 ```
 
-**Luu y quan trong:** `--hidden-channels 64` anh huong den **TOAN BO GNN family** (SAGE, GCN, GIN, GAT, APPNP) — khong chi rieng GAT. Tat ca model trong run do deu dung hidden=64. Neu muon chi GAT dung 64 trong khi cac arch khac dung 128, can sửa code them `--gat-hidden-channels` rieng (chua co). Cach don gian nhat la `--skip-gat` (Option B). Neu dung Option A, ghi registry: `all_models_hidden=64` va nen dung cung gia tri khi compare.
-
-**LENH FALLBACK B — Loai GAT hoan toan (LAST RESORT, chi neu FALLBACK A van OOM):**
-
-> ⚠️ **TRUOC KHI chay Option B**: dam bao da xoa `surrogate_ranking_metrics_a0_clean.csv` theo Section 3b. Neu file cu da co `gat_raw_attr`, `--skip-gat` khong xoa no — bootstrap se thay row stale va rerun GAT ngoai y muon.
-
-```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0 --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
-```
-
-Khi dung Option B: CSV se co 8 models (thieu `gat_raw_attr`). Day la ket qua hop le — bootstrap van chay duoc mien la co it nhat 1 C2 model khac. Ghi registry: `gat_excluded_reason: OOM_A100_40GB_hidden128`.
+Neu dung LENH FALLBACK nay: `--hidden-channels 64` anh huong den TOAN BO GNN con lai (SAGE/GCN/GIN/APPNP). Ghi registry: `all_models_hidden=64`. Bootstrap phai them `--hidden-channels 64` tuong ung.
 
 ### Buoc 4 — HSCC GNN
 
-**LENH MAC DINH — chay truoc tren A100-40GB**
+> ⚠️ **QUYET DINH CHINH THUC (30/4):** GAT da bi drop do OOM tren A100-40GB o hidden=128. LUON them `--skip-gat`. Ghi registry: `gat_excluded_reason: OOM_A100_40GB_hidden128`.
+
+**LENH CHINH THUC**
 
 ```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15
+python run_surrogates.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
 ```
-
-> **DAY LA LENH MAC DINH PHAI THU TRUOC TREN A100-40GB.**
-> Khong nhay sang fallback neu lenh nay chua thuc su bi OOM / CUDA out of memory / fail vi memory.
 
 Verify trong terminal:
 
@@ -160,49 +145,40 @@ Verify trong terminal:
 - `in_dim = 3 + n_lang_dummies`
 - snapshot hien tai expected la `24`
 - `feature_names` co cac cot `lang_*`
+- KHONG co dong `Training gat_raw_attr` trong output (xac nhan GAT da bi skip)
 
-**CAC LENH FALLBACK CHI DUNG NEU LENH MAC DINH HSCC O TREN THAT SU OOM.**
-
-**LENH FALLBACK A — dung cung cau truc nhu Buoc 3, nhung cho HSCC**
-
-```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --hidden-channels 64
-```
-
-**LENH FALLBACK B — LAST RESORT, chi neu FALLBACK A van OOM**
-
-> ⚠️ **TRUOC KHI chay LENH FALLBACK B**: dam bao da xoa `surrogate_ranking_metrics_hscc_clean.csv` theo Section 3b.
+**LENH FALLBACK — chi dung neu SAGE/GCN/GIN/APPNP van OOM sau khi da drop GAT**
 
 ```powershell
-python run_surrogates.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat
+python run_surrogates.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --include-c2-arch --include-c3-rankloss --gat-heads 4 --appnp-alpha 0.15 --skip-gat --hidden-channels 64
 ```
 
-Neu GAT OOM — thu `--hidden-channels 64` truoc, neu van OOM thi moi dung `--skip-gat`. Ghi registry tuong tu.
+Neu dung LENH FALLBACK nay: `--hidden-channels 64` anh huong den TOAN BO GNN con lai (SAGE/GCN/GIN/APPNP). Ghi registry: `all_models_hidden=64`. Bootstrap phai them `--hidden-channels 64` tuong ung.
 
 ### Buoc 5 — Bootstrap CI
 
-Bootstrap **se retrain lai best C2 model** tim duoc tu surrogate CSV de lay predictions cho CI computation. Neu best model la `gat_raw_attr`, no se rerun GAT. Vi vay bootstrap phai match day du cac hyperparameters/quy tac lua chon da dung khi tao surrogate CSV: `--gat-heads`, `--appnp-alpha`, `--appnp-k`, `--hidden-channels`, va `--gnn-std-threshold` (neu dung de loai model variance cao). Neu Buoc 3/4 dung `--skip-gat`, bootstrap se chon model khac (GCN/GIN/SAGE) va khong can chay GAT.
+Bootstrap **se retrain lai best C2 model** tim duoc tu surrogate CSV de lay predictions cho CI computation. Vi Buoc 3/4 LUON dung `--skip-gat`, surrogate CSV khong co `gat_raw_attr` — bootstrap se tu dong chon best model trong {SAGE, GCN, GIN, APPNP}. Bootstrap phai match day du cac hyperparameters da dung khi tao surrogate CSV: `--gat-heads` (giu de consistency, du GAT khong duoc chon), `--appnp-alpha`, `--appnp-k`, `--hidden-channels`, `--gnn-std-threshold`, va (neu bat `--include-rankloss-comparison`) `--rankloss-alpha`.
 
-**LENH MAC DINH — dung khi A0 + HSCC deu chay mac dinh tren A100**
+**LENH CHINH THUC — GAT excluded; surrogate CSV chi co {SAGE, GCN, GIN, APPNP, non-C2 variants}**
 
 ```powershell
-python bootstrap_ci.py --surrogate-csv-a0 outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --surrogate-csv-hscc outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --targets-a0 data/processed/regression_targets_a0.parquet --targets-hscc data/processed/regression_targets_hscc_refined.parquet --include-language-hscc --n-bootstrap 1000 --equivalence-bound 0.02 --gat-heads 4 --appnp-alpha 0.15 --gnn-std-threshold 0.1 --out-a0 outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json --out-hscc outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json
+python bootstrap_ci.py --surrogate-csv-a0 outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv --surrogate-csv-hscc outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv --targets-a0 data/processed/regression_targets_a0.parquet --targets-hscc data/processed/regression_targets_hscc_refined.parquet --include-language-hscc --n-bootstrap 1000 --equivalence-bound 0.02 --gat-heads 4 --appnp-alpha 0.15 --gnn-std-threshold 0.1 --include-rankloss-comparison --rankloss-alpha 0.5 --out-a0 outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json --out-hscc outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json --out-hscc-rankloss outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json
 ```
 
-> **Lenh tren la cho truong hop DEFAULT (hidden=128, appnp-k=10).**
+> **Lenh tren la cho truong hop DEFAULT (hidden=128, appnp-k=10, rankloss-alpha=0.5).**
 > - `--gnn-std-threshold 0.1`: tu dong loai model co `spearman_rho_std > 0.1` khi chon best C2 (dam bao APPNP std=0.697 bi loai khoi bootstrap, nhat quan voi checklist paper).
-> - Neu Buoc 3/4 co doi `--gat-heads`, `--appnp-alpha`, `--appnp-k`, hoac `--hidden-channels`, PHAI them cung gia tri vao lenh nay de bootstrap retrain dung cau hinh.
+> - `--include-rankloss-comparison`: chay them bootstrap CI cho `best_arch_raw_attr_rankloss` (C3 validation) vs strongest flat baseline HSCC; ket qua vao `gnn_vs_rankloss_bootstrap_ci_hscc.json`. Retrain lai best C2 arch bang `loss_mode=rankloss_combined` (alpha*Huber + (1-alpha)*PairwiseRank) — cung mode voi `run_surrogates.py --include-c3-rankloss`.
+> - GAT da bi drop: `--gat-heads 4` van giu trong lenh de parameter consistency, nhung bootstrap se KHONG bao gio chon/retrain GAT (vi `gat_raw_attr` khong co trong surrogate CSV).
+> - `--rankloss-alpha 0.5` la default va khop voi `run_surrogates.py` default. Neu da doi `--rankloss-alpha` khi chay Buoc 3/4, PHAI doi gia tri tuong ung o day.
+> - Neu Buoc 3/4 co doi `--appnp-alpha`, `--appnp-k`, hoac `--hidden-channels`, PHAI them cung gia tri vao lenh nay de bootstrap retrain dung cau hinh.
 > - Neu paper workflow dang dung `--gnn-std-threshold 0.1`, bootstrap cung phai giu dung nguong do; khong duoc de bootstrap chon best model bang mot nguong khac surrogate/paper table.
-> - Neu Buoc 3/4 dung `--skip-gat`, bootstrap tu dong chon best model khac (GCN/GIN/SAGE).
-> - Cach nho don gian: neu A0/HSCC deu chay MAC DINH tren A100, thi dung nguyen lenh bootstrap MAC DINH nay. Chi them flags vao bootstrap neu ban DA that su dung fallback khi train surrogate.
+> - Vi Buoc 3/4 LUON dung `--skip-gat`, bootstrap da tu dong chon best model trong {SAGE, GCN, GIN, APPNP}.
+> - Cach nho: neu A0/HSCC deu chay LENH CHINH THUC tren A100, dung nguyen lenh bootstrap CHINH THUC nay. Chi them `--hidden-channels 64` neu da dung LENH FALLBACK khi train surrogate.
 
-**LENH FALLBACK — khong co mot lenh co dinh rieng**
+**LENH FALLBACK bootstrap — chi dung neu da dung LENH FALLBACK (`--hidden-channels 64`) o Buoc 3/4**
 
-> Neu Person 3 da dung fallback o Buoc 3 hoac Buoc 4, thi KHONG copy may moc lenh mac dinh o tren.
-> Hay lay LENH MAC DINH o tren va them/chinh lai DUNG nhung flags da dung trong surrogate run:
-> - `--hidden-channels 64` neu da dung FALLBACK A
-> - `--skip-gat` khong can them vao bootstrap, nhung bootstrap se tu chon model khac neu surrogate CSV khong con `gat_raw_attr`
-> - `--appnp-k`, `--appnp-alpha`, `--gat-heads`, `--gnn-std-threshold` phai giu dung nhu run surrogate/paper workflow
+> Lay LENH CHINH THUC o tren va them `--hidden-channels 64`. KHONG them `--skip-gat` vao bootstrap (no khong co tac dung o day — bootstrap tu chon best model tu CSV, GAT da vang mat tu truoc).
+> `--appnp-k`, `--appnp-alpha`, `--gat-heads`, `--gnn-std-threshold`, va `--rankloss-alpha` giu nguyen.
 
 Verify:
 
@@ -219,14 +195,39 @@ Verify:
   - `feature_policy.gnn_std_threshold = 0.1`
   - `surrogate_csv_used`
   - `interpretation`
+- `gnn_vs_rankloss_bootstrap_ci_hscc.json` co:
+  - `gnn_model` bat dau bang `best_arch_raw_attr_rankloss(` (vi du `best_arch_raw_attr_rankloss(sage)`)
+  - `feature_policy.loss_mode = "rankloss_combined"`
+  - `feature_policy.rankloss_alpha = 0.5` (hoac gia tri da truyen qua `--rankloss-alpha`)
+  - `feature_policy.include_language = true`
+  - `feature_policy.hidden_channels` (khop voi gia tri da dung o Buoc 4)
+  - `feature_policy.gnn_std_threshold = 0.1`
+  - `comparator_model` khop voi strongest flat baseline cua HSCC
+  - `interpretation` (mot trong 4 gia tri: `gnn_significantly_better`, `gnn_significantly_worse`, `practically_equivalent`, `no_clear_superiority`)
 
-## 5. Node2Vec truoc khi freeze-final
+## 5. Node2Vec — PHAI CHOT TRUOC KHI BAO CAO KET QUA
 
-Hai buoc baseline o tren dang la fast debug pass vi co `--skip-node2vec`.
+> ⚠️ **Quyet dinh bat buoc truoc Section 7**: Buoc 1/2 chay voi `--skip-node2vec` nen file baseline hien tai **khong co row `node2vec_lr`**. Phai chon 1 trong 3 option duoi day va ghi vao registry truoc khi bao ket qua cho team.
 
-Truoc khi freeze bang baseline cuoi, Person 3 phai chot mot trong hai huong:
+### Boi canh: tai sao phai quyet dinh?
 
-### Option A — Rerun Node2Vec
+- `node2vec_lr` la 1 baseline trong paper table (Group 4: Shallow Embedding).
+- Neu khong lam gi them, file baseline se thieu row nay khi nop paper.
+- Node2vec embedding training tren graph 168K nodes ton khoang 30–60 phut; LR fit tren embeddings co san chi ton ~2 phut.
+
+---
+
+### Option A — Rerun Node2Vec (RECOMMENDED neu con du thoi gian)
+
+Chay lai Buoc 1/2 **khong co** `--skip-node2vec`. Node2vec se duoc train lai tu dau — can ~30–60 phut moi regime.
+
+> **Preflight cho Option A:** Section 3 dry-run KHONG test Node2Vec path thuc te. Truoc khi commit rerun Node2Vec, chay import check sau:
+
+```powershell
+python -c "from torch_geometric.nn import Node2Vec; print('OK Node2Vec import')"
+```
+
+> Neu import fail, KHONG chon Option A cho den khi env duoc fix. Neu import pass nhung khi chay thuc te xuat hien `[WARN] Node2Vec dependency missing ...` hoac row `node2vec_lr` ra NaN, xem nhu Option A that bai va quay ve Option C (de-scope) hoac Option B neu provenance cu du tin cay.
 
 A0:
 
@@ -240,48 +241,62 @@ HSCC:
 python run_baselines.py --targets-path data/processed/regression_targets_hscc_refined.parquet --label-regime hscc --include-language --out-csv outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv
 ```
 
-Verify:
+Verify: co row `node2vec_lr` trong ca 2 file **va cac metric chinh khong phai NaN**. Ghi registry: `node2vec_status: rerun_fresh`.
 
-- co row `node2vec_lr` trong moi file clean
+### Option B — Carry-forward tu artifact cu
 
-### Option B — Carry-forward Node2Vec
+Chi duoc dung neu **tat ca** dieu kien sau dung:
 
-Chi duoc dung neu:
+1. Co file artifact cu co row `node2vec_lr` cho DUNG regime (`a0` / `hscc`).
+2. Row do duoc tao voi `include_language` khop (a0 = False, hscc = True).
+3. Provenance ro rang (biet ro chay luc nao, voi config nao).
 
-- co legacy row dung regime,
-- provenance dang tin,
-- row do duoc graft vao file clean cuoi,
-- va ghi ro vao `docs/experiment_registry.md`.
+**KHONG dung Option B neu khong chac chan dieu kien 2** — HSCC node2vec voi `include_language=False` la sai cau hinh va ket qua se khong hop le.
 
-Neu khong co trusted HSCC Node2Vec artifact rieng, khong nen assume carry-forward HSCC la hop le.
+Neu du dieu kien: graft thu cong row `node2vec_lr` tu artifact cu vao file clean. Ghi registry: `node2vec_status: carry_forward; source: <ten file cu>; verified: True`.
+
+### Option C — De-scope Node2Vec (NHANH NHAT)
+
+Neu khong co thoi gian va khong co trusted artifact: **bo node2vec khoi paper table**. Group 4 (Shallow Embedding) chi bao gom MLP hoac bo han. Ghi registry: `node2vec_status: de_scoped; reason: time_constraint`.
+
+Khong can chay them gi. Update comment trong paper draft Section 4.1 (Table baseline) de bo dong node2vec_lr.
+
+---
+
+> **Ket luan khi chon xong**: Cap nhat `node2vec_status` trong `docs/experiment_registry.md` **truoc khi chay Section 7 checklist**.
 
 ## 6. Cleanup shared artifacts (SAU khi Buoc 3 va 4 xong)
 
 > **Luu y:** `runtime_breakdown.csv` da duoc cleanup truoc (0 null rows). Chay lenh nay them 1 lan nua sau khi GNN rerun ket thuc de dam bao khong co row null moi.
 
 ```powershell
-python -c "import pathlib, pandas as pd; p = pathlib.Path('../..') / 'outputs/mapr2026_v3_results/runtime_breakdown.csv'; rt = pd.read_csv(p); ANALYTICAL = {'betweenness','degree','kshell','pagerank','one_hop','two_hop','phi','life_time','views','views_day','lr_life_time','lr_views_life_time','lr_phi','lr_degree_views_life_time','mc_ic_labeling','diffusion_proxies'}; STALE_GNN = {'gnn_centrality','gnn_full','gnn_graph_only','gnn_random','gnn_raw_attr','mlp_raw_attr','node2vec_lr'}; null_mask = rt['label_regime'].isna() | (rt['label_regime'].astype(str).str.strip() == ''); rt.loc[null_mask & rt['model_name'].isin(ANALYTICAL), 'label_regime'] = 'analytical'; rt = rt[~(null_mask & rt['model_name'].isin(STALE_GNN))].reset_index(drop=True); rt.to_csv(p, index=False); print(rt.groupby('label_regime')['model_name'].count().to_dict()); print('Updated:', p.resolve())"
+python -c "import pathlib, pandas as pd; p = pathlib.Path('../..') / 'outputs/mapr2026_v3_results/runtime_breakdown.csv'; rt = pd.read_csv(p); ANALYTICAL = {'betweenness','degree','kshell','pagerank','one_hop','two_hop','phi','life_time','views','views_day','lr_life_time','lr_views_life_time','lr_phi','lr_degree_views_life_time','mc_ic_labeling','diffusion_proxies'}; STALE_GNN = {'gnn_centrality','gnn_full','gnn_graph_only','gnn_random','gnn_raw_attr','mlp_raw_attr','node2vec_lr'}; null_mask = rt['label_regime'].isna() | (rt['label_regime'].astype(str).str.strip() == ''); rt.loc[null_mask & rt['model_name'].isin(ANALYTICAL), 'label_regime'] = 'analytical'; rt = rt[~(null_mask & rt['model_name'].isin(STALE_GNN))].reset_index(drop=True); rt = rt[rt['model_name'] != 'gat_raw_attr'].reset_index(drop=True); rt.to_csv(p, index=False); print(rt.groupby('label_regime')['model_name'].count().to_dict()); print('Updated:', p.resolve())"
 ```
 
-Ket qua expected sau rerun: `{'a0': XX, 'hscc': XX, 'analytical': 16}` — khong co NaN.
+> **Luu y ve GAT cleanup**: Lenh tren co them buoc xoa **tat ca** row `gat_raw_attr` (ca a0 lan hscc) vi GAT da bi drop chinh thuc. Buoc nay can thiet vi cac row GAT cu co `label_regime` hop le — cleanup null_mask cu khong xoa duoc chung.
+
+Ket qua expected sau rerun: `{'a0': XX, 'hscc': XX, 'analytical': 16}` — khong co NaN, khong co `gat_raw_attr`.
 
 ## 7. Checklist truoc khi bao ket qua moi
 
 - `baseline_ranking_metrics_a0_clean.csv`
   - khong co `*_lang`
   - co `label_regime = a0`
+  - node2vec: co row `node2vec_lr` **va khong NaN** (neu chay Option A) HOAC confirmed carry-forward (Option B) HOAC khong co row (neu Option C de-scope) — phai khop voi quyet dinh o Section 5
 - `baseline_ranking_metrics_hscc_clean.csv`
   - co `lr_views_life_time_lang`
   - co `lr_degree_views_life_time_lang`
   - co `label_regime = hscc`
+  - node2vec: cung logic nhu tren — neu chay Option A thi row `node2vec_lr` cung phai khong NaN; phai khop quyet dinh Section 5
 - `surrogate_ranking_metrics_a0_clean.csv`
-  - co **8 hoac 9 models**: `gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full, gcn_raw_attr, gin_raw_attr, appnp_raw_attr, best_arch_raw_attr_rankloss` + `gat_raw_attr` (neu khong OOM)
-  - neu thieu `gat_raw_attr`: OK — ghi registry `gat_excluded_reason`
+  - co **8 models chinh thuc**: `gnn_raw_attr, gnn_graph_only, gnn_centrality, gnn_full, gcn_raw_attr, gin_raw_attr, appnp_raw_attr, best_arch_raw_attr_rankloss`
+  - KHONG co `gat_raw_attr` (GAT da bi drop chinh thuc — ghi registry `gat_excluded_reason: OOM_A100_40GB_hidden128`)
   - kiem tra APPNP: neu `spearman_rho_std > 0.1` thi **khong dung row `appnp_raw_attr` trong paper table** VA bootstrap da tu dong loai no (do `--gnn-std-threshold 0.1`), ghi registry `appnp_excluded_reason: high_variance`
   - **KHONG co row stale tu lan chay cu** (file da bi xoa theo Section 3b)
   - co `label_regime = a0`
 - `surrogate_ranking_metrics_hscc_clean.csv`
-  - co **8 hoac 9 models** nhu tren (cung logic GAT/APPNP)
+  - co **8 models chinh thuc** nhu tren
+  - KHONG co `gat_raw_attr` (cung ly do — ghi registry tuong tu)
   - kiem tra APPNP std tuong tu
   - **KHONG co row stale tu lan chay cu** (file da bi xoa theo Section 3b)
   - co `label_regime = hscc`
@@ -292,18 +307,27 @@ Ket qua expected sau rerun: `{'a0': XX, 'hscc': XX, 'analytical': 16}` — khong
 - `runtime_breakdown.csv`
   - khong con null `label_regime`
   - con row `mc_ic_labeling` voi `label_regime = analytical`
-- 2 file bootstrap JSON
+  - KHONG co row `gat_raw_attr` (da xoa boi Section 6 cleanup)
+- 2 file bootstrap JSON chinh (C4)
   - co `feature_policy.include_language`
   - co `feature_policy.hidden_channels` (khop voi gia tri dung o Buoc 3/4)
   - co `feature_policy.appnp_k` (khop voi gia tri dung o Buoc 3/4)
   - co `feature_policy.gnn_std_threshold = 0.1`
   - co `surrogate_csv_used`
   - co `interpretation`
+- `gnn_vs_rankloss_bootstrap_ci_hscc.json` (C3 rankloss bootstrap — HSCC only)
+  - co `gnn_model` bat dau bang `best_arch_raw_attr_rankloss(`
+  - co `feature_policy.loss_mode = "rankloss_combined"`
+  - co `feature_policy.rankloss_alpha = 0.5` (hoac gia tri da truyen qua `--rankloss-alpha`)
+  - co `feature_policy.include_language = true`
+  - co `feature_policy.hidden_channels` khop voi Buoc 4
+  - co `feature_policy.gnn_std_threshold = 0.1`
+  - co `comparator_model` + `comparator_spearman_on_test`
+  - co `interpretation` hop le
 - `docs/experiment_registry.md`
   - cap nhat `a0_feature_policy`
   - cap nhat `hscc_feature_policy`
-  - cap nhat `gat_actual_heads` (4 neu chay duoc; hoac `gat_excluded_reason` neu skip)
-  - cap nhat `gat_hidden_channels` (128 neu default; 64 neu dung `--hidden-channels 64`)
+  - cap nhat `gat_excluded_reason: OOM_A100_40GB_hidden128` (GAT luon bi excluded — khong can `gat_actual_heads` hay `gat_hidden_channels`)
   - cap nhat `appnp_actual_alpha`
   - cap nhat `appnp_actual_k` (10 default; hoac gia tri khac neu tune)
   - cap nhat `appnp_excluded_reason` neu std > 0.1
@@ -316,9 +340,10 @@ Khi gui ket qua moi cho team, nen bao cao toi thieu:
 
 - best A0 baseline va best A0 GNN
 - best HSCC flat baseline va best HSCC GNN
-- 2 ket luan bootstrap:
-  - A0: GNN vs degree
-  - HSCC: GNN vs strongest flat baseline
-- governance note: GAT status (`chay duoc hidden=128` / `chay voi hidden=64` / `excluded_OOM`)
+- 3 ket luan bootstrap:
+  - A0 (C4): GNN vs degree
+  - HSCC (C4): GNN vs strongest flat baseline
+  - HSCC (C3): rankloss model vs strongest flat baseline
+- governance note: GAT `excluded_OOM` chinh thuc (`gat_excluded_reason: OOM_A100_40GB_hidden128`). Neu co ket qua h=64 tu lan chay cu, co the ghi footnote trong paper voi ρ_A0=0.344, ρ_HSCC=0.513 nhung khong dua vao main table.
 - governance note: APPNP status (`stable std<0.1` / `excluded_high_variance std=X`)
 - node2vec status: `rerun` / `carry_forward` / `de_scoped`
