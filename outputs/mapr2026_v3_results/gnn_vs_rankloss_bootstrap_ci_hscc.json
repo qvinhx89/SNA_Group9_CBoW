@@ -1,12 +1,14 @@
 {
   "label_regime": "hscc",
-  "gnn_model": "gnn_raw_attr",
+  "gnn_model": "best_arch_raw_attr_rankloss(sage)",
   "comparator_model": "lr_degree_views_life_time_lang",
   "comparator_spearman_on_test": 0.8842852268581239,
   "surrogate_csv_used": "/workspace/SNA_Group9_CBoW/outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv",
   "feature_policy": {
     "include_language": true,
-    "gnn_model": "gnn_raw_attr",
+    "gnn_model": "best_arch_raw_attr_rankloss(sage)",
+    "loss_mode": "rankloss_combined",
+    "rankloss_alpha": 0.5,
     "hidden_channels": 128,
     "appnp_k": 10,
     "gat_heads": 4,
@@ -17,15 +19,15 @@
   "n_bootstrap": 1000,
   "equivalence_bound": 0.02,
   "spearman": {
-    "delta_mean": 0.032527589879223495,
-    "ci_95_lower": 0.021032696826069997,
-    "ci_95_upper": 0.043615818761847155,
+    "delta_mean": 0.041488840952812196,
+    "ci_95_lower": 0.030178702042322474,
+    "ci_95_upper": 0.052980297186164364,
     "interpretation": "gnn_significantly_better"
   },
   "ndcg_at_10pct": {
-    "delta_mean": 0.07365456827864049,
-    "ci_95_lower": 0.049787780593419304,
-    "ci_95_upper": 0.0991804398436668,
+    "delta_mean": 0.08188175328723785,
+    "ci_95_lower": 0.056156049479695457,
+    "ci_95_upper": 0.1096985124227096,
     "interpretation": "gnn_significantly_better"
   }
 }
