@@ -783,7 +783,7 @@ def test_31_kappa_sweep(art: dict[str, Any], n_jobs: int = -1) -> dict[str, Any]
 # ─────────────────────────────────────────────────────────────────────────────
 
 _EVIDENCE_TEMPLATE = (
-    "Empirical analysis of the Twitch EN graph (168,114 nodes; mean degree ≈ 81) "
+    "Empirical analysis of the Twitch Gamers graph (168,114 nodes; mean degree ≈ 81) "
     "under the weighted-cascade IC model (p(u,v) = kappa/degree(v), kappa=1) yields "
     "the following diagnostic evidence on binary top-k labeling stability:\n"
     "{evidence_bullets}\n"

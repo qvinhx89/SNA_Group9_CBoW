@@ -15,7 +15,9 @@ Phạm vi:
 
 **Scope bridge:** Tài liệu này là execution plan cho team 3 người coding. `MAPR2026_Implementation_Plan_v3.md` là strategic master plan (research + narrative + publication framing). Nếu khác biệt ở thao tác thực thi hằng ngày, ưu tiên file này; nếu khác biệt về framing nghiên cứu/paper, ưu tiên master plan. **v3.2 override:** mọi task và artifact trong file này phải được hiểu theo `A0 + HSCC`.
 
-> **Legacy notation note (v3.2):** Vì file này được chỉnh từ v3.1, một số block sâu phía dưới vẫn có thể còn nhắc `ic_scores_primary.parquet`, `regression_targets.parquet`, `gnn_vs_degree_bootstrap_ci.json`, hoặc `I-A` như active branch. Khi có xung đột, **Section 1b, Section 2, Section 4, và Section 8 của v3.2 là nguồn sự thật cao nhất cho execution hiện tại**.
+> **Consistency note (v3.2 freeze):** Historical v3.1 terms chỉ nên còn xuất hiện trong các archive notes được gắn nhãn rõ ràng (ví dụ GAT/I-A history). Canonical naming trong handoff/contract của v3.2 dùng regime-suffixed artifacts: `ic_scores_a0.parquet`, `regression_targets_a0.parquet`, `ic_scores_hscc_refined.parquet`, `regression_targets_hscc_refined.parquet`, `gnn_vs_degree_bootstrap_ci_a0.json`, `gnn_vs_baseline_bootstrap_ci_hscc.json`, và `gnn_vs_rankloss_bootstrap_ci_hscc.json` (khi C3 được chạy).
+>
+> _Lưu ý:_ codebase có thể vẫn nhắc tới legacy filenames như `ic_scores_primary.parquet` / `regression_targets.parquet`. Khi gặp, **treat đó là alias của A0** và **không** tạo “hai bộ artifacts song song” với naming khác nhau. Quan trọng nhất là **một mapping rõ ràng, nhất quán** trong handoff để Person 3 không load nhầm.
 
 ---
 
@@ -104,7 +106,7 @@ python run_all.py --stage 2
   - `A0` + `A2` phải views-independent.
   - `HSCC` được phép dùng `views/life_time/community boost` vì đây là domain-informed alternative operationalization.
   - `I-A` không còn là active MAPR branch.
-- Graph dùng **undirected** (`graph_directed: false`) — MUSAE Twitch chỉ có mutual-follow edges.
+- Graph dùng **undirected** (`graph_directed: false`) — Twitch Gamers chỉ có mutual-follow edges.
 - **Uniform p** — không report.
 - **Comparator policy:**
   - `A0` → comparator chính: `degree`, `one_hop`, `two_hop`.
@@ -162,7 +164,7 @@ python run_all.py --stage 2
 | `archive_regimes` | **I-A, II-B** | not on critical path |
 | `community_blocking_for_hscc` | **true** | Person 2 artifact is upstream dependency |
 | `bootstrap_a0` | `gnn_vs_degree_bootstrap_ci_a0.json` | A0 comparator = degree |
-| `bootstrap_hscc` | `gnn_vs_baseline_bootstrap_ci_hscc.json` | HSCC comparator = strongest flat baseline |
+| `bootstrap_hscc` | `gnn_vs_baseline_bootstrap_ci_hscc.json` | HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
 | `submit_deadline` | **30/4** | hard deadline |
 
 ---
@@ -182,12 +184,15 @@ python run_all.py --stage 2
 | `data/processed/split_masks.parquet` | Person 1 | Person 3 | shared split across regimes |
 | `data/processed/community_features.parquet` | Person 2 | Person 2,3 | **blocking for HSCC**; `node_id, community_id, cross_community_edge_fraction` |
 | `data/processed/diffusion_proxies.parquet` | Person 2 | Person 3 | full-graph `one_hop_spread, two_hop_spread` |
-| `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv` | Person 3 | All | must include `label_regime` column or equivalent separation when reporting A0 vs HSCC |
-| `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv` | Person 3 | All | must include regime-aware GNN rows |
+| `outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv` | Person 3 | All | regime=a0; columns: label_regime, model_name, spearman_rho, ndcg, precision, runtime |
+| `outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv` | Person 3 | All | regime=hscc; same schema + fairness rows nếu dùng language |
+| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv` | Person 3 | All | regime=a0; GNN rows incl. gnn_raw_attr, gcn, gin, appnp, best_arch_rankloss |
+| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv` | Person 3 | All | regime=hscc; same schema; không có gat_raw_attr (dropped OOM) |
 | `outputs/mapr2026_v3_results/runtime_breakdown.csv` | Person 2 + Person 3 | All | runtime rows for both regimes |
 | `outputs/mapr2026_v3_results/metric_correlation_matrix.json` | Person 2 | All | at minimum for A0; HSCC addendum if time |
-| `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json` | Person 3 | All | A0 comparator = degree |
-| `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json` | Person 3 | All | HSCC comparator = strongest flat baseline |
+| `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json` | Person 3 | All | C4: A0 comparator = degree |
+| `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json` | Person 3 | All | C4: HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
+| `outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json` | Person 3 | All | C3 [🟡 BOOST]: rankloss variant CI; chỉ tạo khi `--include-rankloss-comparison` |
 
 ### Format spec chi tiết (để khỏi hiểu khác nhau)
 
@@ -241,7 +246,9 @@ np.savez(
 - Rule tạo: `test_frac=0.20`, `stratify=degree_quintile` (pd.qcut q=5), `random_state=42`
 - **Consumer rule:** Person 3 load bằng `load_split_mask(PATHS.split_masks)` và filter qua `apply_test_mask()` từ `eval_ranking_harness.py`. Không tạo split mới.
 
-#### `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`
+#### `outputs/mapr2026_v3_results/baseline_ranking_metrics_{a0|hscc}_clean.csv`
+
+> File được tạo riêng theo regime: `*_a0_clean.csv` và `*_hscc_clean.csv`. Schema giống nhau cho cả hai. Tên cũ `baseline_ranking_metrics.csv` là legacy — không dùng.
 
 - `label_regime`: string — `a0` hoặc `hscc`
 - `model_name`: string
@@ -250,7 +257,9 @@ np.savez(
 - `precision_at_10pct`: float
 - `runtime_sec`: float — **full-graph inference time** (M0-locked; không tính precompute/training)
 
-#### `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv` (v3.2 regime-aware)
+#### `outputs/mapr2026_v3_results/surrogate_ranking_metrics_{a0|hscc}_clean.csv` (v3.2 regime-separated)
+
+> File được tạo riêng theo regime: `*_a0_clean.csv` và `*_hscc_clean.csv`. Schema giống nhau cho cả hai. Tên cũ `surrogate_ranking_metrics.csv` là legacy — không dùng.
 
 Schema bắt buộc (mean±std trên 5 training seeds `[42, 123, 456, 789, 1024]`):
 
@@ -415,7 +424,7 @@ IC scores + split_masks ──────────────────�
 ### Person 1 — Track A: IC core cho `A0 + HSCC` (CSR + labels + shared split) [🔴 MAPR-MUST]
 
 > 🔴 **[MAPR-MUST]** Track A chỉ còn phục vụ `A0 + HSCC`. `I-A`, `II-B`, `C2-I-A`, `C4-I-A`, và mọi pilot/fallback liên quan **không thuộc execution path MAPR v3.2**.
-> Nếu scripts hiện tại còn ghi `ic_scores_primary.parquet` / `regression_targets.parquet`, **Person 1 phải sửa scripts theo plan này trước khi handoff**, không kéo plan quay lại naming cũ.
+> Nếu scripts còn nhắc `ic_scores_primary.parquet` / `regression_targets.parquet`, **coi đó là legacy alias của A0**. Không tự phát đổi tên artifacts giữa chừng; thay vào đó, ghi rõ mapping trong handoff (để tránh tình trạng “A0 có 2 filename khác nhau” làm Person 3 load nhầm).
 
 **Mục tiêu:** cung cấp bộ artifacts canonical để cả team có thể chạy baselines, surrogates, và bootstrap theo đúng hai regime của v3.2.
 
@@ -1113,7 +1122,7 @@ def two_hop(node, G_neighbors, degrees):
 1. Evaluation harness (model-agnostic, regime-aware)
    - Input: `regression_targets_a0.parquet` hoặc `regression_targets_hscc_refined.parquet` + **`split_masks.parquet`** (M0-locked)
    - Cách dùng: `load_split_mask()` → `apply_test_mask()` → `compute_metrics()`
-   - Output: `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`
+   - Output: `outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv` hoặc `outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv` (tùy regime)
    - Bắt buộc phân biệt `label_regime` = `a0` / `hscc`
    - **⚠ Không tạo split mới** — luôn dùng artifact của Person 1
    - Metrics: Spearman ρ (primary), NDCG@10% (secondary), Precision@10% (supplementary)
@@ -1172,7 +1181,7 @@ def two_hop(node, G_neighbors, degrees):
    | `betweenness` | 2 | ApproxBetweenness2 |
    | `one_hop_spread` | 3 | one-hop proxy |
    | `two_hop_spread` | 3 | two-hop proxy |
-   | `node2vec_lr` | 4 | Node2Vec + Ridge LR |
+   | `node2vec_lr` | 4 | Node2Vec + LR |
    | `mlp_raw_attr` | 4 | MLP raw attributes |
    | `gnn_raw_attr` | 5 | GraphSAGE raw-attr / `sage_raw_attr` (backward compat — → surrogate CSV) |
    | `gnn_graph_only` | 5 | GraphSAGE graph-only (→ surrogate CSV) |
@@ -1194,7 +1203,7 @@ def two_hop(node, G_neighbors, degrees):
      - `runtime_sec` Group 2 = **inference-only** trên full active graph (generate score vector từ artifact precompute), không tính file load/metric computation
    - **Group 3 — Diffusion proxies:** one-hop O(E) + two-hop naive O(Σ d(v)^2) từ `diffusion_proxies.parquet` (full graph, filter test mask)
 
-3. **Group 4 — Shallow Embedding Baselines** (v3 Section 7 Group 4 — ghi vào `baseline_ranking_metrics.csv`, KHÔNG phải surrogate CSV):
+3. **Group 4 — Shallow Embedding Baselines** (v3 Section 7 Group 4 — ghi vào `baseline_ranking_metrics_{a0|hscc}_clean.csv`, KHÔNG phải surrogate CSV):
    - **Node2Vec + LR:**
      - Library: **`node2vec`** (`pip install node2vec`) hoặc **`pecanpy`** (nhanh hơn cho large graph — `pip install pecanpy`)
      - Params: `dim=64, walks=20` (⚠ KHÔNG phải 200 — 10x chậm hơn), `walk_len=20`, `p=1, q=1` (unbiased random walk)
@@ -1223,7 +1232,7 @@ def two_hop(node, G_neighbors, degrees):
      y_pred = y_pred_full[test_mask_local]
      ```
 
-     - `runtime_sec` trong `baseline_ranking_metrics.csv` = **inference-only** (`predict`) trên full active graph.
+    - `runtime_sec` trong `baseline_ranking_metrics_{a0|hscc}_clean.csv` = **inference-only** (`predict`) trên full active graph.
      - `inference_sec_full_graph` trong `runtime_breakdown.csv` = thời gian `predict` trên full active graph (không phải test-only).
      - Embed + fit = training cost → ghi `train_sec` trong `runtime_breakdown.csv`.
      - ⚠ Node2Vec là **inductive cần re-embed** nếu graph thay đổi — không giống GNN inference (one-pass full graph). Đây là điểm yếu cần note trong paper.
@@ -1256,7 +1265,7 @@ def two_hop(node, G_neighbors, degrees):
    # Không fit lại scaler trên test — đây là tiêu chuẩn để tránh leakage
    ```
 
-   - **Lưu ý naming:** Master plan v3 gọi đây là "Group 4 Baselines" (không phải "surrogates"). Kết quả phải vào `baseline_ranking_metrics.csv` cùng với Group 1–3 để so sánh đầy đủ trong Table 2 của paper.
+   - **Lưu ý naming:** Master plan v3 gọi đây là "Group 4 Baselines" (không phải "surrogates"). Kết quả phải vào `baseline_ranking_metrics_a0_clean.csv` hoặc `baseline_ranking_metrics_hscc_clean.csv` cùng với Group 1–3 của đúng regime để so sánh đầy đủ trong Table 2 của paper.
 
 4. **[MUST — v3.1 unconditional] Group 5 — GNN — Architecture comparison + ablation variants** (v3.1 Section 9.1):
 
@@ -1279,13 +1288,13 @@ Chạy với `raw_attr` features, 5 seeds mỗi arch — **4 active architecture
 >
 > **v3.2 execution note:** architecture matrix dưới đây là shortlist cho **cả hai active regimes**. Cách gọi `C2-A0` được giữ lại như historical shorthand vì A0 là nơi so sánh architecture bắt đầu trước, nhưng cùng shortlist này phải được reuse cho `HSCC` sau khi baseline fairness hoàn tất. Không đọc section này như thể C2 chỉ tồn tại cho `A0`.
 >
-> - **H1 (GAT–A0):** Dưới IC primary (A0), GAT có thể học attention weight tỷ lệ nghịch với neighbor degree — IC `p=1/deg(v)` phù hợp với attention mechanism. _(hypothesis, C2 decides)_
+> - **H1 (GAT–A0) — [⚪ ARCHIVED: dropped OOM]:** Historical hypothesis from v3.1. Current official rerun KHÔNG test GAT; dùng `--skip-gat`, nên H1 chỉ còn là archive note.
 > - **H2 (GCN–A2):** Nếu chạy Sensitivity S1 (A2 labels), GCN expected to improve vì `D^{-1/2}AD^{-1/2}` ≈ A2. _(testable, phụ thuộc S1 có chạy không)_
 > - **H3 (APPNP — IC cascade analogy):** APPNP thực hiện K-step Personalized PageRank: `x^(k) = (1-α)·Â·x^(k-1) + α·x^(0)`. Với `K=10, alpha=0.15`: α là teleport/restart weight (tái-inject `x^(0)` mỗi bước; không diễn giải như xác suất IC “dừng”). Đây là **structural analogy/inductive bias** cho target diffusion-like — hypothesized best arch. _(Klicpera et al., ICLR 2019)_
 >
 > Cả ba hypotheses đều có **prepared narratives cho mọi outcome**. Không claim kết quả trước khi chạy C2.
 >
-> **Tie-break (nếu diff < 0.001):** APPNP > GAT > GIN > GCN > SAGE (**pre-registered**; APPNP ưu tiên vì H3 theory).
+> **Tie-break (nếu diff < 0.001):** APPNP > GIN > GCN > SAGE (**pre-registered**; APPNP ưu tiên vì H3 theory; GAT dropped OOM nên không tham gia tie-break).
 
 > **Context:** Xem bảng real numbers trong **ablation story** bên dưới để hiểu structural constraint của A0 (tại sao GNN khó beat degree, H3 rationale, và outcome interpretations).
 
@@ -1332,32 +1341,32 @@ CSV name: `best_arch_raw_attr_rankloss`
 | GNN-full         | all 6 features (normalized)                              | ✦ [IF TIME] — supplementary upper bound (có thể cắt nếu tight timeline) |
 | GNN-random       | random/constant node features (1)                        | ✦ [IF TIME] — sanity-check message passing value                        |
 
-> ✦ **[IF TIME]** `GNN-random` — không block deadline; chỉ chạy sau khi xong toàn bộ MUST GNN variants. Nếu chạy: ghi vào `surrogate_ranking_metrics.csv` với `model_name=gnn_random`.
+> ✦ **[IF TIME]** `GNN-random` — không block deadline; chỉ chạy sau khi xong toàn bộ MUST GNN variants. Nếu chạy: ghi vào `surrogate_ranking_metrics_{a0|hscc}_clean.csv` với `model_name=gnn_random` cho đúng regime.
 
 > **Feature normalization bắt buộc**: tất cả features phải normalize trước khi vào GNN (min-max hoặc z-score). Column names trong experiment.yaml là `*_norm`. Không dùng raw values trực tiếp.
 
-**Config chuẩn cho TẤT CẢ 5 architectures — locked để fair comparison:**
+**Config chuẩn cho 4 active architectures (SAGE, GCN, GIN, APPNP) — locked để fair comparison:** _(GAT dropped OOM; dùng `--skip-gat`)_
 
 | Hyperparameter | Giá trị (conv-based archs)                   | Ghi chú APPNP                                                                |
 | -------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
 | `hidden_dim`   | 128                                          | Không thay đổi per arch (APPNP dùng hidden_dim cho MLP embedding)            |
 | `n_layers`     | 2                                            | Conv-based only; APPNP không dùng n_layers                                   |
 | `dropout`      | 0.3                                          | Không thay đổi per arch                                                      |
-| `gat_heads`    | 4                                            | Chỉ cho GAT (`out_dim=128//4=32 per head → concat → 128`)                    |
+| `gat_heads`    | 4                                            | *(archived — GAT dropped OOM; param giữ lại trong run_surrogates.py nhưng không invoke khi `--skip-gat`)* |
 | `appnp_K`      | **10**                                       | **APPNP only** — cascade depth (propagation steps)                           |
 | `appnp_alpha`  | **0.15**                                     | **APPNP only** — teleport/restart weight (starting point; controls locality) |
-| Loss           | Huber (`delta=1.0`)                          | Không dùng early stopping — **giống nhau cho tất cả 5 archs**                |
+| Loss           | Huber (`delta=1.0`)                          | Không dùng early stopping — **giống nhau cho tất cả 4 active archs**         |
 | `lr`           | 0.001 (Adam)                                 | Không thay đổi per arch                                                      |
 | `epochs`       | 200 (cố định)                                | **Không early stopping** — cố định để fair comparison                        |
 | Training seeds | `[42, 123, 456, 789, 1024]`                  | 5 seeds mỗi arch                                                             |
 | Split          | `split_masks.parquet` (M0-locked)            | **Cùng split cho mọi arch**                                                  |
-| Features (C2)  | `raw_attr` (views_log, views/day, life_time) | C2 chỉ so sánh trên raw_attr — 5 archs × 1 feature set                       |
+| Features (C2)  | `raw_attr` (views_log, views/day, life_time) | C2 chỉ so sánh trên raw_attr — **4 active archs** × 1 feature set            |
 
 **Best arch selection criterion (cho C3, C4, ablation):**
 
-> **Best arch = architecture có `spearman_rho_mean` cao nhất** qua 5 seeds trong `surrogate_ranking_metrics.csv`. Nếu tie (diff < 0.001): ưu tiên theo thứ tự **APPNP > GAT > GIN > GCN > SAGE** (pre-registered; APPNP ưu tiên vì H3 theory). Ghi `gnn_primary_arch` vào `docs/experiment_registry.md` ngay sau khi C2 xong — C3 và C4 depend on this value.
+> **Best arch = architecture có `spearman_rho_mean` cao nhất** qua 5 seeds trong `surrogate_ranking_metrics_{regime}_clean.csv`. Nếu tie (diff < 0.001): ưu tiên theo thứ tự **APPNP > GIN > GCN > SAGE** (pre-registered — GAT dropped OOM; không được chọn làm best arch). Ghi `gnn_primary_arch` vào `docs/experiment_registry.md` ngay sau khi C2 xong — C3 và C4 depend on this value.
 
-Architectures: `sage` (SAGEConv, mean) | `gcn` (GCNConv) | `gin` (GINConv+MLP) | `gat` (GATConv, heads=4) | **`appnp`** (K=10, alpha=0.15, **H3 expected best**).
+Architectures: `sage` (SAGEConv, mean) | `gcn` (GCNConv) | `gin` (GINConv+MLP) | ~~`gat` (GATConv, heads=4)~~ **DROPPED OOM** | **`appnp`** (K=10, alpha=0.15, **H3 expected best**). **Official run: 4 active archs** (`--skip-gat`).
 Framework: **PyTorch Geometric (PyG) ≥ 2.5**, `torch ≥ 2.0`. Hardware yêu cầu: GPU ≥ 8GB VRAM (RTX 3080 / A100).
 
 > ⚠ **[IF PROBLEM: PyG install fail HOẶC không có GPU ≥ 8GB]** Fallback: DGL + CPU (chậm hơn ~5× — thêm khoảng 2–3 ngày training time). Thay `from torch_geometric.nn import SAGEConv` bằng `from dgl.nn import SAGEConv`.
@@ -1585,8 +1594,8 @@ def get_model(arch, in_dim, hidden_dim=128, n_layers=2, dropout=0.3,
                         n_layers=n_layers, dropout=dropout, gat_heads=gat_heads)
 
 
-# C2: 5 architectures (APPNP added — H3: IC cascade analog)
-ARCHITECTURES = ['sage', 'gcn', 'gin', 'gat', 'appnp']
+# C2: 4 active architectures — GAT dropped OOM (A100-40GB, h=128); use --skip-gat
+ARCHITECTURES = ['sage', 'gcn', 'gin', 'appnp']
 training_seeds = [42, 123, 456, 789, 1024]
 
 def train_and_eval(arch, features, seed, data, epochs=200, lr=1e-3):
@@ -1825,12 +1834,12 @@ Ablation story:
 >
 > **Key insight:** IC-A0 dùng `p=1/deg(v)` → IC score degree-coupled (tương quan rất cao với degree) → `degree` là baseline rất mạnh. Đây là **structural constraint của A0**, không phải implementation bug.
 
-- **Architecture comparison (C2 primary — A0 labels):** 5 archs (SAGE / GCN / GIN / GAT / **APPNP**) trên `raw_attr` → _which message passing best captures IC's multi-hop dynamics?_
+- **Architecture comparison (C2 primary — A0 labels):** **4 active archs** (SAGE / GCN / GIN / **APPNP**; GAT dropped OOM — `--skip-gat`) trên `raw_attr` → _which message passing best captures IC's multi-hop dynamics?_
   - **H3 (APPNP — STRONGEST, expected best):** APPNP **decouples feature transformation from propagation** → K=10 PPR steps `x^(k) = (1-α)·Â·x^(k-1) + α·x^(0)` without oversmoothing (`K=10, alpha=0.15` là starting point). IC là multi-hop process (two_hop 0.804 > one_hop 0.688) → APPNP's deeper receptive field expected to capture multi-hop composition better than SAGE mean. **Framing trong paper:** "plausible deeper-propagation inductive bias for IC reach" — không claim APPNP mimics IC mechanics (IC stochastic; APPNP deterministic).
-  - **H1 (GAT–A0):** _(hypothesis — to be confirmed by C2)_ weighted cascade `p=1/deg(v)` → GAT attention **có thể** học inversely-proportional-to-degree weighting tự động
+  - **H1 (GAT–A0) — [⚪ ARCHIVED: GAT dropped OOM]:** _(Không testable trong current MAPR rerun — xem Section 9.1 IP file cho historical note)_
   - **H2 (GCN–A2):** _(hypothesis — chỉ testable nếu Sensitivity S1 chạy được)_ GCN's `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric IC rule
   - **GIN:** sum aggregation → có thể capture two-hop count tốt hơn SAGE mean (vì sum preserves hop counts, không smooth out)
-  - Cả 5 arch hypothesis đều có prepared narratives (xem Section 4.1b của Implementation Plan)
+  - Cả 4 active arch hypotheses đều có prepared narratives; GAT chỉ còn là archived note (xem Section 4.1b của Implementation Plan)
   - **Nếu C2 vẫn không beat degree = EXPECTED (không phải failure):** A0 label ∝ 1/deg(v) → structural ceiling. → I-A supplemental analysis sẽ unlock genuine GNN advantage với degree-blind labels.
 - **Feature ablation (dùng best arch từ C2):**
   - GNN-raw-attr vs MLP-raw-attr → giá trị của **message passing** (**+0.099 Spearman confirmed**: 0.534 vs 0.435)
@@ -1842,7 +1851,7 @@ Ablation story:
 - **CV=0.2109 paper framing:** "Near-critical IC dynamics (CV=0.209) empirically motivated continuous regression formulation — NOT a fallback; the principled choice for simulation-derived continuous targets."
 
 5. Repeated training seeds + reporting (v3.1 Sections 8.7 + 9.1):
-   - **5 seeds:** `[42, 123, 456, 789, 1024]` → report `mean ± std` cho mỗi metric trong `surrogate_ranking_metrics.csv`
+   - **5 seeds:** `[42, 123, 456, 789, 1024]` → report `mean ± std` cho mỗi metric trong `surrogate_ranking_metrics_{a0|hscc}_clean.csv`
    - **Lưu ý về BH-FDR:** Chỉ áp dụng nếu chạy nhiều MWU tests (multiple comparisons). Trong scope bình thường thì report mean±std là đủ.
 
 6. Runtime table (v3.1 Section 9.3):
@@ -1854,18 +1863,18 @@ Ablation story:
    | GNN training (5 seeds)                  | time            | With GPU                                                                                            |
    | **GNN inference (168,114 nodes)**       | **runtime_sec** | Full active graph                                                                                   |
    | Node2Vec training                       | time            |                                                                                                     |
-   | Speedup: MC IC vs GNN inference         | **7,169×**      | Key claim: 480s / 0.067s (confirmed từ runtime_breakdown.csv) — xem operational definition bên dưới |
+   | Speedup: MC IC vs GNN inference         | **~5,590×**     | Headline uses 480.3s / 0.086s from `hscc,gnn_raw_attr` in `runtime_breakdown.csv`; round to ~5,500× in paper prose |
 
    `runtime_sec` trong CSV = **inference only** (không tính load + precompute).
 
-   > **Operational definition 7,169× (reviewer prep):**
+   > **Operational definition (~5,590×, frozen rerun):**
    >
-   > - **480s** = MC-IC labeling 5,000 nodes × 200 runs (one-time training label generation, joblib parallelism).
-   > - **0.067s** = GNN inference forward-pass trên toàn bộ 168,114 active nodes (sau training xong).
-   > - **Conservative lower-bound:** 480s/0.067s = 7,169× so sánh "labeling cost 5k nodes" vs "inferring all 168k nodes" — không cùng population. Full-graph-vs-full-graph speedup ~241,000× (16,140s IC vs 0.067s GNN).
-   > - **Framing an toàn trong paper:** "GNN inference (0.067s, 168k nodes) is 7,169× faster than MC-IC label generation (480s, 5k×200 runs) used for training." Không claim 7,169× là same-population comparison.
+   > - **480.3s** = MC-IC labeling 5,000 nodes × 200 runs (one-time training label generation, joblib parallelism).
+   > - **0.086s** = GNN inference forward-pass trên toàn bộ 168,114 active nodes (headline row = `hscc,gnn_raw_attr` trong `runtime_breakdown.csv`, sau training xong).
+   > - **Headline ratio:** 480.3 / 0.086 ≈ 5,590×. Trong paper prose, round về **~5,500×** hoặc "over 5,000×" để tránh false precision.
+   > - **Framing an toàn trong paper:** "Once trained, the GNN surrogate provides full-graph inference in approximately 0.086 seconds, compared with 480.3 seconds for a single MC-IC labeling pass used for training." Không dùng lại claim cũ `0.067s / 7,169×`.
 
-**Runtime rule (để so sánh fair):** log riêng 3 phần (precompute / train / inference). Trong `baseline_ranking_metrics.csv` để `runtime_sec` là inference time trên full active nodes, và ghi chi tiết breakdown ở file phụ `outputs/mapr2026_v3_results/runtime_breakdown.csv` (contract bắt buộc trong M0).
+**Runtime rule (để so sánh fair):** log riêng 3 phần (precompute / train / inference). Trong `baseline_ranking_metrics_{a0|hscc}_clean.csv` để `runtime_sec` là inference time trên full active nodes, và ghi chi tiết breakdown ở file phụ `outputs/mapr2026_v3_results/runtime_breakdown.csv` (contract bắt buộc trong M0).
 
 > **QUAN TRỌNG (v3.1 Section 9.3):** Nếu GNN-raw-attr là primary, **không cần tính centrality precompute time** (degree/PR/kshell) vào runtime GNN — centrality chỉ cần cho GNN-centrality và GNN-full. Việc loại bỏ centrality precompute khỏi primary GNN pipeline làm runtime so sánh **fair hơn** (và là một điểm mạnh của GNN-raw-attr: không cần expensive precompute).
 
@@ -1904,8 +1913,12 @@ class PATHS:
     one_hop_correlation   = "outputs/day1_benchmark/one_hop_correlation.json"
     ic_pilot_diagnostics  = "outputs/day1_benchmark/ic_pilot_diagnostics.json"
     results_dir           = "outputs/mapr2026_v3_results"
-    baseline_csv      = "outputs/mapr2026_v3_results/baseline_ranking_metrics.csv"
-    surrogate_csv     = "outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv"
+    # Regime-split canonical names (dùng trong production):
+    baseline_csv_a0   = "outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv"
+    baseline_csv_hscc = "outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv"
+    surrogate_csv_a0  = "outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv"
+    surrogate_csv_hscc= "outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv"
+    # Legacy note: trước v3.2 file này từng dùng 2 CSV generic; official rerun hiện tại dùng 4 file `_clean` tách theo regime như trên.
     runtime_csv       = "outputs/mapr2026_v3_results/runtime_breakdown.csv"
 ```
 
@@ -1948,8 +1961,8 @@ print(metrics)
 **DoD cho Track C:**
 
 - `load_split_mask()` + `apply_test_mask()` chạy không lỗi với mock artifacts (M1).
-- `baseline_ranking_metrics.csv` có đủ rows theo **regime** (M4): `A0` có Group 1-3 + shallow baselines; `HSCC` có flat fairness baselines tối thiểu `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)`, và nếu dùng `language` thì có fairness rows tương ứng.
-- `surrogate_ranking_metrics.csv` có `label_regime`, `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `runtime_sec` cho từng regime đã chạy (M5).
+- `baseline_ranking_metrics_a0_clean.csv` + `baseline_ranking_metrics_hscc_clean.csv` có đủ rows theo **regime** (M4): `A0` có Group 1-3 + shallow baselines; `HSCC` có flat fairness baselines tối thiểu `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)`, và nếu dùng `language` thì có fairness rows tương ứng.
+- `surrogate_ranking_metrics_a0_clean.csv` + `surrogate_ranking_metrics_hscc_clean.csv` có `label_regime`, `spearman_rho_mean`, `spearman_rho_std`, `ndcg_mean`, `ndcg_std`, `runtime_sec` cho từng regime đã chạy (M5).
 - `C2` architecture comparison trên regime active có đủ rows `gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr` (5 seeds each, mean±std) theo đúng regime đang đánh giá; **không mong đợi `gat_raw_attr` trong official rerun** vì GAT đã bị drop và run dùng `--skip-gat`.
 - `C3` rank-loss row chỉ áp dụng sau khi đã chọn best arch trong đúng regime; không block nếu team cắt rank-loss để giữ `A0 + HSCC` core path.
 - `A0`: `gnn_vs_degree_bootstrap_ci_a0.json` tồn tại với `n_bootstrap=1000`, `ci_95_lower`, `ci_95_upper`, `interpretation`.
@@ -1977,7 +1990,7 @@ print(metrics)
 
 | Person | Việc | Output |
 | ------ | ---- | ------ |
-| Person 3 | chạy HSCC flat baselines: `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)` | HSCC rows in `baseline_ranking_metrics.csv` |
+| Person 3 | chạy HSCC flat baselines: `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)` | HSCC rows in `baseline_ranking_metrics_hscc_clean.csv` |
 | Person 3 | nếu GNN dùng `language`, thêm fairness baselines với `language` | fairness rows |
 | Person 2 | provide any missing joins for community/language checks | support files |
 
@@ -1994,12 +2007,12 @@ print(metrics)
 | Person | Việc | Output |
 | ------ | ---- | ------ |
 | Person 3 | bootstrap `A0`: GNN vs degree | `gnn_vs_degree_bootstrap_ci_a0.json` |
-| Person 3 | bootstrap `HSCC`: GNN vs strongest flat baseline | `gnn_vs_baseline_bootstrap_ci_hscc.json` |
+| Person 3 | bootstrap `HSCC`: GNN vs strongest flat baseline (frozen official rerun comparator = `lr_degree_views_life_time_lang`) | `gnn_vs_baseline_bootstrap_ci_hscc.json` |
 | Cả team | lock results and table wording | result freeze |
 
 ### Milestone M5 — Integration + paper hand-off (26–30/4)
 
-- Final `baseline_ranking_metrics.csv` và `surrogate_ranking_metrics.csv` phải đọc được theo regime.
+- Final `baseline_ranking_metrics_a0_clean.csv` + `baseline_ranking_metrics_hscc_clean.csv` và `surrogate_ranking_metrics_a0_clean.csv` + `surrogate_ranking_metrics_hscc_clean.csv` phải đọc được theo regime.
 - `runtime_breakdown.csv` hoàn chỉnh.
 - Bàn giao 2 kết quả chính cho paper:
   - `A0` contrast finding.
@@ -2130,7 +2143,7 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 
 | # | Việc | Artifact output | Deadline |
 | - | ---- | --------------- | -------- |
-| 1 | Confirm `graph_csr.npz` + split mask | shared upstream artifacts | ngay |
+| 1 | Confirm `graph_csr.npz` + `split_masks.parquet` | shared upstream artifacts | ngay |
 | 2 | Lock `A0` artifacts | `ic_scores_a0.parquet`, `regression_targets_a0.parquet` | ngay |
 | 3 | Regenerate và verify HSCC targets | `ic_scores_hscc_refined.parquet`, `regression_targets_hscc_refined.parquet` | **21–22/4** |
 | 4 | Freeze HSCC config, add registry entry | registry updated | **21–22/4** |
@@ -2156,7 +2169,7 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 | 5 | **C2** — Chạy GNN architecture comparison trên `HSCC` (`--skip-gat`) | HSCC rows in `surrogate_ranking_metrics_hscc_clean.csv` | 23–24/4 | [🔴 C2] |
 | 6 | **C3** — Rankloss variant của best C2 arch trên HSCC (sau khi C2 xong) | via `bootstrap_ci.py --include-rankloss-comparison` | 24/4 | [🟡 C3] |
 | 7 | **C4** — Bootstrap `A0`: GNN vs degree baseline | `gnn_vs_degree_bootstrap_ci_a0.json` | **24/4** | [🔴 C4] |
-| 8 | **C4** — Bootstrap `HSCC`: GNN vs strongest flat baseline | `gnn_vs_baseline_bootstrap_ci_hscc.json` | **24/4** | [🔴 C4] |
+| 8 | **C4** — Bootstrap `HSCC`: GNN vs strongest flat baseline (frozen official rerun comparator = `lr_degree_views_life_time_lang`) | `gnn_vs_baseline_bootstrap_ci_hscc.json` | **24/4** | [🔴 C4] |
 | 9 | Runtime assembly + table handoff (không có row `gat_raw_attr`) | `runtime_breakdown.csv` | 25/4 | [🔴] |
 | 10 | **C5** — GINE + IC edge features supplemental | post-MAPR artifact | POST-MAPR | [🔵 FUTURE:TKDE/WWW2027] |
 
@@ -2179,8 +2192,11 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 
 **Person 3 → paper owner**
 
-- regime-aware `baseline_ranking_metrics.csv`
-- regime-aware `surrogate_ranking_metrics.csv`
-- `gnn_vs_degree_bootstrap_ci_a0.json`
-- `gnn_vs_baseline_bootstrap_ci_hscc.json`
+- `baseline_ranking_metrics_a0_clean.csv`
+- `baseline_ranking_metrics_hscc_clean.csv`
+- `surrogate_ranking_metrics_a0_clean.csv`
+- `surrogate_ranking_metrics_hscc_clean.csv`
+- `gnn_vs_degree_bootstrap_ci_a0.json` (C4)
+- `gnn_vs_baseline_bootstrap_ci_hscc.json` (C4)
+- `gnn_vs_rankloss_bootstrap_ci_hscc.json` (C3 — [🟡 BOOST]; chỉ nếu C3 đã chạy)
 - `runtime_breakdown.csv`

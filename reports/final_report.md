@@ -24,10 +24,10 @@
 4. **RQ4**: Can Hidden Influencers be detected using only surface metrics?
 
 ### 1.3 Dataset
-- Dataset: Twitch Gamers Social Network (Twitch DE)
-- Nodes: ~XXX,XXX streamers
-- Edges: ~X,XXX,XXX mutual follows
-- Source: [Source reference]
+- Dataset: Twitch Gamers Social Network
+- Nodes: 168,114 streamers
+- Edges: 6,797,557 mutual follows
+- Source: `benedekrozemberczki/datasets` (Twitch Gamers)
 
 ---
 

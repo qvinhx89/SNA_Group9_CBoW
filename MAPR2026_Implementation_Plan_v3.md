@@ -9,7 +9,9 @@
 
 **Scope bridge:** Tài liệu này là strategic master plan (research + execution + paper). Với phạm vi coding team 3 người, `docs/MAPR2026_v3_team_parallel_coding_plan.md` là execution override; nếu có khác biệt ở tác vụ hằng ngày, ưu tiên Team Plan và giữ các ràng buộc nghiên cứu/narrative theo tài liệu này. **v3.2 override:** MAPR path chính thức không còn là `A0 primary + I-A rescue`, mà là **dual-operationalization contrast** giữa `A0` và `HSCC`.
 
-> **Legacy notation note (v3.2):** Một số block chi tiết sâu trong file vẫn giữ ký hiệu lịch sử từ v3.1 như `ic_scores_primary.parquet`, `regression_targets.parquet`, `gnn_vs_degree_bootstrap_ci.json`, hoặc các mô tả `I-A` từng là active branch. Khi có xung đột, **Section 0, Section 7-8, Section 14-18, và Section 22 của v3.2 là nguồn sự thật cao nhất**.
+> **Consistency note (v3.2 freeze):** Historical v3.1 terms chỉ nên còn xuất hiện trong các **archive notes được gắn nhãn rõ ràng**. Active execution trong MAPR v3.2 dùng naming hiện tại theo regime: `ic_scores_a0.parquet`, `regression_targets_a0.parquet`, `ic_scores_hscc_refined.parquet`, `regression_targets_hscc_refined.parquet`, `gnn_vs_degree_bootstrap_ci_a0.json`, `gnn_vs_baseline_bootstrap_ci_hscc.json`, và `gnn_vs_rankloss_bootstrap_ci_hscc.json` (khi C3 được chạy). Nếu có xung đột nội dung, **Team Plan + các section freeze trong file này** là nguồn sự thật cao nhất.
+>
+> _Lưu ý kỹ thuật:_ một số scripts trong codebase vẫn có default legacy path như `ic_scores_primary.parquet` / `regression_targets.parquet`. Nếu gặp, **treat đó là alias của A0** (không “đổi tên” artifacts tự phát giữa chừng) và ghi rõ trong handoff để tránh mismatch giữa người chạy.
 
 ---
 
@@ -115,7 +117,7 @@ IC score = OPERATIONALIZATION của influence potential
 # experiment.yaml
 graph_directed: false
 graph_direction_note: >
-  "MUSAE Twitch dataset exposes only mutual-follow edges (Rozemberczki et al., 2021 §3).
+  "Twitch Gamers dataset exposes only mutual-follow edges (Rozemberczki & Sarkar, 2021).
    Undirected treatment is the only valid representation. Under undirected weighted
    cascade, p(u,v) = 1/degree(v) models limited attention budget per incoming edge."
 ```
@@ -166,7 +168,9 @@ def benchmark_ic_runtime(G_ig, n_test=100, n_runs=50):
 
 **Đây là quyết định sống còn cho toàn bộ GNN narrative.**
 
-Dưới weighted cascade với p nhỏ, cascade thường chết trong 1–3 hops. Do đó one-hop expected spread `Σ 1/degree(v)` có thể là predictor cực mạnh cho full IC reach (ρ > 0.9). Tuy nhiên gate Day-1 không được dựa vào Spearman một mình: phải kiểm tra thêm top-k alignment qua Jaccard@10% và NDCG@10%.
+Dưới weighted cascade với p nhỏ, cascade thường chết trong 1–3 hops, nên one-hop expected spread `Σ 1/degree(v)` có thể tương quan với IC reach. Tuy nhiên **không được mặc định “near-perfect alignment”**; proxies (one-hop/two-hop) được xem là **baselines/diagnostics**, còn surrogate learning vẫn cần thiết nếu top-k ranking không trùng khớp. Gate Day-1 không được dựa vào Spearman một mình: phải kiểm tra thêm top-k alignment qua Jaccard@10% và NDCG@10%.
+
+> **Post-freeze note (v3.2):** Frozen rerun không cho thấy one-hop đạt mức “saturating” (ρ gần 1). Vì vậy **không** restructure paper theo hướng “proxies primary”; giữ proxies như baseline và nhấn mạnh multi-hop/feature interactions khi nói về GNN.
 
 ```python
 from sklearn.metrics import ndcg_score
@@ -226,9 +230,9 @@ print(f"One-hop vs IC pilot: ρ={rho:.3f}, Jaccard@10%={jaccard_10:.3f}, NDCG@10
 #          → giữ GNN + 2-hop head-to-head, nhấn mạnh top-k divergence
 ```
 
-**Prepared narrative nếu ρ > 0.9 và top-k alignment cao:**
+**Template narrative (CHỈ dùng nếu điều kiện ρ > 0.9 + top-k alignment thật sự đạt):**
 
-> _"We find that one-hop analytical expected spread under weighted cascade achieves ρ > 0.9 with full MC IC scores, suggesting cascade dynamics are largely confined to the local neighborhood of each seed. This finding itself is a contribution: expensive MC simulation can be approximated by an O(E) analytical proxy with 7,169× speedup. GNN surrogate learning is additionally motivated by its feature-agnostic nature — no precomputed graph statistics required — and the potential to generalize inductively to new nodes."_
+> _"We find that a simple one-hop diffusion proxy under weighted cascade achieves near-saturation with MC-IC influence rankings, suggesting cascade dynamics are largely confined to the local neighborhood of each seed. We therefore report diffusion proxies as strong analytical baselines, while still evaluating learned surrogates for cases where top‑k alignment and multi-hop effects matter."_
 
 ---
 
@@ -838,12 +842,12 @@ def two_hop_expected_spread(node, G, degrees):
 | GraphSAGE    | `SAGEConv` | Mean (baseline)       | Hiện tại đang dùng; reference point                                                                                                               |
 | **GCN**      | `GCNConv`  | **Sym. norm. sum**    | Spectral baseline; **`D^{-1/2}AD^{-1/2}` structurally analogous to A2 diffusion rule** — additional inductive bias check nếu chạy A2 sensitivity  |
 | GIN          | `GINConv`  | Sum + MLP             | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics                                 |
-| **GAT**      | `GATConv`  | **Learned attention** | **Hypothesis (confirm via C2):** p(u,v)=1/degree(v) → attention **có thể** học weighting này                                                      |
+| **GAT**      | `GATConv`  | **Learned attention** | ~~Hypothesis (confirm via C2)~~ **DROPPED — OOM tại A100-40GB, h=128. Dùng `--skip-gat`. H1 archived (xem Section 9.1).** |
 | **APPNP**    | `APPNP`    | **K-step PPR**        | **H3:** embed-then-propagate với teleport/restart là structural analogy/inductive bias cho IC multi-hop; test như ứng viên “deep receptive field” |
 
 > **Ba inductive bias hypotheses (to be confirmed by C2):**
 >
-> 1. **GAT–A0 hypothesis:** Dưới IC primary (A0: `p=1/deg(v)`), GAT có thể học attention weight tỷ lệ nghịch với degree của neighbor → potentially best aligned with A0. _(hypothesis/intuition — C2 decides)_
+> 1. **GAT–A0 hypothesis — [⚪ ARCHIVED: GAT dropped OOM]:** _(Không testable — GAT bị drop do OOM tại A100-40GB. H1 archived trong Section 9.1.)_
 > 2. **GCN–A2 hypothesis:** `GCNConv` aggregates với weight `1/√(d̃_u×d̃_v)` — structurally analogous to A2 symmetric rule. Nếu chạy A2 sensitivity IC labels, GCN expected to be best arch. _(testable via sensitivity experiment — see Section 4.1b)_
 > 3. **APPNP–multi-hop hypothesis (H3):** APPNP's K-step PPR propagation với teleport/restart weight là structural analogy/inductive bias cho target diffusion-like; hypothesized to outperform conv-stack baselines trên A0 labels. _(hypothesis — C2 decides; see Section 9.1)_
 >
@@ -865,14 +869,14 @@ def two_hop_expected_spread(node, G, degrees):
 | **GraphSAGE** | ✅ đã có | ✅ đã có   | ✅ đã có   |
 | **GCN**       | **MUST** | [IF TIME]  | [IF TIME]  |
 | **GIN**       | **MUST** | [IF TIME]  | [IF TIME]  |
-| **GAT**       | **MUST** | [IF TIME]  | [IF TIME]  |
+| **GAT**       | ~~MUST~~ **DROPPED** (OOM A100-40GB, h=128; dùng `--skip-gat`) | — | — |
 | **APPNP**     | **MUST** | [IF TIME]  | [IF TIME]  |
 
-**Naming convention cho surrogate_ranking_metrics.csv (artifact names):**
-`gcn_raw_attr`, `gin_raw_attr`, `gat_raw_attr`, `appnp_raw_attr` (+ `best_arch_raw_attr_rankloss` sau C2)
+**Naming convention cho `surrogate_ranking_metrics_{regime}_clean.csv` (artifact names):**
+`gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr` (+ `best_arch_raw_attr_rankloss` sau C2). `gat_raw_attr` = **dropped** (OOM; không xuất hiện trong official rerun — dùng `--skip-gat`). Mỗi regime ra 1 file riêng: `*_a0_clean.csv` và `*_hscc_clean.csv`.
 
 > **Lưu ý phân biệt:** Tên trong CSV artifact (`gcn_raw_attr`) khác với tên display trong paper table (`gnn_raw_attr (GCN)`).
-> Quy ước: CSV dùng snake*case prefix (`gcn*`, `gin*`, `gat*`); paper table dùng `gnn_raw_attr (Architecture)` để nhất quán với G5 group labeling.
+> Quy ước: CSV dùng snake*case prefix cho active architectures (`gcn*`, `gin*`, `appnp*`); paper table dùng `gnn_raw_attr (Architecture)` để nhất quán với G5 group labeling. `gat*` chỉ còn là legacy/archive naming, không thuộc official rerun.
 
 **Tại sao cấu trúc này:**
 
@@ -1030,8 +1034,9 @@ def bootstrap_spearman_ndcg_ci(y_true, y_pred_a, y_pred_b, n_bootstrap=1000, see
 
 **Outputs:**
 
-- `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json`
-- `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json`
+- `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json` — C4: A0 comparator = degree
+- `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json` — C4: HSCC comparator = strongest flat baseline
+- `outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json` — C3 [🟡 BOOST]: rankloss variant vs strongest flat baseline HSCC; chỉ tạo khi dùng `--include-rankloss-comparison` trong `bootstrap_ci.py`
 
 ```json
 {
@@ -1115,9 +1120,9 @@ std_spearman  = np.std( [r['spearman'] for r in results_per_seed])
 
 ## 9. GNN Training (v3.1 — Architecture Comparison + Ranking Loss) [🔴 MAPR-MUST — xem subsection tiers]
 
-### 9.1 Architecture Comparison: GCN / GIN / GAT / GraphSAGE / APPNP
+### 9.1 Architecture Comparison: GCN / GIN / GraphSAGE / APPNP [GAT: dropped — OOM tại A100-40GB, h=128]
 
-> **v3.1:** Mở rộng từ GraphSAGE duy nhất → 5 architectures. Config chuẩn giống nhau để fair comparison.
+> **v3.1:** Mở rộng từ GraphSAGE duy nhất → 5 architectures (ban đầu). **v3.2 official:** 4 active architectures (SAGE, GCN, GIN, APPNP) sau khi GAT bị drop OOM — dùng `--skip-gat`. Config chuẩn giống nhau để fair comparison.
 > **APPNP là architecture được bổ sung mới** vì lý do lý thuyết mạnh nhất: APPNP **decouples feature transformation from propagation** — embed node features first (MLP), then propagate embeddings via K=10 PPR steps with teleport weight α. Điều này cho phép **receptive field sâu (K=10) mà không bị oversmoothing** (vì transformation và propagation tách biệt). Đây là inductive bias plausible cho IC regression vì IC scores reflect multi-hop cascade reach. Framing: "plausible candidate for deeper multi-hop influence propagation" — không claim APPNP mimics IC mechanics (stochastic vs deterministic là khác nhau). Xem H3 bên dưới.
 >
 > **⚠ PyG version check (trước khi chạy):** `APPNP` requires PyG ≥ 2.3. Verify:
@@ -1135,7 +1140,7 @@ class GNNSurrogate(nn.Module):
     Unified GNN wrapper — swap architecture bằng arch parameter.
     Primary task: Regression trên log(IC_score + 1).
     Config chuẩn: n_layers=2, hidden_dim=128, dropout=0.3 (KHÔNG thay đổi khi so sánh arch).
-    Supported arch: 'sage' | 'gcn' | 'gin' | 'gat'
+    Supported arch: 'sage' | 'gcn' | 'gin' | 'gat' (archived — OOM tại A100-40GB h=128; dùng --skip-gat trong official run)
     APPNP dùng APPNPSurrogate (class riêng bên dưới — kiến trúc khác: embed-then-propagate).
     """
     def __init__(self, arch='sage', in_dim=3, hidden_dim=128, n_layers=2,
@@ -1222,12 +1227,14 @@ def get_model(arch, in_dim, hidden_dim=128, n_layers=2, dropout=0.3,
 
 # Architectures to train (all với gnn_raw_attr features):
 # APPNP = architecture lý thuyết mạnh nhất (H3 — IC cascade analogy)
-ARCHITECTURES = ['sage', 'gcn', 'gin', 'gat', 'appnp']
+ARCHITECTURES = ['sage', 'gcn', 'gin', 'appnp']
+# NOTE: 'gat' dropped — OOM tại A100-40GB (hidden_channels=128). Official rerun dùng --skip-gat.
+# GATConv implementation trong GNNSurrogate giữ lại như reference code nhưng không được invoke.
 
 # Training loop usage:
 # for arch in ARCHITECTURES:
 #     model = get_model(arch, in_dim=in_dim)
-#     # → APPNPSurrogate cho 'appnp', GNNSurrogate cho 4 arch còn lại
+#     # → APPNPSurrogate cho 'appnp', GNNSurrogate cho 3 arch còn lại (sage/gcn/gin)
 ```
 
 **C2 Fair-comparison protocol (bắt buộc lock):**
@@ -1238,27 +1245,25 @@ ARCHITECTURES = ['sage', 'gcn', 'gin', 'gat', 'appnp']
   - `HSCC raw_attr` = `[views_log_norm, views_per_day_norm, life_time_norm, language_encoded]` nếu mục tiêu là learn cross-community signal qua language structure
   - Nếu bật `language` cho GNN ở HSCC, phải chạy fairness baselines với `language`
 - **Cùng loss:** Huber (`delta=1.0`); **không early stopping** — `epochs=200` cố định
-- **Cùng hyperparams (conv-based archs):** `hidden_dim=128, n_layers=2, dropout=0.3, lr=1e-3`; GAT thêm `gat_heads=4`
+- **Cùng hyperparams (conv-based archs):** `hidden_dim=128, n_layers=2, dropout=0.3, lr=1e-3`; GAT thêm `gat_heads=4` *(archived — GAT dropped OOM; param giữ lại cho reference code)*
 - **APPNP-specific:** `K=10, alpha=0.15, dropout=0.3, lr=1e-3` (thay vì conv layers; xem `APPNPSurrogate`)
 - **5 seeds mỗi arch:** `[42, 123, 456, 789, 1024]` → report mean ± std
 
 **Best arch selection criterion:**
 
 - **Primary:** arch có `spearman_rho_mean` cao nhất qua 5 seeds
-- **Tie-break (diff < 0.001):** APPNP > GAT > GIN > GCN > SAGE (**pre-registered order**; APPNP được ưu tiên vì lý thuyết mạnh nhất — H3)
+- **Tie-break (diff < 0.001):** APPNP > GIN > GCN > SAGE (**pre-registered order** — GAT dropped OOM; không được chọn làm best arch; APPNP được ưu tiên vì lý thuyết mạnh nhất — H3)
 - **Ghi vào:** `docs/experiment_registry.md` field `gnn_primary_arch` ngay sau C2 xong
 
 **Ba inductive bias hypotheses — pre-registered trước C2:**
 
-**Hypothesis H1 (GAT–A0 alignment):** Dưới `A0` contrast track (`p(u,v)=1/deg(v)`):
-Weighted cascade → neighbor degree thấp có influence lớn hơn.
-_Intuition:_ GAT có thể học attention weight inversely-proportional-to-degree tự động.
+**Hypothesis H1 (GAT–A0 alignment) — [⚪ REF: ARCHIVED, GAT dropped]:** _(Không testable trong official MAPR rerun — GAT bị drop do OOM tại A100-40GB với hidden_channels=128.)_
 
-> ⚠ Đây là **hypothesis/intuition** dựa trên cơ chế lý thuyết. C2 empirically verify — nếu GAT không win thì dùng kết quả thực nghiệm, không dùng framing này trong paper.
+> Ghi chú historical: Intuition rằng GAT có thể học attention weight inversely-proportional-to-degree (phù hợp với A0: `p(u,v)=1/deg(v)`) là plausible về lý thuyết. Nếu chạy trên hardware khác (h=64 hoặc multi-GPU), C2 có thể verify. Kết quả empirical từ h=64 pilot (nếu có) có thể dùng như qualitative note trong Appendix. **Không dùng H1 framing trong main paper vì GAT không run trong current MAPR window.**
 
 **Hypothesis H2 (GCN–A2 alignment — nếu chạy A2 sensitivity):** Dưới `A2` sensitivity (`p(u,v)=1/√(deg(u)×deg(v))`):
 `GCNConv` aggregates với weight `1/√(d̃_u×d̃_v)` — structurally analogous to A2 diffusion.
-_Prediction:_ Nếu chạy C2 trên A2 labels, GCN expected to outperform GAT/GIN/SAGE vì inductive bias aligned với target generative process.
+_Prediction:_ Nếu chạy C2 trên A2 labels, GCN expected to outperform GIN/SAGE vì inductive bias aligned với target generative process. _(GAT excluded — dropped OOM)_
 
 > ⚠ Self-loops (d̃ = deg+1 ≠ deg) và non-linearity (ReLU/dropout) làm GCN không _exactly_ implement A2 — đây là structural analogy, not exact equivalence. Pre-register dưới dạng "architectural inductive bias check."
 
@@ -1284,7 +1289,7 @@ _Prediction (hypothesis):_ APPNP is hypothesized to be a strong candidate across
 
 > **⚠ Structural constraint của A0:** IC-A0 sử dụng `p(u,v) = 1/deg(v)`, nên IC score **degree-coupled** (transition phụ thuộc trực tiếp vào `deg(v)`). Hệ quả: `degree` Spearman = 0.826 — baseline rất mạnh. GNN training trên A0 labels sẽ dễ "tái học" degree-like quantities từ graph topology.
 >
-> Empirically từ existing artifacts (test split; `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`):
+> Empirically từ existing artifacts (test split; `outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv`):
 >
 > - `one_hop_spread` ρ = **0.688** (một hop)
 > - `two_hop_spread` ρ = **0.804** (hai hop — multi-hop improves vs one-hop)
@@ -1347,7 +1352,7 @@ criterion_rankloss = combined_loss  # α=0.5 default; sweep [0.25, 0.5, 0.75] if
 
 **Kỳ vọng:** +0.02–0.03 Spearman, và cải thiện NDCG@10% đáng kể hơn random pairs (vì gradient tập trung vào top nodes). Nếu best_arch + ranking loss đạt ≥ 0.84 → vượt degree (0.826) → clean contribution.
 
-**Output thêm vào surrogate_ranking_metrics.csv:** `best_arch_raw_attr_rankloss` (tên thực tế sau C2, ví dụ: `gat_raw_attr_rankloss` nếu GAT là best arch)
+**Output thêm vào `surrogate_ranking_metrics_{regime}_clean.csv`:** `best_arch_raw_attr_rankloss` (tên thực tế sau C2, ví dụ: `appnp_raw_attr_rankloss` nếu APPNP là best arch, `gin_raw_attr_rankloss` nếu GIN là best arch — GAT không thể là best arch vì dropped OOM)
 
 ### 9.1c Inductive Generalization Test [🔵 FUTURE:ICLR2027]
 
@@ -1493,7 +1498,7 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 >
 > **Nếu GINE-IC-A0 beat degree:** → thú vị — explicit IC mechanism encoding helps; paper claim = "surrogate learning benefits from encoding diffusion mechanism structure."
 
-**Output:** Thêm rows vào `surrogate_ranking_metrics.csv` (same schema).
+**Output:** Thêm rows vào `surrogate_ranking_metrics_{regime}_clean.csv` của regime tương ứng (same schema).
 
 ---
 
@@ -1590,17 +1595,17 @@ train_idx, test_idx = train_test_split(
 | Component                               | Time      | Notes                                        |
 |-----------------------------------------|-----------|----------------------------------------------|
 | Feature precompute (degree, PR, kshell) | ~5 min    | Centrality baselines only; not needed for GNN-raw-attr |
-| MC IC labeling (5k nodes × 200 runs)    | 480s      | One-time cost (from runtime_breakdown.csv)   |
+| MC IC labeling (5k nodes × 200 runs)    | 480.3s    | One-time cost (from runtime_breakdown.csv)   |
 | GNN training (5 seeds, 1 arch)          | ~23s/arch | ~115s total for 5 seeds; ×4 archs = ~460s    |
-| GNN inference (168,114 nodes)           | 0.067s    | All active nodes (from runtime_breakdown.csv)|
+| GNN inference (168,114 nodes)           | 0.086s    | All active nodes (from runtime_breakdown.csv; headline row = `hscc,gnn_raw_attr`)|
 | Node2Vec training (dim=64, walks=20)    | ~8 min    | [to be measured]                             |
-| Speedup: MC IC vs GNN inference         | **7,169×** | 480s / 0.067s (confirmed artifact)          |
+| Speedup: MC IC vs GNN inference         | **~5,590×** | 480.3s / 0.086s (headline; round to ~5,500× in paper prose) |
 ```
 
 **Filling instructions:** Cột "to be measured" sẽ được fill từ actual runs và ghi vào `runtime_breakdown.csv`.
 
 **QUAN TRỌNG:** Nếu GNN-raw-attr là primary, không cần centrality precompute → runtime so sánh fair hơn.
-GNN-raw-attr deployment cost = training (one-time, ~460s) + inference (0.067s) vs MC-IC (480s per evaluation).
+GNN-raw-attr deployment cost = training (one-time, ~460s) + inference (0.086s) vs MC-IC labeling (480.3s per labeling pass used for training labels).
 
 ---
 
@@ -1717,7 +1722,7 @@ def dead_account_audit(df_raw):
 
 - 2.1 IC model and MC estimation.
 - 2.2 Surrogate learning problem and ranking metrics.
-- 2.3 GNN architectures with neutral wording: `SAGE`, `GCN`, `GIN`, `GAT`, `APPNP`.
+- 2.3 GNN architectures with neutral wording: `SAGE`, `GCN`, `GIN`, `APPNP` (4 architectures; note GAT was excluded due to GPU memory constraints at our scale — state this in Section 2.3 or Appendix).
 - 2.4 Short note on evaluation fairness: comparator must match the information available in each operationalization.
 
 ### Section 3 — MC-IC as Comparative Operational Metric (1.25 trang)
@@ -1815,7 +1820,7 @@ def dead_account_audit(df_raw):
 global_seed: 42
 filter_dead_account: true
 graph_directed: false
-graph_direction_note: "MUSAE Twitch: mutual-follow edges only. Undirected treatment is required."
+graph_direction_note: "Twitch Gamers: mutual-follow edges only. Undirected treatment is required."
 
 # ─── IC Simulation Backend ────────────────────────────────────
 ic_backend: csr_numpy
@@ -1876,7 +1881,7 @@ pagerank_alpha: 0.85
 # ─── Baselines by Regime ──────────────────────────────────────
 baselines_a0:
   structural: [degree_rank, one_hop_spread, two_hop_spread, pagerank, kshell]
-  flat: [views_rank, views_per_day_rank, mlp_raw_attr]
+  flat: [views, views_day, mlp_raw_attr]
 
 baselines_hscc:
   flat_must:
@@ -1887,17 +1892,17 @@ baselines_hscc:
       mlp_raw_attr,
     ]
   flat_fairness_if_language:
-    [lr_views_life_time_language, mlp_raw_attr_language]
+    [lr_views_life_time_lang, lr_degree_views_life_time_lang]
   structural_context:
     [degree_rank, one_hop_spread, two_hop_spread, pagerank, kshell]
   forbidden_raw_features:
     [community_id, cross_community_edge_fraction]
 
 # ─── GNN ───────────────────────────────────────────────────────
-gnn_architectures: [sage, gcn, gin, gat, appnp]
+gnn_architectures: [sage, gcn, gin, appnp]   # gat dropped — OOM A100-40GB h=128; --skip-gat
 gnn_primary_arch_a0: auto_after_c2
 gnn_primary_arch_hscc: auto_after_c2
-gnn_gat_heads: 4
+gnn_gat_heads: 4                              # archived — not invoked when --skip-gat
 gnn_appnp_K: 10
 gnn_appnp_alpha: 0.15
 gnn_hidden_dim: 128
@@ -1917,8 +1922,9 @@ feature_sets:
 
 # ─── Bootstrap Comparators ────────────────────────────────────
 bootstrap_outputs:
-  a0: outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json
-  hscc: outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json
+  a0: outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json          # C4
+  hscc: outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json    # C4
+  hscc_rankloss: outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json  # C3 [BOOST] — chỉ khi --include-rankloss-comparison
 bootstrap_equivalence_bound: 0.02
 
 # ─── Evaluation ───────────────────────────────────────────────
@@ -2021,8 +2027,10 @@ SNA_MAPR2026/
 │   │   ├── ic_scores_sensitivity_a2.parquet  # S1: p=1/sqrt(deg(u)*deg(v)) — symmetric
 │   │   └── ic_scores_sensitivity_a1.parquet  # S2: p=1/deg(u) — source budget [IF TIME]
 │   └── mapr2026_v3_results/           # ← v3.1 consolidated artifacts (referenced throughout doc)
-│       ├── baseline_ranking_metrics.csv       # all G1-G4 models, Spearman+NDCG+P@10
-│       ├── surrogate_ranking_metrics.csv      # all G5 GNN variants, mean±std across seeds
+│       ├── baseline_ranking_metrics_a0_clean.csv       # A0 G1-G4 models, Spearman+NDCG+P@10
+│       ├── baseline_ranking_metrics_hscc_clean.csv     # HSCC G1-G4 models, fairness-aware rows
+│       ├── surrogate_ranking_metrics_a0_clean.csv      # A0 G5 GNN variants, mean±std across seeds
+│       ├── surrogate_ranking_metrics_hscc_clean.csv    # HSCC G5 GNN variants, mean±std across seeds
 │       ├── degree_controlled_ic_variance.json # Section 8.4 — v3.1 NEW
 │       ├── gnn_vs_degree_bootstrap_ci_a0.json # A0 comparator = degree
 │       ├── gnn_vs_baseline_bootstrap_ci_hscc.json # HSCC comparator = strongest flat baseline
@@ -2080,6 +2088,7 @@ SNA_MAPR2026/
 
 - [ ] Bootstrap `A0`: `gnn_vs_degree_bootstrap_ci_a0.json`
 - [ ] Bootstrap `HSCC`: `gnn_vs_baseline_bootstrap_ci_hscc.json`
+- [ ] Bootstrap rankloss `HSCC` [🟡 BOOST]: `gnn_vs_rankloss_bootstrap_ci_hscc.json` (chỉ bắt buộc nếu C3 được chạy)
 - [ ] Claim trong paper map đúng với bootstrap của từng regime
 - [ ] Runtime table tách labeling cost và inference cost
 - [ ] 5 training seeds, report mean ± std
@@ -2121,8 +2130,8 @@ SNA_MAPR2026/
 
 | Rủi ro                                                                          | Xác suất   | Impact     | Mitigation                                                                                                                                     |
 | ------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/GAT/APPNP)     | Trung bình | Trung bình | Bootstrap CI (Section 8.5) → claim practical equivalence (nếu CI within ±0.02); "+0.099 without precomputed structural summaries" story vs MLP |
-| GAT không converge với current setup (4 heads, hidden=128)                      | Thấp       | Thấp       | Reduce heads=1; increase epochs=300; nếu vẫn fail: report GAT instability as finding                                                           |
+| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/APPNP)         | Trung bình | Trung bình | Bootstrap CI (Section 8.5) → claim practical equivalence (nếu CI within ±0.02); "+0.099 without precomputed structural summaries" story vs MLP |
+| GAT không converge với current setup (4 heads, hidden=128)                      | ~~Thấp~~ **Resolved** | **N/A** | **Resolved:** GAT đã bị drop chính thức do OOM tại A100-40GB. Official rerun dùng `--skip-gat`. Không cần mitigation. |
 | Ranking loss không improve Spearman so với Huber                                | Trung bình | Thấp       | Report as negative finding (appendix note); Huber-trained GNN remains primary variant                                                          |
 | Degree-controlled variance test shows low IC variance (CV < 0.3)                | Thấp       | Trung bình | Honest limitation in paper: "IC ≈ degree at Twitch scale"; strengthen runtime story instead                                                    |
 | Bootstrap CI shows GNN significantly _lower_ than degree (CI entirely negative) | Thấp       | Cao        | Restructure Section 4 claim: focus on (1) no-centrality-precompute advantage + (2) message passing contribution (+0.099)                       |
@@ -2133,7 +2142,7 @@ SNA_MAPR2026/
 ## 20. Decision Log Template [⚪ REF]
 
 > **Status as of 16/4/2026:** Day-1 decisions đã hoàn thành. IC simulation đã chạy xong. Known outcomes
-> from artifacts (runtime_breakdown.csv, surrogate_ranking_metrics.csv) được ghi lại bên dưới.
+> from artifacts (runtime_breakdown.csv, `surrogate_ranking_metrics_a0_clean.csv`, `surrogate_ranking_metrics_hscc_clean.csv`) được ghi lại bên dưới.
 
 ```markdown
 # docs/day1_decisions.md
@@ -2155,14 +2164,14 @@ Narrative chosen: "GNN as feature-agnostic IC surrogate"
 
 ## [~13/4/2026] Baseline Results — KNOWN
 
-degree Spearman ρ = 0.826 (from baseline_ranking_metrics.csv)
+degree Spearman ρ = 0.826 (from `baseline_ranking_metrics_a0_clean.csv`)
 pagerank Spearman ρ = 0.824
 kshell Spearman ρ = 0.816
-gnn_centrality ρ = 0.817 (SAGE, from surrogate_ranking_metrics.csv)
+gnn_centrality ρ = 0.817 (SAGE, from `surrogate_ranking_metrics_a0_clean.csv`)
 gnn_raw_attr ρ = 0.534 (SAGE)
 mlp_raw_attr ρ = 0.435
-GNN inference time = 0.067s
-MC-IC labeling time = 480s → speedup = 7,169×
+GNN inference time = 0.086s
+MC-IC labeling time = 480.3s → speedup = ~5,590× (round to ~5,500× in paper prose)
 
 ## [~16/4/2026] v3.1 Framing Decision — ACTIVE
 
@@ -2172,8 +2181,8 @@ Tension to resolve: gnn_centrality (0.817) < degree (0.826) → bootstrap CI nee
 
 ## [sau C2/C4] Architecture Comparison Result
 
-Best architecture: chọn từ `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv` (max `spearman_rho_mean` trong các architecture rows)
-Best arch Spearman ρ: xem `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv`
+Best architecture: chọn **riêng theo regime** từ `outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv` hoặc `outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv` (max `spearman_rho_mean` trong các architecture rows)
+Best arch Spearman ρ: xem file `_a0_clean` hoặc `_hscc_clean` tương ứng với regime đang report
 Bootstrap `A0`: xem `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json`
 Bootstrap `HSCC`: xem `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json`
 Paper claim: map theo interpretation của từng regime, không dùng một comparator duy nhất cho cả paper
@@ -2191,7 +2200,7 @@ Paper claim: map theo interpretation của từng regime, không dùng một com
 | 2     | Data + IC | Sampling + KS, pilot diagnostics, stability        | Label stability write-up                                                            | Writing support  |
 | 3     | Baselines | Betweenness (bg), PageRank, k-shell, **community** | **bootstrap CI** (Sec 8.5)                                                          | Results tables   |
 | 4     | Baselines | One-hop, 2-hop, Node2Vec, MLP                      | Evaluation metrics, runtime; fill NDCG/P@10% in baseline table                      | Figures          |
-| 5     | GNN       | PyG setup, GNN-raw-attr (SAGE) training            | **Architecture comparison (GCN/GIN/GAT)** + **ranking loss** (9.1b); 5-seed results | Paper Sec 4      |
+| 5     | GNN       | PyG setup, GNN-raw-attr (SAGE) training            | **Architecture comparison (GCN/GIN/APPNP)** + **ranking loss** (9.1b); 5-seed results (**GAT dropped OOM**) | Paper Sec 4      |
 | 6     | Paper     | **Intro + Related Work từ Ngày 8**                 | Sec 3 draft (MC-IC as metric)                                                       | Paper Sec 1-2, 5 |
 
 > **v3.1 priority shift (execution mapping):** Person 3 (mapped từ role Person 5) tập trung vào architecture comparison + ranking loss (NEW MUST-HAVES) trước khi làm ablation variants. Person 3 chạy bootstrap CI sau khi có best-arch predictions.
@@ -2223,21 +2232,24 @@ Person 6 Section 4 write-up → finalize 20-21/4
 
 ### CRITICAL — Blocking
 
+> ⚠ **Note:** Labels B1–B5 trong bảng này là "blocking task" numbers, KHÔNG phải "experiment C1–C5". Experiment numbering (C1/C2/C3/C4/C5) nằm ở Section 8.4–8.7 và Section 9.1.
+
 | # | Thực nghiệm / việc | Owner | Artifact expected | Status |
 | - | ------------------ | ----- | ----------------- | ------ |
-| C1 | Regenerate HSCC regression targets + freeze config | P1 | `regression_targets_hscc_refined.parquet` + registry entry | ☐ |
-| C2 | HSCC baseline fairness set hoàn chỉnh | P3 | HSCC rows trong `baseline_ranking_metrics.csv` | ☐ |
-| C3 | Architecture comparison trên `A0` và `HSCC` theo scope thực tế | P3 | rows trong `surrogate_ranking_metrics.csv` | ☐ |
-| C4 | Bootstrap `A0`: GNN vs degree | P3 | `gnn_vs_degree_bootstrap_ci_a0.json` | ☐ |
-| C5 | Bootstrap `HSCC`: GNN vs strongest flat baseline | P3 | `gnn_vs_baseline_bootstrap_ci_hscc.json` | ☐ |
+| B1 | Regenerate HSCC regression targets + freeze config | P1 | `regression_targets_hscc_refined.parquet` + registry entry | ☐ |
+| B2 | HSCC baseline fairness set hoàn chỉnh (Exp C1) | P3 | HSCC rows trong `baseline_ranking_metrics_hscc_clean.csv` | ☐ |
+| B3 | Architecture comparison trên `A0` + `HSCC` (Exp C2; `--skip-gat`, 4 archs) | P3 | `surrogate_ranking_metrics_a0_clean.csv` + `surrogate_ranking_metrics_hscc_clean.csv` | ☐ |
+| B4 | Bootstrap `A0`: GNN vs degree (Exp C4-A0) | P3 | `gnn_vs_degree_bootstrap_ci_a0.json` | ☐ |
+| B5 | Bootstrap `HSCC`: GNN vs strongest flat baseline (Exp C4-HSCC) | P3 | `gnn_vs_baseline_bootstrap_ci_hscc.json` | ☐ |
 
 ### SHOULD HAVE
 
 | # | Thực nghiệm / việc | Owner | Artifact expected | Status |
 | - | ------------------ | ----- | ----------------- | ------ |
-| S1 | `A2` sensitivity nếu main path đã ổn | P1/P3 | `ic_scores_sensitivity_a2.parquet` | ☐ |
-| S2 | NDCG@10% + P@10% đầy đủ cho cả `A0` và `HSCC` tables | P3 | updated metrics CSVs | ☐ |
-| S3 | Ceiling/oracle appendix note cho HSCC | P1/P3 | appendix text / note | ☐ |
+| S1 | Rankloss variant trên HSCC (Exp C3 — [🟡 BOOST]) | P3 | `gnn_vs_rankloss_bootstrap_ci_hscc.json` | ☐ |
+| S2 | `A2` sensitivity nếu main path đã ổn | P1/P3 | `ic_scores_sensitivity_a2.parquet` | ☐ |
+| S3 | NDCG@10% + P@10% đầy đủ cho cả `A0` và `HSCC` tables | P3 | updated metrics CSVs | ☐ |
+| S4 | Ceiling/oracle appendix note cho HSCC | P1/P3 | appendix text / note | ☐ |
 
 ### CUT FIRST
 
@@ -2256,8 +2268,13 @@ Person 6 Section 4 write-up → finalize 20-21/4
 - [x] Comparator policy đã tách `A0` vs `HSCC`
 - [x] Folder/artifact names không còn neo vào `primary` cho main MAPR path
 - [x] Checklist pre-submission đã thêm HSCC fairness requirements
+- [x] GAT drop đã propagate đến: Section 9.1, experiment.yaml, risk table, architecture table, paper structure §2.3
+- [x] 4-arch list (`sage, gcn, gin, appnp`) locked trong experiment.yaml + code snippet Section 3
+- [x] Bootstrap outputs yaml có đủ 3 keys (a0, hscc, hscc_rankloss)
+- [x] Section 22 blocking items (B1–B5) dùng canonical `_clean` CSV names
 
 ---
 
 _Document version: 3.2_
 _Last strategic rewrite: 21/4/2026_
+_Last audit: 28/4/2026 — GAT drop fully propagated; Section 22 labels disambiguated_

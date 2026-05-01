@@ -13,7 +13,7 @@ experiment:
 # NOTE: These keys are intentionally descriptive and may not be consumed by code.
 mapr2026_v3_1:
   graph_directed: false
-  graph_note: "MUSAE Twitch edges are mutual-follow; treat graph as undirected."
+  graph_note: "Twitch Gamers edges are mutual-follow; treat graph as undirected."
   calibration_mode: "variance_check"  # no target-reach calibration for primary
   p_primary: "weighted_cascade"       # p(u,v)=1/deg(v) (parameter-free)
   ic_backend: "csr_numpy"
