@@ -11,11 +11,11 @@
 
 **Two-file authority model — đọc cả hai file, mỗi file trả lời một loại câu hỏi khác nhau:**
 
-| Câu hỏi | File trả lời |
-|---|---|
-| Số liệu frozen, paste-ready sentences, claim templates là gì? | **File này (`Paper guide.md`)** |
-| Viết như thế nào — style, tone, language patterns, section rules? | **`Paper rules.md`** |
-| Claim nào được phép và cần artifact nào? | Cả hai file cùng nhau |
+| Câu hỏi                                                           | File trả lời                    |
+| ----------------------------------------------------------------- | ------------------------------- |
+| Số liệu frozen, paste-ready sentences, claim templates là gì?     | **File này (`Paper guide.md`)** |
+| Viết như thế nào — style, tone, language patterns, section rules? | **`Paper rules.md`**            |
+| Claim nào được phép và cần artifact nào?                          | Cả hai file cùng nhau           |
 
 Khi hai file có vẻ mâu thuẫn về **số liệu cụ thể** (ρ, CI, comparator name): **file này thắng**. Khi mâu thuẫn về **nguyên tắc viết/framing**: **`Paper rules.md` thắng**.
 
@@ -98,6 +98,7 @@ Rule vận hành rất quan trọng: review skeleton có thể gợi ý cấu tr
 > **⚠️ MAIN-PAPER SCOPE LOCK — IEEE 6-page limit**
 >
 > Main paper claims are bounded to exactly **4 evidence blocks** (+ optional C3):
+>
 > 1. **Binary instability → continuous regression** (§3 + `ic_label_stability.json`, `phase2_threshold_analysis.json`)
 > 2. **A0 result: GCN statistically below degree — structural ceiling** (§4.2 + `gnn_vs_degree_bootstrap_ci_a0.json`)
 > 3. **HSCC result: SAGE significantly above `lr_degree_views_life_time_lang` — message passing value** (§4.3 + `gnn_vs_baseline_bootstrap_ci_hscc.json`)
@@ -176,11 +177,11 @@ Chỉ cần đủ để reviewer thấy vì sao các baseline này hợp lệ:
 
 **Paragraph structure guidance cho §2.2 (1–2 câu per baseline group):**
 
-*Paragraph 1 — Analytical baselines:* "Degree centrality and k-core decomposition are widely used analytical proxies for influence potential in dense networks [Kitsak et al., 2010]. While computationally trivial, their relevance to simulation-based IC scores depends critically on the propagation model: degree-coupled transmission models structurally reward high-degree nodes, while engagement-driven models may decorrelate from degree."
+_Paragraph 1 — Analytical baselines:_ "Degree centrality and k-core decomposition are widely used analytical proxies for influence potential in dense networks [Kitsak et al., 2010]. While computationally trivial, their relevance to simulation-based IC scores depends critically on the propagation model: degree-coupled transmission models structurally reward high-degree nodes, while engagement-driven models may decorrelate from degree."
 
-*Paragraph 2 — Flat attribute models:* "Logistic regression on node-level source attributes provides a strong flat baseline that captures engagement signals (views, account lifetime) without graph structure. A fair comparison against GNNs requires that flat baselines have matched feature access — both receiving the same attribute set — to isolate the contribution of message passing."
+_Paragraph 2 — Flat attribute models:_ "Logistic regression on node-level source attributes provides a strong flat baseline that captures engagement signals (views, account lifetime) without graph structure. A fair comparison against GNNs requires that flat baselines have matched feature access — both receiving the same attribute set — to isolate the contribution of message passing."
 
-*Paragraph 3 — Node2Vec as shallow embedding baseline:* "Node2Vec [Grover & Leskovec, 2016] generates structure-aware node embeddings via random walk sampling, providing a shallow structural baseline separate from both analytical and flat attribute approaches. We include it to distinguish graph-structure signal (Node2Vec) from message-passing signal (GNN)."
+_Paragraph 3 — Node2Vec as shallow embedding baseline:_ "Node2Vec [Grover & Leskovec, 2016] generates structure-aware node embeddings via random walk sampling, providing a shallow structural baseline separate from both analytical and flat attribute approaches. We include it to distinguish graph-structure signal (Node2Vec) from message-passing signal (GNN)."
 
 **Length target:** §2.2 nên là ~3 câu / 50–70 từ. Không cần phải cite mỗi baseline survey — chỉ cite những references trực tiếp support lý do chọn baseline đó.
 
@@ -202,8 +203,9 @@ Mục tiêu là cho thấy shortlist hợp lý và được chạy dưới cùng
 Không đi quá sâu vào literature của influence maximization. Paper này không tối ưu seed set; paper này học surrogate cho **continuous node-level IC scores**.
 
 **Node2Vec (đã quyết định giữ trong table):** Khi viết paper, phân biệt rõ Node2Vec với degree/LR/MLP:
+
 - Embedding generation cần ~153 giây (~2.5 phút) precomputation per regime theo frozen `runtime_breakdown.csv` — không phải real-time inference
-- Trong setup section hoặc runtime table, ghi rõ: *"Node2Vec embedding generation + LR fit (training): ~153s; LR prediction (inference only): ~0.04s"*
+- Trong setup section hoặc runtime table, ghi rõ: _"Node2Vec embedding generation + LR fit (training): ~153s; LR prediction (inference only): ~0.04s"_
 - **Lưu ý semantics:** `train_sec` (153s) = embedding generation + LR fit bundled together; `inference_sec` (0.04s) = LR predict only. Không tách nhỏ hơn vì code không ghi riêng từng phần.
 - Không frame Node2Vec như "fast inference" baseline — nó có offline preprocessing cost cao hơn degree/LR
 - Trong Table 2/3, tách Node2Vec vào nhóm **"shallow embedding"** riêng hoặc thêm footnote về precomputation cost để không so sánh ngang hàng tốc độ với analytical baselines
@@ -242,13 +244,13 @@ p(u,v)=1/\deg(v)
 **HSCC**
 
 \[
-p(u,v)=\mathrm{clip}\left(\lambda \frac{\phi(u)}{\deg(u)}(1+\gamma \mathbf{1}[c_u\neq c_v]),0,p_{\max}\right)
+p(u,v)=\mathrm{clip}\left(\lambda \frac{\phi(u)}{\deg(u)}(1+\gamma \mathbf{1}[c_u\neq c_v]),0,p\_{\max}\right)
 \]
 
 với:
 
 \[
-\phi(u)=\mathrm{rank}\left(\frac{\log(1+\mathrm{views}_u)}{1+\mathrm{life\_time}_u}\right)/N
+\phi(u)=\mathrm{rank}\left(\frac{\log(1+\mathrm{views}\_u)}{1+\mathrm{life_time}\_u}\right)/N
 \]
 
 - domain-informed alternative,
@@ -270,16 +272,18 @@ với:
 
 Nên có một bảng ngắn kiểu này:
 
-| Regime | Mean reach | CV (per-band range) | Max reach | Comment |
-|---|---:|---:|---:|---|
-| A0 | 2.5–109 per degree band [✅ from `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`] | 1.12–2.29 across quintiles [✅] | [🔲 compute from the frozen Person 1 A0 score parquet (`ic_scores_a0.parquet` per team handoff) before filling Table 1] | heavy-tailed, degree-dominated; top band (deg 93–7613) mean=109 vs low band mean=2.5 |
-| HSCC | 4.83 [✅] | 0.583 (overall) [✅] | 16.31 [✅] | selective, community-driven; low max reach reflects local propagation |
+| Regime |                                                                                         Mean reach |             CV (per-band range) |                                                                                                               Max reach | Comment                                                                              |
+| ------ | -------------------------------------------------------------------------------------------------: | ------------------------------: | ----------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------ |
+| A0     | 2.5–109 per degree band [✅ from `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`] | 1.12–2.29 across quintiles [✅] | [🔲 compute from the frozen Person 1 A0 score parquet (`ic_scores_a0.parquet` per team handoff) before filling Table 1] | heavy-tailed, degree-dominated; top band (deg 93–7613) mean=109 vs low band mean=2.5 |
+| HSCC   |                                                                                          4.83 [✅] |            0.583 (overall) [✅] |                                                                                                              16.31 [✅] | selective, community-driven; low max reach reflects local propagation                |
 
 **Frozen sources cho A0:**
+
 - `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json`: per-quintile CV [2.29, 1.89, 1.44, 1.12, 1.62] và mean reach [2.51, 7.46, 13.10, 24.30, 109.31]
 - Overall A0 mean/median: [🔲 compute from the frozen Person 1 A0 score parquet (`ic_scores_a0.parquet` per team handoff) nếu thật sự cần exact number cho Table 1 trong paper]
 
 **Frozen sources cho HSCC:**
+
 - `outputs/mapr2026_v3_results/hscc_refined_label_diagnostics.json` — label stats: mean=4.83, max=16.31, std=2.82, CV=0.583
 
 **Điểm cần viết rõ:**
@@ -343,10 +347,11 @@ Giữ ngắn gọn:
 **APPNP evaluation status (bắt buộc phải ghi rõ trong setup và table):**
 
 APPNP được chạy trong cả hai regime nhưng có seed variance vượt ngưỡng policy (`--gnn-std-threshold 0.1`):
+
 - A0: APPNP std=0.417 ≥ 0.1 → **excluded from best-arch selection**
 - HSCC: APPNP std=0.146 ≥ 0.1 → **excluded from best-arch selection**
 
-APPNP **vẫn được list trong results table** để so sánh, nhưng phải có footnote: *"APPNP excluded from best-architecture comparison due to seed variance exceeding threshold (std > 0.1 in both regimes)."* Không được chọn APPNP làm representative GNN cho bất kỳ claim nào.
+APPNP **vẫn được list trong results table** để so sánh, nhưng phải có footnote: _"APPNP excluded from best-architecture comparison due to seed variance exceeding threshold (std > 0.1 in both regimes)."_ Không được chọn APPNP làm representative GNN cho bất kỳ claim nào.
 
 **Node2Vec status (✅ IN table, với group separation bắt buộc):**
 
@@ -357,6 +362,7 @@ Node2Vec **được giữ trong main results table** (không bị loại). Tuy n
 > **[Rule HSCC-F1 — Feature Access Parity Lock (NON-NEGOTIABLE)]**
 >
 > The HSCC GNN (`gnn_raw_attr`) uses `include_language=true`. Therefore:
+>
 > - The official HSCC flat comparator **MUST** also include language features
 > - **Locked comparator: `lr_degree_views_life_time_lang`** (ρ = 0.884) — cannot be changed post-freeze
 > - Any flat baseline WITHOUT language gives the GNN an unfair feature advantage → invalid comparison
@@ -400,13 +406,15 @@ Phần này **không được viết như một failure**.
 **Cách viết A0 result KHÔNG như failure — hướng dẫn cụ thể:**
 
 Khi viết §4.2 prose, phải theo logic sau:
-1. **Mở đầu bằng narrative của regime**, không phải bằng failure: *"Under A0, the label-generation mechanism is degree-coupled by construction..."*
+
+1. **Mở đầu bằng narrative của regime**, không phải bằng failure: _"Under A0, the label-generation mechanism is degree-coupled by construction..."_
 2. **Nêu strength của baselines trước**: degree ρ=0.826, k-shell=0.816, two-hop strong — "analytical baselines already capture most of the surrogate signal"
 3. **Kết quả GNN trong context**: GCN ρ=0.808 — "approaches the ceiling but remains statistically below it" — không phải "GNN fails"
 4. **Đóng bằng mechanism**: "This result confirms the structural ceiling hypothesis: when labels are degree-coupled, graph learning cannot recover signal that degree already encodes analytically"
 5. **Architecture-regime insight**: Ghi rõ GCN wins A0 (ρ=0.808), SAGE poor (ρ=0.534) — đây là finding, không phải sidenote
 
 **A0 architecture results (frozen):**
+
 - GCN: ρ=0.808 ± 0.001 → best under A0
 - GIN: ρ=0.615 ± 0.029 → moderate
 - SAGE: ρ=0.534 ± 0.009 → poor under A0
@@ -451,6 +459,7 @@ GIN ρ=0.028 dưới HSCC là finding quan trọng. Cần viết một câu tron
 GIN collapse không được loại bỏ khỏi table hoặc từ bỏ không nhắc trong prose — đây là kiến trúc được chạy chính thức và kết quả của nó là một comparative finding.
 
 **HSCC architecture results (frozen):**
+
 - SAGE: ρ=0.915 ± 0.004 → best under HSCC
 - GCN: ρ=0.602 ± 0.014 → moderate (drops from A0)
 - GIN: ρ=0.028 ± 0.046 → near-random collapse
@@ -492,6 +501,7 @@ GIN collapse không được loại bỏ khỏi table hoặc từ bỏ không nh
 **Near-tie disclosure (bắt buộc ghi vào paper hoặc footnote):** Theo `baseline_ranking_metrics_hscc_clean.csv`, `lr_views_life_time_lang` đạt ρ=0.88442 và `lr_degree_views_life_time_lang` đạt ρ=0.88430 — chênh lệch chỉ 0.00012 (4th decimal place). Hai baseline này thực tế là **tied at ρ ≈ 0.884**. Official comparator được chọn là `lr_degree_views_life_time_lang` vì đó là model được lock trong frozen bootstrap CI artifact (`gnn_vs_baseline_bootstrap_ci_hscc.json`), không phải vì nó mạnh hơn theo point estimate.
 
 **Cách viết defensible trong paper (dùng một trong hai cách):**
+
 - Option A (ngắn): "the strongest flat baseline under matched feature access (ρ = 0.884)" — chấp nhận được vì ρ=0.88430 ≈ ρ=0.88442
 - Option B (chính xác hơn): "the official comparator from the pre-specified bootstrap CI artifact — LR(degree, views, life_time, language), ρ = 0.884 — which is effectively tied with LR(views, life_time, language) at the fourth decimal place"
 
@@ -499,9 +509,9 @@ Nếu reviewer hỏi tại sao không dùng `lr_views_life_time_lang`: answer = 
 
 **[Archive — không dùng cho paper này — frozen result đã xác nhận `gnn_significantly_better`]**
 
-*Nếu GNN chỉ xấp xỉ:* `lr_degree_views_life_time_lang (ρ = 0.884) already explains most of the source-driven component...`
+_Nếu GNN chỉ xấp xỉ:_ `lr_degree_views_life_time_lang (ρ = 0.884) already explains most of the source-driven component...`
 
-*Nếu GNN thua:* `The best GNN remains below lr_degree_views_life_time_lang (ρ = 0.884)...`
+_Nếu GNN thua:_ `The best GNN remains below lr_degree_views_life_time_lang (ρ = 0.884)...`
 
 Paper vẫn ổn nếu contrast `A0 vs HSCC` còn mạnh và viết trung thực.
 
@@ -539,12 +549,12 @@ Paper vẫn ổn nếu contrast `A0 vs HSCC` còn mạnh và viết trung thực
 
 **Frozen architecture-regime results:**
 
-| Architecture | A0 (ρ) | HSCC (ρ) | Pattern |
-|---|---|---|---|
-| GCN (symmetric norm) | **0.808** | 0.602 | Best A0, moderate HSCC |
-| SAGE (mean agg) | 0.534 | **0.915** | Poor A0, best HSCC |
-| GIN (sum agg) | 0.615 | 0.028 | Moderate A0, collapse HSCC |
-| APPNP (K-PPR) | excluded (std=0.417) | excluded (std=0.146) | Unstable both |
+| Architecture         | A0 (ρ)               | HSCC (ρ)             | Pattern                    |
+| -------------------- | -------------------- | -------------------- | -------------------------- |
+| GCN (symmetric norm) | **0.808**            | 0.602                | Best A0, moderate HSCC     |
+| SAGE (mean agg)      | 0.534                | **0.915**            | Poor A0, best HSCC         |
+| GIN (sum agg)        | 0.615                | 0.028                | Moderate A0, collapse HSCC |
+| APPNP (K-PPR)        | excluded (std=0.417) | excluded (std=0.146) | Unstable both              |
 
 **Framing cho paper body (paste-ready English):**
 
@@ -563,11 +573,12 @@ Paper vẫn ổn nếu contrast `A0 vs HSCC` còn mạnh và viết trung thực
 **Vị trí tốt nhất trong paper:**
 
 1. **Table 3 (HSCC results):** Thêm một row riêng cho SAGE + rankloss, đặt ngay dưới row `gnn_raw_attr` (SAGE standard). Label: `SAGE + rankloss` hoặc `GNN (rankloss, C3)`. Ghi ρ=0.924 ± 0.002.
-2. **§4.3 prose:** Thêm một câu ngắn: *"A ranking-aware training variant achieves ρ = 0.924 (+0.009 descriptive gain over standard Huber training) and significantly outperforms the flat comparator by Δρ = +0.041 (95% CI [+0.030, +0.053])."*
+2. **§4.3 prose:** Thêm một câu ngắn: _"A ranking-aware training variant achieves ρ = 0.924 (+0.009 descriptive gain over standard Huber training) and significantly outperforms the flat comparator by Δρ = +0.041 (95% CI [+0.030, +0.053])."_
    - **Lưu ý:** "+0.009 vs standard SAGE" là **descriptive** (không có paired bootstrap → không dùng "significantly"). "+0.041 vs comparator" là **inferential** (có CI từ frozen JSON → dùng "significantly").
-3. **Conclusion:** Thêm optional sentence (Rule C2): *"Ranking-aware training provides a further marginal gain under HSCC, suggesting that explicit rank supervision is a viable extension when the operationalization is source-side-driven."*
+3. **Conclusion:** Thêm optional sentence (Rule C2): _"Ranking-aware training provides a further marginal gain under HSCC, suggesting that explicit rank supervision is a viable extension when the operationalization is source-side-driven."_
 
 **Không nên đẩy xuống appendix** vì:
+
 - Artifact đã frozen và kết quả significant vs comparator (CI [+0.030, +0.053] không span zero)
 - Là một đóng góp nhỏ nhưng concrete — giúp làm phong phú thêm §4.3 mà không cần nhiều chỗ
 - Nếu thiếu chỗ, cắt oracle decomposition rows hoặc discussion prose trước khi cắt C3 row
@@ -588,14 +599,14 @@ Giữ phần này ngắn và thực dụng:
 
 **Frozen runtime values (từ `runtime_breakdown.csv`):**
 
-| Step | Time |
-|---|---|
-| MC-IC labeling (1 pass, full graph) | **480.3s** |
-| GNN inference (full graph, SAGE `gnn_raw_attr`, HSCC row) | **~0.086s** |
-| Speedup (MC-IC ÷ GNN inference) | **~5,590×** (using `hscc,gnn_raw_attr` in `runtime_breakdown.csv`; round to ~5,500× in paper prose) |
-| Node2Vec precomputation | ~153s (~2.5 min) |
-| Node2Vec downstream LR inference | ~0.040s |
-| degree / analytical baseline | ~0.001s |
+| Step                                                      | Time                                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| MC-IC labeling (1 pass, full graph)                       | **480.3s**                                                                                          |
+| GNN inference (full graph, SAGE `gnn_raw_attr`, HSCC row) | **~0.086s**                                                                                         |
+| Speedup (MC-IC ÷ GNN inference)                           | **~5,590×** (using `hscc,gnn_raw_attr` in `runtime_breakdown.csv`; round to ~5,500× in paper prose) |
+| Node2Vec precomputation                                   | ~153s (~2.5 min)                                                                                    |
+| Node2Vec downstream LR inference                          | ~0.040s                                                                                             |
+| degree / analytical baseline                              | ~0.001s                                                                                             |
 
 **Paste-ready English:**
 
@@ -608,6 +619,7 @@ Giữ phần này ngắn và thực dụng:
 Không dùng "5,580×" trực tiếp trong paper — round về "approximately 5,500×" hoặc "over 5,000×" để tránh false precision.
 
 **Prose order cho §4.5 runtime paragraph:**
+
 1. MC-IC cost first (480s — the expensive step being replaced)
 2. GNN inference cost (0.086s from `hscc,gnn_raw_attr` — the fast surrogate)
 3. Speedup ratio (~5,500×)
@@ -671,6 +683,7 @@ Nếu paper dùng `language` trong GNN, phải nói rõ rằng fairness của ba
 > We studied the learnability of two IC operationalizations on the Twitch Gamers social graph. Under a degree-coupled regime (A0), the best GNN remains statistically below degree centrality (Δρ = −0.018, CI [−0.029, −0.008]), confirming that the diffusion operationalization imposes a structural ceiling that degree already saturates. Under a source-community regime (HSCC), graph message passing significantly outperforms the strongest matched flat baseline (Δρ = +0.033, CI [+0.021, +0.044]), with an optional ranking-aware variant reaching Δρ = +0.041. In all cases, trained surrogates provide influence score inference orders of magnitude faster than repeated MC simulation. Our central finding is that operationalization choice, rather than architectural capacity, governs when graph learning adds value for simulation-based influence prediction.
 
 **Sentence assignment:**
+
 - Sentence 1: Context / scope statement (one graph, two operationalizations)
 - Sentence 2: A0 finding with frozen CI (structural ceiling confirmed)
 - Sentence 3: HSCC finding with frozen CI (graph learning adds value here)
@@ -708,7 +721,7 @@ Two-panel results figure — **layout cụ thể:**
 - **Model rows (cùng order ở cả 2 panel, top-to-bottom):**
   - Analytical group: degree, k-shell, pagerank, one-hop, two-hop
   - Flat attr group: LR(life_time), LR(views+LT), LR(degree+views+LT+lang) ← `lr_degree_views_life_time_lang`
-  - Shallow embedding: Node2Vec+LR *(italic or lighter weight)*
+  - Shallow embedding: Node2Vec+LR _(italic or lighter weight)_
   - GNN group: SAGE, GCN, GIN, APPNP† — với SAGE rankloss ở cuối GNN group
 - **Comparator line (vertical dashed):**
   - A0: degree ρ=0.826
@@ -807,13 +820,13 @@ Abstract nên giữ đúng **6 câu** (template dưới đây), lý tưởng **k
 
 ### Claim-to-artifact map bắt buộc
 
-| Claim / paper sentence type | Required artifact(s) tối thiểu |
-|---|---|
-| Binary instability là structural (A0 formal; HSCC by topology extension) | `outputs/day1_benchmark/stability_explanation.json` [✅ EXISTS], `ic_label_stability.json` [✅ Jaccard=0.307], `phase1_community_overlap.json` [✅ 84.2% community overlap], `phase2_threshold_analysis.json` [✅ max Jaccard=0.657 across all k] — tất cả tại `outputs/day1_benchmark/` và `outputs/ic_feasibility/` |
-| `A0` là structural ceiling / GNN statistically below degree (**NOT equivalence**) | `gnn_vs_degree_bootstrap_ci_a0.json` ✅ — GCN ρ=0.808 vs degree ρ=0.826, delta=−0.018, CI=[−0.029, −0.008]; `surrogate_ranking_metrics_a0_clean.csv` ✅ |
-| `HSCC` là graph-aware regime / GNN gain beyond flat baselines | `gnn_vs_baseline_bootstrap_ci_hscc.json` ✅ — SAGE ρ=0.915 vs `lr_degree_views_life_time_lang` ρ=0.884, delta=+0.033, CI=[+0.021, +0.044]; `surrogate_ranking_metrics_hscc_clean.csv` ✅ |
-| Runtime / speedup claim | `runtime_breakdown.csv` ✅ — MC-IC=480.3s; headline runtime uses `hscc,gnn_raw_attr` inference≈0.086s; speedup≈5,590× (round to ~5,500× in paper prose) |
-| **C3 rankloss significantly improves over the flat comparator; +0.009 vs standard SAGE is descriptive only [🟡 BOOST — ✅ FROZEN]** | `gnn_vs_rankloss_bootstrap_ci_hscc.json` ✅ — SAGE rankloss ρ=0.924 vs `lr_degree_views_life_time_lang` ρ=0.884; delta=+0.041, CI=[+0.030, +0.053]; `loss_mode=rankloss_combined`, `rankloss_alpha=0.5` confirmed |
+| Claim / paper sentence type                                                                                                         | Required artifact(s) tối thiểu                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Binary instability là structural (A0 formal; HSCC by topology extension)                                                            | `outputs/day1_benchmark/stability_explanation.json` [✅ EXISTS], `ic_label_stability.json` [✅ Jaccard=0.307], `phase1_community_overlap.json` [✅ 84.2% community overlap], `phase2_threshold_analysis.json` [✅ max Jaccard=0.657 across all k] — tất cả tại `outputs/day1_benchmark/` và `outputs/ic_feasibility/` |
+| `A0` là structural ceiling / GNN statistically below degree (**NOT equivalence**)                                                   | `gnn_vs_degree_bootstrap_ci_a0.json` ✅ — GCN ρ=0.808 vs degree ρ=0.826, delta=−0.018, CI=[−0.029, −0.008]; `surrogate_ranking_metrics_a0_clean.csv` ✅                                                                                                                                                               |
+| `HSCC` là graph-aware regime / GNN gain beyond flat baselines                                                                       | `gnn_vs_baseline_bootstrap_ci_hscc.json` ✅ — SAGE ρ=0.915 vs `lr_degree_views_life_time_lang` ρ=0.884, delta=+0.033, CI=[+0.021, +0.044]; `surrogate_ranking_metrics_hscc_clean.csv` ✅                                                                                                                              |
+| Runtime / speedup claim                                                                                                             | `runtime_breakdown.csv` ✅ — MC-IC=480.3s; headline runtime uses `hscc,gnn_raw_attr` inference≈0.086s; speedup≈5,590× (round to ~5,500× in paper prose)                                                                                                                                                               |
+| **C3 rankloss significantly improves over the flat comparator; +0.009 vs standard SAGE is descriptive only [🟡 BOOST — ✅ FROZEN]** | `gnn_vs_rankloss_bootstrap_ci_hscc.json` ✅ — SAGE rankloss ρ=0.924 vs `lr_degree_views_life_time_lang` ρ=0.884; delta=+0.041, CI=[+0.030, +0.053]; `loss_mode=rankloss_combined`, `rankloss_alpha=0.5` confirmed                                                                                                     |
 
 **Universal wording rule:** mọi câu có từ như `"outperforms"`, `"significantly improves"`, `"practically equivalent"`, `"ceiling"`, hoặc `"dominates"` đều phải map được về đúng artifact freeze của regime tương ứng. Nếu chưa map được, hạ câu đó xuống mức mô tả mềm hơn hoặc bỏ.
 
@@ -825,14 +838,14 @@ Abstract nên giữ đúng **6 câu** (template dưới đây), lý tưởng **k
 
 **Scope và evidence — quan trọng:**
 
-| Artifact | Nội dung | Phạm vi |
-|---|---|---|
-| `outputs/day1_benchmark/ic_label_stability.json` | Jaccard_mean=0.307, Spearman_mean=0.685 across 3 seeds | A0 only (weighted_cascade) |
-| `outputs/day1_benchmark/stability_explanation.json` | interpretation="structural"; pct_communities_spanning_boundary=0.842 | A0 scores; community topology = regime-invariant |
-| `outputs/ic_feasibility/phase1_community_overlap.json` | Community-set Jaccard=0.842 > 0.7 threshold | A0 scores; community structure applies to both regimes |
-| `outputs/ic_feasibility/phase2_threshold_analysis.json` | Max estimated Jaccard=0.657 across k=3%–30% | A0 only |
-| `outputs/ic_feasibility/pivot_decision_report.json` | evidence_statement_for_paper ready; PIVOT_CONFIRMED | A0 only |
-| `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json` | CV 1.12–2.29 across quintiles | A0 only |
+| Artifact                                                         | Nội dung                                                             | Phạm vi                                                |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
+| `outputs/day1_benchmark/ic_label_stability.json`                 | Jaccard_mean=0.307, Spearman_mean=0.685 across 3 seeds               | A0 only (weighted_cascade)                             |
+| `outputs/day1_benchmark/stability_explanation.json`              | interpretation="structural"; pct_communities_spanning_boundary=0.842 | A0 scores; community topology = regime-invariant       |
+| `outputs/ic_feasibility/phase1_community_overlap.json`           | Community-set Jaccard=0.842 > 0.7 threshold                          | A0 scores; community structure applies to both regimes |
+| `outputs/ic_feasibility/phase2_threshold_analysis.json`          | Max estimated Jaccard=0.657 across k=3%–30%                          | A0 only                                                |
+| `outputs/ic_feasibility/pivot_decision_report.json`              | evidence_statement_for_paper ready; PIVOT_CONFIRMED                  | A0 only                                                |
+| `outputs/mapr2026_v3_results/degree_controlled_ic_variance.json` | CV 1.12–2.29 across quintiles                                        | A0 only                                                |
 
 **Quy tắc khi viết về Claim 1:**
 
@@ -912,11 +925,13 @@ Thay `"feature-agnostic"` bằng:
 **Khi nào "practical equivalence" hợp lệ và khi nào KHÔNG hợp lệ:**
 
 "Practically equivalent" (hay "statistically equivalent") là một **inferential claim** — chỉ được dùng khi:
+
 1. Có pre-registered equivalence bound δ₀ (ở đây δ₀=0.02),
 2. Bootstrap CI được tính đúng cách,
 3. **Toàn bộ CI nằm trong [−δ₀, +δ₀]** = [−0.02, +0.02].
 
 **Với frozen A0 result:** CI = [−0.029, −0.008]:
+
 - CI không nằm trong [−0.02, +0.02]: lower bound −0.029 có |−0.029| = 0.029 > 0.02
 - CI hoàn toàn âm → GNN dưới degree → `gnn_significantly_worse`
 - **KHÔNG được dùng "practically equivalent"** cho A0
@@ -1144,13 +1159,16 @@ Câu trả lời: đóng góp chính của paper là methodological (operational
 Đây là **reviewer attack nguy hiểm nhất** cho HSCC claim. Hai cách counter:
 
 **Cách 1 — CI framing (không cần thêm evidence):**
+
 > The improvement of Δρ = +0.033 is statistically significant at the 95% level (CI [+0.021, +0.044]), with the confidence interval fully above zero and both bounds exceeding the pre-registered equivalence threshold (δ₀ = 0.02). Under our pre-registration, this constitutes evidence of genuine improvement, not marginal noise.
 
 **Cách 2 — Rank position framing (nếu có space):**
+
 > In a test set of 1,000 nodes, Δρ = +0.033 corresponds to systematic rank differences that compound across the top-k subset critical for influence maximization — a 3–4 percentile rank gain for the most influential nodes is practically meaningful in seed selection contexts.
 
 **Cách 3 — Baseline comparison framing:**
-> The Δρ = +0.033 gain is over the *strongest matched flat baseline* (LR with degree, views, life_time, and language — ρ = 0.884), not over a trivial baseline. Achieving any gain over an already-strong attribute model confirms that neighborhood message passing adds non-redundant information.
+
+> The Δρ = +0.033 gain is over the _strongest matched flat baseline_ (LR with degree, views, life_time, and language — ρ = 0.884), not over a trivial baseline. Achieving any gain over an already-strong attribute model confirms that neighborhood message passing adds non-redundant information.
 
 **Lưu ý:** Đừng dùng cách 2 nếu không có exact computation. Cách 1 là safest và fully supported by frozen artifact.
 
@@ -1159,10 +1177,12 @@ Câu trả lời: đóng góp chính của paper là methodological (operational
 > The equivalence bound δ₀ = 0.02 was pre-specified prior to data analysis in the experiment design document (implementation plan) and is consistent with a conservative small-effect threshold for Spearman correlation in ranking benchmarks. Under this pre-registration, A0 CI = [−0.029, −0.008] falls outside the equivalence window (the lower bound |−0.029| exceeds δ₀), correctly classified as significantly worse. HSCC CI = [+0.021, +0.044] has both bounds above δ₀, correctly classified as significantly better. The bound is symmetric and was fixed before unblinding results.
 
 **Paste-ready rebuttal:**
+
 > The equivalence bound δ₀ = 0.02 was pre-registered prior to data analysis, following Lakens (2017) two one-sided tests (TOST) methodology for statistical equivalence testing. The threshold was chosen as a conservative small-effect bound for Spearman rank correlations in ranking benchmarks — consistent with Cohen's small-effect convention in correlation analysis. Changing the threshold post-hoc would constitute p-hacking; we report results under the pre-specified bound and provide full bootstrap CIs for readers who prefer alternative thresholds.
 
 **Methodological citation (for paper if space permits; for reviewer response always):**
-> Lakens, D. (2017). Equivalence tests: A practical primer for t tests, correlations, and meta-analyses. *Social Psychological and Personality Science*, 8(4), 355–362.
+
+> Lakens, D. (2017). Equivalence tests: A practical primer for t tests, correlations, and meta-analyses. _Social Psychological and Personality Science_, 8(4), 355–362.
 
 **Usage note:** If the main paper text uses "equivalence bound" or "TOST" language, add Lakens (2017) to the paper's reference list. If equivalence testing is implicit only (CI-based interpretation without naming TOST), this citation is reviewer-response-only and need not appear in the main reference list.
 

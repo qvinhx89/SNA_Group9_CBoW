@@ -150,22 +150,22 @@ python run_all.py --stage 2
 
 > ⚠ **Đây là single source of truth cho toàn team.** Mọi thay đổi phải cập nhật bảng này trước, sau đó propagate sang code/config/artifacts. Không được hard-code khác đi ở bất kỳ chỗ nào.
 
-| Hằng số | Giá trị chuẩn | Ý nghĩa |
-| ------ | ------------- | ------- |
-| `cv_gate` | **0.3** | regression-ready gate |
-| `jaccard_gate` | **0.85** | binary-ready gate |
-| `top_k_pct` | **0.10** | top-10% threshold |
-| `n_sample` | **5,000** | labeled nodes per regime |
-| `N_runs` | **200** | MC runs per node |
-| `gnn_seeds` | **5** | report mean±std |
-| `split_seed` | **42** | shared split |
-| `test_frac` | **0.20** | held-out test fraction |
-| `active_regimes` | **A0 + HSCC** | current MAPR execution path |
-| `archive_regimes` | **I-A, II-B** | not on critical path |
-| `community_blocking_for_hscc` | **true** | Person 2 artifact is upstream dependency |
-| `bootstrap_a0` | `gnn_vs_degree_bootstrap_ci_a0.json` | A0 comparator = degree |
-| `bootstrap_hscc` | `gnn_vs_baseline_bootstrap_ci_hscc.json` | HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
-| `submit_deadline` | **30/4** | hard deadline |
+| Hằng số                       | Giá trị chuẩn                            | Ý nghĩa                                                                                                                      |
+| ----------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `cv_gate`                     | **0.3**                                  | regression-ready gate                                                                                                        |
+| `jaccard_gate`                | **0.85**                                 | binary-ready gate                                                                                                            |
+| `top_k_pct`                   | **0.10**                                 | top-10% threshold                                                                                                            |
+| `n_sample`                    | **5,000**                                | labeled nodes per regime                                                                                                     |
+| `N_runs`                      | **200**                                  | MC runs per node                                                                                                             |
+| `gnn_seeds`                   | **5**                                    | report mean±std                                                                                                              |
+| `split_seed`                  | **42**                                   | shared split                                                                                                                 |
+| `test_frac`                   | **0.20**                                 | held-out test fraction                                                                                                       |
+| `active_regimes`              | **A0 + HSCC**                            | current MAPR execution path                                                                                                  |
+| `archive_regimes`             | **I-A, II-B**                            | not on critical path                                                                                                         |
+| `community_blocking_for_hscc` | **true**                                 | Person 2 artifact is upstream dependency                                                                                     |
+| `bootstrap_a0`                | `gnn_vs_degree_bootstrap_ci_a0.json`     | A0 comparator = degree                                                                                                       |
+| `bootstrap_hscc`              | `gnn_vs_baseline_bootstrap_ci_hscc.json` | HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
+| `submit_deadline`             | **30/4**                                 | hard deadline                                                                                                                |
 
 ---
 
@@ -173,26 +173,26 @@ python run_all.py --stage 2
 
 > Các schema dưới đây bám theo `docs/MAPR2026_v3_migration_checklist.md`. Nếu cần đổi tên/format, phải đổi đồng bộ và ghi vào `docs/experiment_registry.md`.
 
-| Artifact (path) | Owner | Consumers | Contract tối thiểu |
-| --------------- | ----- | --------- | ------------------ |
-| `data/processed/graph_csr.npz` | Person 1 | All | deterministic CSR mapping |
-| `data/processed/ic_scores_a0.parquet` | Person 1 | Person 2,3 | sample-only A0 labels |
-| `data/processed/regression_targets_a0.parquet` | Person 1 | Person 3 | `node_id, y` for A0 |
-| `data/processed/classification_labels_a0.parquet` | Person 1 | Person 3 | optional binary derived from A0 |
-| `data/processed/ic_scores_hscc_refined.parquet` | Person 1 | Person 2,3 | sample-only HSCC labels |
-| `data/processed/regression_targets_hscc_refined.parquet` | Person 1 | Person 3 | `node_id, y` for HSCC |
-| `data/processed/split_masks.parquet` | Person 1 | Person 3 | shared split across regimes |
-| `data/processed/community_features.parquet` | Person 2 | Person 2,3 | **blocking for HSCC**; `node_id, community_id, cross_community_edge_fraction` |
-| `data/processed/diffusion_proxies.parquet` | Person 2 | Person 3 | full-graph `one_hop_spread, two_hop_spread` |
-| `outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv` | Person 3 | All | regime=a0; columns: label_regime, model_name, spearman_rho, ndcg, precision, runtime |
-| `outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv` | Person 3 | All | regime=hscc; same schema + fairness rows nếu dùng language |
-| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv` | Person 3 | All | regime=a0; GNN rows incl. gnn_raw_attr, gcn, gin, appnp, best_arch_rankloss |
-| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv` | Person 3 | All | regime=hscc; same schema; không có gat_raw_attr (dropped OOM) |
-| `outputs/mapr2026_v3_results/runtime_breakdown.csv` | Person 2 + Person 3 | All | runtime rows for both regimes |
-| `outputs/mapr2026_v3_results/metric_correlation_matrix.json` | Person 2 | All | at minimum for A0; HSCC addendum if time |
-| `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json` | Person 3 | All | C4: A0 comparator = degree |
-| `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json` | Person 3 | All | C4: HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
-| `outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json` | Person 3 | All | C3 [🟡 BOOST]: rankloss variant CI; chỉ tạo khi `--include-rankloss-comparison` |
+| Artifact (path)                                                        | Owner               | Consumers  | Contract tối thiểu                                                                                                               |
+| ---------------------------------------------------------------------- | ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `data/processed/graph_csr.npz`                                         | Person 1            | All        | deterministic CSR mapping                                                                                                        |
+| `data/processed/ic_scores_a0.parquet`                                  | Person 1            | Person 2,3 | sample-only A0 labels                                                                                                            |
+| `data/processed/regression_targets_a0.parquet`                         | Person 1            | Person 3   | `node_id, y` for A0                                                                                                              |
+| `data/processed/classification_labels_a0.parquet`                      | Person 1            | Person 3   | optional binary derived from A0                                                                                                  |
+| `data/processed/ic_scores_hscc_refined.parquet`                        | Person 1            | Person 2,3 | sample-only HSCC labels                                                                                                          |
+| `data/processed/regression_targets_hscc_refined.parquet`               | Person 1            | Person 3   | `node_id, y` for HSCC                                                                                                            |
+| `data/processed/split_masks.parquet`                                   | Person 1            | Person 3   | shared split across regimes                                                                                                      |
+| `data/processed/community_features.parquet`                            | Person 2            | Person 2,3 | **blocking for HSCC**; `node_id, community_id, cross_community_edge_fraction`                                                    |
+| `data/processed/diffusion_proxies.parquet`                             | Person 2            | Person 3   | full-graph `one_hop_spread, two_hop_spread`                                                                                      |
+| `outputs/mapr2026_v3_results/baseline_ranking_metrics_a0_clean.csv`    | Person 3            | All        | regime=a0; columns: label_regime, model_name, spearman_rho, ndcg, precision, runtime                                             |
+| `outputs/mapr2026_v3_results/baseline_ranking_metrics_hscc_clean.csv`  | Person 3            | All        | regime=hscc; same schema + fairness rows nếu dùng language                                                                       |
+| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv`   | Person 3            | All        | regime=a0; GNN rows incl. gnn_raw_attr, gcn, gin, appnp, best_arch_rankloss                                                      |
+| `outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv` | Person 3            | All        | regime=hscc; same schema; không có gat_raw_attr (dropped OOM)                                                                    |
+| `outputs/mapr2026_v3_results/runtime_breakdown.csv`                    | Person 2 + Person 3 | All        | runtime rows for both regimes                                                                                                    |
+| `outputs/mapr2026_v3_results/metric_correlation_matrix.json`           | Person 2            | All        | at minimum for A0; HSCC addendum if time                                                                                         |
+| `outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json`       | Person 3            | All        | C4: A0 comparator = degree                                                                                                       |
+| `outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json`   | Person 3            | All        | C4: HSCC comparator = strongest flat baseline at rerun time; frozen official rerun comparator = `lr_degree_views_life_time_lang` |
+| `outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json`   | Person 3            | All        | C3 [🟡 BOOST]: rankloss variant CI; chỉ tạo khi `--include-rankloss-comparison`                                                  |
 
 ### Format spec chi tiết (để khỏi hiểu khác nhau)
 
@@ -1232,7 +1232,7 @@ def two_hop(node, G_neighbors, degrees):
      y_pred = y_pred_full[test_mask_local]
      ```
 
-    - `runtime_sec` trong `baseline_ranking_metrics_{a0|hscc}_clean.csv` = **inference-only** (`predict`) trên full active graph.
+   - `runtime_sec` trong `baseline_ranking_metrics_{a0|hscc}_clean.csv` = **inference-only** (`predict`) trên full active graph.
      - `inference_sec_full_graph` trong `runtime_breakdown.csv` = thời gian `predict` trên full active graph (không phải test-only).
      - Embed + fit = training cost → ghi `train_sec` trong `runtime_breakdown.csv`.
      - ⚠ Node2Vec là **inductive cần re-embed** nếu graph thay đổi — không giống GNN inference (one-pass full graph). Đây là điểm yếu cần note trong paper.
@@ -1276,13 +1276,13 @@ Chạy với `raw_attr` features, 5 seeds mỗi arch — **4 active architecture
 
 > **⚠ Naming canonical rule:** SAGE raw-attr baseline **phải được ghi vào surrogate CSV với tên `gnn_raw_attr`** (không phải `sage_raw_attr`) để backward compatibility với existing artifacts và consumer scripts. `sage_raw_attr` chỉ là alias giải thích trong table này; **KHÔNG ghi tên `sage_raw_attr` vào file CSV**. Current active C2 arch names: `gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr`; `gat_raw_attr` chỉ là legacy name trong archive notes, không phải expectation của official rerun.
 
-| Architecture      | **CSV model_name (canonical)**                                                  | Priority             | Inductive bias hypothesis                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| GraphSAGE (đã có) | **`gnn_raw_attr`** ← tên CSV chuẩn (alias: sage_raw_attr — chỉ dùng trong docs) | ✅ Done              | Mean agg. — baseline                                                                                                     |
-| **GCN**           | `gcn_raw_attr`                                                                  | **MUST (C2)**        | **H2: `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric diffusion — expected better under A2 labels (nếu chạy sensitivity S1)**         |
-| GIN               | `gin_raw_attr`                                                                  | **MUST (C2)**        | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics        |
-| **GAT**           | `gat_raw_attr`                                                                  | Archive / dropped current rerun | Historical H1 candidate; official MAPR rerun dùng `--skip-gat` vì GAT OOM ở `hidden_channels=128`.                         |
-| **🆕 APPNP**      | `appnp_raw_attr`                                                                | **MUST (C2) — H3 ★** | **H3: K-step PPR propagation + teleport/restart (structural analogy/inductive bias) — STRONGEST theoretical motivation** |
+| Architecture      | **CSV model_name (canonical)**                                                  | Priority                        | Inductive bias hypothesis                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| GraphSAGE (đã có) | **`gnn_raw_attr`** ← tên CSV chuẩn (alias: sage_raw_attr — chỉ dùng trong docs) | ✅ Done                         | Mean agg. — baseline                                                                                                     |
+| **GCN**           | `gcn_raw_attr`                                                                  | **MUST (C2)**                   | **H2: `D^{-1/2}AD^{-1/2}` ≈ A2 symmetric diffusion — expected better under A2 labels (nếu chạy sensitivity S1)**         |
+| GIN               | `gin_raw_attr`                                                                  | **MUST (C2)**                   | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics        |
+| **GAT**           | `gat_raw_attr`                                                                  | Archive / dropped current rerun | Historical H1 candidate; official MAPR rerun dùng `--skip-gat` vì GAT OOM ở `hidden_channels=128`.                       |
+| **🆕 APPNP**      | `appnp_raw_attr`                                                                | **MUST (C2) — H3 ★**            | **H3: K-step PPR propagation + teleport/restart (structural analogy/inductive bias) — STRONGEST theoretical motivation** |
 
 > **Ba inductive bias hypotheses — pre-registered trước C2 (để report theo framing đúng):**
 >
@@ -1303,6 +1303,7 @@ Sau khi C2 xong → train best arch với combined α·Huber + (1-α)·pairwise-
 CSV name: `best_arch_raw_attr_rankloss`
 
 **[v3.2 MUST] Bootstrap CI theo regime:**
+
 - `A0`: `bootstrap_spearman_ci(y_true_a0, gnn_best_preds_a0, degree_preds)` → `gnn_vs_degree_bootstrap_ci_a0.json`
 - `HSCC`: `bootstrap_spearman_ci(y_true_hscc, gnn_best_preds_hscc, strongest_flat_baseline_preds)` → `gnn_vs_baseline_bootstrap_ci_hscc.json`
 
@@ -1347,20 +1348,20 @@ CSV name: `best_arch_raw_attr_rankloss`
 
 **Config chuẩn cho 4 active architectures (SAGE, GCN, GIN, APPNP) — locked để fair comparison:** _(GAT dropped OOM; dùng `--skip-gat`)_
 
-| Hyperparameter | Giá trị (conv-based archs)                   | Ghi chú APPNP                                                                |
-| -------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `hidden_dim`   | 128                                          | Không thay đổi per arch (APPNP dùng hidden_dim cho MLP embedding)            |
-| `n_layers`     | 2                                            | Conv-based only; APPNP không dùng n_layers                                   |
-| `dropout`      | 0.3                                          | Không thay đổi per arch                                                      |
-| `gat_heads`    | 4                                            | *(archived — GAT dropped OOM; param giữ lại trong run_surrogates.py nhưng không invoke khi `--skip-gat`)* |
-| `appnp_K`      | **10**                                       | **APPNP only** — cascade depth (propagation steps)                           |
-| `appnp_alpha`  | **0.15**                                     | **APPNP only** — teleport/restart weight (starting point; controls locality) |
-| Loss           | Huber (`delta=1.0`)                          | Không dùng early stopping — **giống nhau cho tất cả 4 active archs**         |
-| `lr`           | 0.001 (Adam)                                 | Không thay đổi per arch                                                      |
-| `epochs`       | 200 (cố định)                                | **Không early stopping** — cố định để fair comparison                        |
-| Training seeds | `[42, 123, 456, 789, 1024]`                  | 5 seeds mỗi arch                                                             |
-| Split          | `split_masks.parquet` (M0-locked)            | **Cùng split cho mọi arch**                                                  |
-| Features (C2)  | `raw_attr` (views_log, views/day, life_time) | C2 chỉ so sánh trên raw_attr — **4 active archs** × 1 feature set            |
+| Hyperparameter | Giá trị (conv-based archs)                   | Ghi chú APPNP                                                                                             |
+| -------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `hidden_dim`   | 128                                          | Không thay đổi per arch (APPNP dùng hidden_dim cho MLP embedding)                                         |
+| `n_layers`     | 2                                            | Conv-based only; APPNP không dùng n_layers                                                                |
+| `dropout`      | 0.3                                          | Không thay đổi per arch                                                                                   |
+| `gat_heads`    | 4                                            | _(archived — GAT dropped OOM; param giữ lại trong run_surrogates.py nhưng không invoke khi `--skip-gat`)_ |
+| `appnp_K`      | **10**                                       | **APPNP only** — cascade depth (propagation steps)                                                        |
+| `appnp_alpha`  | **0.15**                                     | **APPNP only** — teleport/restart weight (starting point; controls locality)                              |
+| Loss           | Huber (`delta=1.0`)                          | Không dùng early stopping — **giống nhau cho tất cả 4 active archs**                                      |
+| `lr`           | 0.001 (Adam)                                 | Không thay đổi per arch                                                                                   |
+| `epochs`       | 200 (cố định)                                | **Không early stopping** — cố định để fair comparison                                                     |
+| Training seeds | `[42, 123, 456, 789, 1024]`                  | 5 seeds mỗi arch                                                                                          |
+| Split          | `split_masks.parquet` (M0-locked)            | **Cùng split cho mọi arch**                                                                               |
+| Features (C2)  | `raw_attr` (views_log, views/day, life_time) | C2 chỉ so sánh trên raw_attr — **4 active archs** × 1 feature set                                         |
 
 **Best arch selection criterion (cho C3, C4, ablation):**
 
@@ -1699,18 +1700,18 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 > **Mục đích:** Khi reviewer hỏi "why not try X?", team có documented rationale sẵn. Cũng là checklist để không waste time implement architectures không phù hợp với project này.
 > **v3.2 clarification:** bảng này không định nghĩa scope chỉ cho `A0`. Hãy hiểu đây là shortlist architecture cho active MAPR path; `A0` là regime chạy trước để lock C2, còn `HSCC` reuse shortlist sau khi flat-baseline fairness đã xong.
 
-| Architecture            | Verdict                       | Dùng ở đâu                 | Lý do chi tiết                                                                                                                                               |
-| ----------------------- | ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SAGE** (mean agg.)    | ✅ **Trong C2-A0** (baseline) | C2-A0 row `gnn_raw_attr`   | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr).                                                                           |
-| **GCN**                 | ✅ **MUST C2-A0** (H2)        | C2-A0 `gcn_raw_attr`       | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2.                                                                                             |
-| **GIN**                 | ✅ **MUST C2-A0**             | C2-A0 `gin_raw_attr`       | Sum agg. — highest WL expressiveness; preserves hop counts.                                                                                                  |
+| Architecture            | Verdict                         | Dùng ở đâu                 | Lý do chi tiết                                                                                                                                               |
+| ----------------------- | ------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **SAGE** (mean agg.)    | ✅ **Trong C2-A0** (baseline)   | C2-A0 row `gnn_raw_attr`   | Baseline reference. Mean agg. bị smoothing → 0.470 (graph_only), 0.534 (raw_attr).                                                                           |
+| **GCN**                 | ✅ **MUST C2-A0** (H2)          | C2-A0 `gcn_raw_attr`       | H2: D^{-1/2}AD^{-1/2} ≈ A2 symmetric IC. Test cả C2-A0 và C2-A2.                                                                                             |
+| **GIN**                 | ✅ **MUST C2-A0**               | C2-A0 `gin_raw_attr`       | Sum agg. — highest WL expressiveness; preserves hop counts.                                                                                                  |
 | **GAT v1**              | Archive / dropped current rerun | Legacy `gat_raw_attr` note | Historical H1 candidate. Official MAPR rerun không yêu cầu row `gat_raw_attr`; current execution dùng `--skip-gat` do OOM.                                   |
-| **APPNP**               | ✅ **MUST C2-A0** (H3)        | C2-A0 `appnp_raw_attr`     | H3: K-step PPR ≈ IC cascade. Expected best arch.                                                                                                             |
-| **GATv2**               | 🔵 **Archive only**           | Không thuộc MAPR path      | Giữ như historical note cho I-A branch cũ. Không implement trong current `A0 + HSCC` execution cycle.                                                          |
-| **GINE + IC edge feat** | ✅ **C5 [IF TIME]**           | `gine_ic_a0_raw_attr`      | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment.                                                        |
-| **GCNII**               | ❌ **Skip C2**                | —                          | Advantage chỉ tại L=16–64. Tại `n_layers=2` (C2 locked) ≈ GCN + residual. Cần separate L=16 experiment → phá fair comparison.                                |
-| **HGT**                 | ❌ **Loại hoàn toàn**         | —                          | Designed cho **heterogeneous graphs** (many node/edge types). Twitch = **homogeneous** (1 type). Type matrices collapse → complex GAT variant, không có lợi. |
-| **GraphGPS**            | ❌ **Loại — scale**           | —                          | MPNN + Transformer O(N²) với N=168k = 28 tỷ pairs. LapPE eigendecomposition 168k×168k tốn 30–60 phút. Overkill cho 3-feature node regression.                |
+| **APPNP**               | ✅ **MUST C2-A0** (H3)          | C2-A0 `appnp_raw_attr`     | H3: K-step PPR ≈ IC cascade. Expected best arch.                                                                                                             |
+| **GATv2**               | 🔵 **Archive only**             | Không thuộc MAPR path      | Giữ như historical note cho I-A branch cũ. Không implement trong current `A0 + HSCC` execution cycle.                                                        |
+| **GINE + IC edge feat** | ✅ **C5 [IF TIME]**             | `gine_ic_a0_raw_attr`      | Strongest alignment: explicit IC prob làm edge feature. NOT feature-agnostic. Upper bound experiment.                                                        |
+| **GCNII**               | ❌ **Skip C2**                  | —                          | Advantage chỉ tại L=16–64. Tại `n_layers=2` (C2 locked) ≈ GCN + residual. Cần separate L=16 experiment → phá fair comparison.                                |
+| **HGT**                 | ❌ **Loại hoàn toàn**           | —                          | Designed cho **heterogeneous graphs** (many node/edge types). Twitch = **homogeneous** (1 type). Type matrices collapse → complex GAT variant, không có lợi. |
+| **GraphGPS**            | ❌ **Loại — scale**             | —                          | MPNN + Transformer O(N²) với N=168k = 28 tỷ pairs. LapPE eigendecomposition 168k×168k tốn 30–60 phút. Overkill cho 3-feature node regression.                |
 
 > **Quick rule cho future architectures:**
 >
@@ -1856,13 +1857,13 @@ Ablation story:
 
 6. Runtime table (v3.1 Section 9.3):
 
-   | Component                               | Metric          | Notes                                                                                               |
-   | --------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------- |
-   | Feature precompute (degree, PR, kshell) | time            | Centrality baselines only                                                                           |
-   | MC IC labeling (n_sample × N_runs)      | time            | One-time cost — từ Person 1                                                                         |
-   | GNN training (5 seeds)                  | time            | With GPU                                                                                            |
-   | **GNN inference (168,114 nodes)**       | **runtime_sec** | Full active graph                                                                                   |
-   | Node2Vec training                       | time            |                                                                                                     |
+   | Component                               | Metric          | Notes                                                                                                              |
+   | --------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+   | Feature precompute (degree, PR, kshell) | time            | Centrality baselines only                                                                                          |
+   | MC IC labeling (n_sample × N_runs)      | time            | One-time cost — từ Person 1                                                                                        |
+   | GNN training (5 seeds)                  | time            | With GPU                                                                                                           |
+   | **GNN inference (168,114 nodes)**       | **runtime_sec** | Full active graph                                                                                                  |
+   | Node2Vec training                       | time            |                                                                                                                    |
    | Speedup: MC IC vs GNN inference         | **~5,590×**     | Headline uses 480.3s / 0.086s from `hscc,gnn_raw_attr` in `runtime_breakdown.csv`; round to ~5,500× in paper prose |
 
    `runtime_sec` trong CSV = **inference only** (không tính load + precompute).
@@ -1980,35 +1981,35 @@ print(metrics)
 
 ### Milestone M4.1 — Re-lock execution path (21/4)
 
-| Person | Việc | Output |
-| ------ | ---- | ------ |
+| Person   | Việc                                    | Output                                                     |
+| -------- | --------------------------------------- | ---------------------------------------------------------- |
 | Person 1 | regenerate HSCC targets + freeze config | `regression_targets_hscc_refined.parquet`, registry update |
-| Person 2 | confirm community artifact coverage | `community_features.parquet` ready for HSCC |
-| Person 3 | patch regime-aware evaluation naming | runners/harness aligned |
+| Person 2 | confirm community artifact coverage     | `community_features.parquet` ready for HSCC                |
+| Person 3 | patch regime-aware evaluation naming    | runners/harness aligned                                    |
 
 ### Milestone M4.2 — Baseline fairness before GNN claims (22/4)
 
-| Person | Việc | Output |
-| ------ | ---- | ------ |
+| Person   | Việc                                                                                                             | Output                                                 |
+| -------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Person 3 | chạy HSCC flat baselines: `LR(life_time)`, `LR(views+life_time)`, `LR(degree+views+life_time)`, `MLP(raw attrs)` | HSCC rows in `baseline_ranking_metrics_hscc_clean.csv` |
-| Person 3 | nếu GNN dùng `language`, thêm fairness baselines với `language` | fairness rows |
-| Person 2 | provide any missing joins for community/language checks | support files |
+| Person 3 | nếu GNN dùng `language`, thêm fairness baselines với `language`                                                  | fairness rows                                          |
+| Person 2 | provide any missing joins for community/language checks                                                          | support files                                          |
 
 ### Milestone M4.3 — Regime-specific model runs (23–24/4)
 
-| Person | Việc | Output |
-| ------ | ---- | ------ |
-| Person 3 | run GNN on `A0` | A0 surrogate rows |
-| Person 3 | run GNN on `HSCC` | HSCC surrogate rows |
+| Person   | Việc                                   | Output               |
+| -------- | -------------------------------------- | -------------------- |
+| Person 3 | run GNN on `A0`                        | A0 surrogate rows    |
+| Person 3 | run GNN on `HSCC`                      | HSCC surrogate rows  |
 | Person 1 | optional `A2` only if main path stable | sensitivity artifact |
 
 ### Milestone M4.4 — Bootstrap and locking (24–25/4)
 
-| Person | Việc | Output |
-| ------ | ---- | ------ |
-| Person 3 | bootstrap `A0`: GNN vs degree | `gnn_vs_degree_bootstrap_ci_a0.json` |
+| Person   | Việc                                                                                                                   | Output                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Person 3 | bootstrap `A0`: GNN vs degree                                                                                          | `gnn_vs_degree_bootstrap_ci_a0.json`     |
 | Person 3 | bootstrap `HSCC`: GNN vs strongest flat baseline (frozen official rerun comparator = `lr_degree_views_life_time_lang`) | `gnn_vs_baseline_bootstrap_ci_hscc.json` |
-| Cả team | lock results and table wording | result freeze |
+| Cả team  | lock results and table wording                                                                                         | result freeze                            |
 
 ### Milestone M5 — Integration + paper hand-off (26–30/4)
 
@@ -2020,24 +2021,24 @@ print(metrics)
 
 ## 4b) Risk Management (v3.2) [⚪ REF]
 
-| Rủi ro | Impact | Action |
-| ------ | ------ | ------ |
-| `A0` GNN không vượt degree | Expected | Không coi là bug; viết như structural finding |
-| HSCC baseline fairness thiếu | Critical | Không đọc bất kỳ GNN win nào trước khi thêm đủ `life_time` baselines |
-| GNN dùng `language` nhưng flat baselines không có `language` | Critical | Bổ sung fairness versions ngay |
-| HSCC GNN chỉ ngang baseline mạnh nhất | Medium | Giữ contrast paper; không mở formula mới |
-| Community artifact trễ | Critical | Ưu tiên Person 2 trước mọi boost item khác |
-| Paper > 6 trang | Blocker | Cắt `I-A`, `A1`, exhaustive extras trước |
+| Rủi ro                                                       | Impact   | Action                                                               |
+| ------------------------------------------------------------ | -------- | -------------------------------------------------------------------- |
+| `A0` GNN không vượt degree                                   | Expected | Không coi là bug; viết như structural finding                        |
+| HSCC baseline fairness thiếu                                 | Critical | Không đọc bất kỳ GNN win nào trước khi thêm đủ `life_time` baselines |
+| GNN dùng `language` nhưng flat baselines không có `language` | Critical | Bổ sung fairness versions ngay                                       |
+| HSCC GNN chỉ ngang baseline mạnh nhất                        | Medium   | Giữ contrast paper; không mở formula mới                             |
+| Community artifact trễ                                       | Critical | Ưu tiên Person 2 trước mọi boost item khác                           |
+| Paper > 6 trang                                              | Blocker  | Cắt `I-A`, `A1`, exhaustive extras trước                             |
 
 ## 4c) Scope Reduction — Cắt khi cần (v3.2) [⚪ REF]
 
-| Cắt trước | Giữ bắt buộc |
-| --------- | ------------ |
-| `I-A`, `II-B`, `GATv2-I-A` | `A0` contrast run |
-| `A1`, inductive, GINE | `HSCC` main run |
-| multi-alpha rankloss sweep | HSCC baseline fairness |
+| Cắt trước                           | Giữ bắt buộc                   |
+| ----------------------------------- | ------------------------------ |
+| `I-A`, `II-B`, `GATv2-I-A`          | `A0` contrast run              |
+| `A1`, inductive, GINE               | `HSCC` main run                |
+| multi-alpha rankloss sweep          | HSCC baseline fairness         |
 | exhaustive all-arch all-regime grid | bootstrap theo đúng comparator |
-| per-group diagnostics | community + proxy artifacts |
+| per-group diagnostics               | community + proxy artifacts    |
 
 ---
 
@@ -2141,37 +2142,37 @@ Nếu gặp condition dưới đây, thực hiện action tương ứng; **chỉ
 
 ### Person 1 — IC artifacts
 
-| # | Việc | Artifact output | Deadline |
-| - | ---- | --------------- | -------- |
-| 1 | Confirm `graph_csr.npz` + `split_masks.parquet` | shared upstream artifacts | ngay |
-| 2 | Lock `A0` artifacts | `ic_scores_a0.parquet`, `regression_targets_a0.parquet` | ngay |
-| 3 | Regenerate và verify HSCC targets | `ic_scores_hscc_refined.parquet`, `regression_targets_hscc_refined.parquet` | **21–22/4** |
-| 4 | Freeze HSCC config, add registry entry | registry updated | **21–22/4** |
-| 5 | Optional `A2` only if main path stable | `ic_scores_sensitivity_a2.parquet` | sau 24/4 |
+| #   | Việc                                            | Artifact output                                                             | Deadline    |
+| --- | ----------------------------------------------- | --------------------------------------------------------------------------- | ----------- |
+| 1   | Confirm `graph_csr.npz` + `split_masks.parquet` | shared upstream artifacts                                                   | ngay        |
+| 2   | Lock `A0` artifacts                             | `ic_scores_a0.parquet`, `regression_targets_a0.parquet`                     | ngay        |
+| 3   | Regenerate và verify HSCC targets               | `ic_scores_hscc_refined.parquet`, `regression_targets_hscc_refined.parquet` | **21–22/4** |
+| 4   | Freeze HSCC config, add registry entry          | registry updated                                                            | **21–22/4** |
+| 5   | Optional `A2` only if main path stable          | `ic_scores_sensitivity_a2.parquet`                                          | sau 24/4    |
 
 ### Person 2 — Community + proxies
 
-| # | Việc | Artifact output | Deadline |
-| - | ---- | --------------- | -------- |
-| 1 | Confirm `community_features.parquet` coverage 100% | community artifact ready | **21/4** |
-| 2 | Confirm `diffusion_proxies.parquet` full graph | proxy artifact ready | **21/4** |
-| 3 | Support joins/checks for HSCC interpretation | merged support tables if needed | 22–23/4 |
-| 4 | Optional correlation add-on for HSCC | summary note / json | nếu kịp |
+| #   | Việc                                               | Artifact output                 | Deadline |
+| --- | -------------------------------------------------- | ------------------------------- | -------- |
+| 1   | Confirm `community_features.parquet` coverage 100% | community artifact ready        | **21/4** |
+| 2   | Confirm `diffusion_proxies.parquet` full graph     | proxy artifact ready            | **21/4** |
+| 3   | Support joins/checks for HSCC interpretation       | merged support tables if needed | 22–23/4  |
+| 4   | Optional correlation add-on for HSCC               | summary note / json             | nếu kịp  |
 
 ### Person 3 — Baselines + GNN + CI
 
-| # | Việc | Artifact output | Deadline | Tier |
-| - | ---- | --------------- | -------- | ---- |
-| 1 | Deterministic evaluation harness, regime-aware | harness fixed | ngay | [🔴] |
-| 2 | **C1** — Chạy A0 + HSCC flat baselines (degree-controlled variance check) | `baseline_ranking_metrics_a0_clean.csv`, `baseline_ranking_metrics_hscc_clean.csv` | **22/4** | [🔴 C1] |
-| 3 | **C1** — Nếu dùng `language`, thêm HSCC fairness baselines | extra HSCC rows in baseline CSV | **22/4** | [🔴 C1] |
-| 4 | **C2** — Chạy GNN architecture comparison trên `A0` (`--skip-gat`) | A0 rows in `surrogate_ranking_metrics_a0_clean.csv` | 23/4 | [🔴 C2] |
-| 5 | **C2** — Chạy GNN architecture comparison trên `HSCC` (`--skip-gat`) | HSCC rows in `surrogate_ranking_metrics_hscc_clean.csv` | 23–24/4 | [🔴 C2] |
-| 6 | **C3** — Rankloss variant của best C2 arch trên HSCC (sau khi C2 xong) | via `bootstrap_ci.py --include-rankloss-comparison` | 24/4 | [🟡 C3] |
-| 7 | **C4** — Bootstrap `A0`: GNN vs degree baseline | `gnn_vs_degree_bootstrap_ci_a0.json` | **24/4** | [🔴 C4] |
-| 8 | **C4** — Bootstrap `HSCC`: GNN vs strongest flat baseline (frozen official rerun comparator = `lr_degree_views_life_time_lang`) | `gnn_vs_baseline_bootstrap_ci_hscc.json` | **24/4** | [🔴 C4] |
-| 9 | Runtime assembly + table handoff (không có row `gat_raw_attr`) | `runtime_breakdown.csv` | 25/4 | [🔴] |
-| 10 | **C5** — GINE + IC edge features supplemental | post-MAPR artifact | POST-MAPR | [🔵 FUTURE:TKDE/WWW2027] |
+| #   | Việc                                                                                                                            | Artifact output                                                                    | Deadline  | Tier                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------- | ------------------------ |
+| 1   | Deterministic evaluation harness, regime-aware                                                                                  | harness fixed                                                                      | ngay      | [🔴]                     |
+| 2   | **C1** — Chạy A0 + HSCC flat baselines (degree-controlled variance check)                                                       | `baseline_ranking_metrics_a0_clean.csv`, `baseline_ranking_metrics_hscc_clean.csv` | **22/4**  | [🔴 C1]                  |
+| 3   | **C1** — Nếu dùng `language`, thêm HSCC fairness baselines                                                                      | extra HSCC rows in baseline CSV                                                    | **22/4**  | [🔴 C1]                  |
+| 4   | **C2** — Chạy GNN architecture comparison trên `A0` (`--skip-gat`)                                                              | A0 rows in `surrogate_ranking_metrics_a0_clean.csv`                                | 23/4      | [🔴 C2]                  |
+| 5   | **C2** — Chạy GNN architecture comparison trên `HSCC` (`--skip-gat`)                                                            | HSCC rows in `surrogate_ranking_metrics_hscc_clean.csv`                            | 23–24/4   | [🔴 C2]                  |
+| 6   | **C3** — Rankloss variant của best C2 arch trên HSCC (sau khi C2 xong)                                                          | via `bootstrap_ci.py --include-rankloss-comparison`                                | 24/4      | [🟡 C3]                  |
+| 7   | **C4** — Bootstrap `A0`: GNN vs degree baseline                                                                                 | `gnn_vs_degree_bootstrap_ci_a0.json`                                               | **24/4**  | [🔴 C4]                  |
+| 8   | **C4** — Bootstrap `HSCC`: GNN vs strongest flat baseline (frozen official rerun comparator = `lr_degree_views_life_time_lang`) | `gnn_vs_baseline_bootstrap_ci_hscc.json`                                           | **24/4**  | [🔴 C4]                  |
+| 9   | Runtime assembly + table handoff (không có row `gat_raw_attr`)                                                                  | `runtime_breakdown.csv`                                                            | 25/4      | [🔴]                     |
+| 10  | **C5** — GINE + IC edge features supplemental                                                                                   | post-MAPR artifact                                                                 | POST-MAPR | [🔵 FUTURE:TKDE/WWW2027] |
 
 ### Handoff tối thiểu
 

@@ -72,18 +72,19 @@ IC score = OPERATIONALIZATION của influence potential
 **Scope note (v3.2):** Main contribution vẫn là pipeline [1]→[2]→[3]→[4], nhưng Section 4 phải được tổ chức theo **2 operationalizations**: `A0` và `HSCC`. `A2` là sensitivity. `I-A` được archive khỏi critical MAPR path.
 
 > **Tension cốt lõi cần resolve trong v3.2:** `A0` và `HSCC` yêu cầu **hai comparator khác nhau**.
+>
 > - `A0`: câu hỏi đúng là GNN có đạt mức **practically equivalent** với degree / two-hop hay không.
 > - `HSCC`: câu hỏi đúng là GNN có vượt **strongest standard non-graph baseline** (`LR/MLP` với `life_time`, `views`, và nếu dùng thì `language`) hay không.
-> Defense strategy: (a) giữ `A0` như negative control/structural regime, (b) dùng `HSCC` làm graph-aware regime chính, (c) bootstrap CI theo **đúng comparator của từng regime**, (d) không claim GNN thắng nếu baseline fairness chưa đủ.
+>   Defense strategy: (a) giữ `A0` như negative control/structural regime, (b) dùng `HSCC` làm graph-aware regime chính, (c) bootstrap CI theo **đúng comparator của từng regime**, (d) không claim GNN thắng nếu baseline fairness chưa đủ.
 
 ---
 
 ### 0.2 Ba nhiệm vụ tách biệt — KHÔNG trộn lẫn
 
-| Task  | Câu hỏi nghiên cứu                                                           | Output chính                                                         | Tier |
-| ----- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---- |
-| **A** | How do different IC operationalizations define influence without behavior logs? | `A0` labels, `HSCC` labels, stability, regression justification        | **MAIN** |
-| **C** | When does GNN add value over analytical or flat baselines?                  | Regime-specific comparison tables, bootstrap CI, speedup             | **MAIN** |
+| Task  | Câu hỏi nghiên cứu                                                              | Output chính                                                    | Tier     |
+| ----- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------- |
+| **A** | How do different IC operationalizations define influence without behavior logs? | `A0` labels, `HSCC` labels, stability, regression justification | **MAIN** |
+| **C** | When does GNN add value over analytical or flat baselines?                      | Regime-specific comparison tables, bootstrap CI, speedup        | **MAIN** |
 
 ### 0.3 Framing language — nhất quán xuyên suốt paper
 
@@ -96,7 +97,7 @@ IC score = OPERATIONALIZATION của influence potential
 | "IC validates our approach"                       | "IC is our definitional operationalization"                                                                                         |
 | "We pivot to regression due to label instability" | "We formulate prediction as regression on continuous MC scores — the principled choice for a simulation-derived continuous target"  |
 | "Option B is a fallback"                          | "Regression primary is the correct formulation; binary labels are a derived secondary artifact with inherent threshold sensitivity" |
-| "GNN approximates IC to a very good margin"       | "GNN is evaluated against the strongest valid comparator for each operationalization"                                                |
+| "GNN approximates IC to a very good margin"       | "GNN is evaluated against the strongest valid comparator for each operationalization"                                               |
 | "GNN outperforms baselines"                       | "Under A0, analytical baselines are near-optimal; under HSCC, message passing may outperform flat baselines"                        |
 | "MC-IC is a good metric"                          | "MC-IC is a principled operational metric for influence potential in static social graphs"                                          |
 | "We show GNN is better"                           | "The added value of GNN depends on the operationalization and the information available to non-graph baselines"                     |
@@ -364,14 +365,14 @@ pilot_diagnostics:
 
 #### Phân loại defensibility (cập nhật)
 
-| Variant | Tên | Views-indep | life_time indep | Grounding | Defensible? | Priority v3.2 |
-| ------- | --- | ----------- | --------------- | --------- | ----------- | ------------- |
-| `A0: 1/deg(v)` | Weighted Cascade | ✅ | ✅ | ✅✅ Kempe + DeepIM | **✅ Main paper (contrast track)** | 1 |
-| `HSCC` | Source-velocity + community boost | ❌ dùng views/life_time | ❌ | ✅ Twitch-motivated | **✅ Main paper (main target)** | 2 |
-| `A2: 1/sqrt(deg(u)deg(v))` | Symmetric | ✅ | ✅ | ✅ GCN analogy | ✅ Sensitivity | 3 |
-| `A1: 1/deg(u)` | Source Budget | ✅ | ✅ | Marginal | 🟡 Optional sensitivity | 4 |
-| `I-A: w(v)/sum w(N(u))` | Attr-Informed (row-norm) | ❌ | ✅ | Negative-result value only | 🔵 Archive / appendix note | 5 |
-| `II-B: w(v)/deg(v)` | Views-Density | ❌ | ✅ | Moderate | 🔵 Archive fallback only | 6 |
+| Variant                    | Tên                               | Views-indep             | life_time indep | Grounding                  | Defensible?                        | Priority v3.2 |
+| -------------------------- | --------------------------------- | ----------------------- | --------------- | -------------------------- | ---------------------------------- | ------------- |
+| `A0: 1/deg(v)`             | Weighted Cascade                  | ✅                      | ✅              | ✅✅ Kempe + DeepIM        | **✅ Main paper (contrast track)** | 1             |
+| `HSCC`                     | Source-velocity + community boost | ❌ dùng views/life_time | ❌              | ✅ Twitch-motivated        | **✅ Main paper (main target)**    | 2             |
+| `A2: 1/sqrt(deg(u)deg(v))` | Symmetric                         | ✅                      | ✅              | ✅ GCN analogy             | ✅ Sensitivity                     | 3             |
+| `A1: 1/deg(u)`             | Source Budget                     | ✅                      | ✅              | Marginal                   | 🟡 Optional sensitivity            | 4             |
+| `I-A: w(v)/sum w(N(u))`    | Attr-Informed (row-norm)          | ❌                      | ✅              | Negative-result value only | 🔵 Archive / appendix note         | 5             |
+| `II-B: w(v)/deg(v)`        | Views-Density                     | ❌                      | ✅              | Moderate                   | 🔵 Archive fallback only           | 6             |
 
 ---
 
@@ -380,6 +381,7 @@ pilot_diagnostics:
 > 🔵 **[ARCHIVE / reference only]** `I-A` và `II-B` được giữ lại chỉ như historical record của các attribute-informed operationalizations đã từng cân nhắc. Chúng **không còn là execution branch, không còn pilot gate, không còn fallback path, và không còn là basis cho architecture selection trong MAPR 2026 window**.
 >
 > Nếu cần nhắc trong paper, chỉ dùng 1-2 câu ở Discussion/Appendix:
+>
 > - `I-A`: row-normalized views có thể làm sụp discriminative structure trên graph dense.
 > - `II-B`: là một fallback historical variant, không thuộc main paper path.
 >
@@ -820,18 +822,19 @@ def two_hop_expected_spread(node, G, degrees):
 
 ### Group 4: Flat and Shallow Baselines [🔴/🟡 MIXED]
 
-| Baseline | Config | Regime |
-| -------- | ------ | ------ |
-| `LR(life_time)` | linear regression on `life_time` | **HSCC MUST** |
-| `LR(views + life_time)` | linear regression on engagement attrs | **HSCC MUST** |
-| `LR(degree + views + life_time)` | linear regression on full raw attrs | **HSCC MUST** |
-| `MLP(raw attrs)` | 2-layer MLP, features = `[views_log, views/day, life_time]` | **HSCC MUST** |
-| `LR/MLP + language` | fairness versions nếu GNN dùng `language` | **HSCC SHOULD DO** |
-| Node2Vec + LR | dim=64, walks=**20** (không phải 200), walk_len=20 | 🟡 secondary |
+| Baseline                         | Config                                                      | Regime             |
+| -------------------------------- | ----------------------------------------------------------- | ------------------ |
+| `LR(life_time)`                  | linear regression on `life_time`                            | **HSCC MUST**      |
+| `LR(views + life_time)`          | linear regression on engagement attrs                       | **HSCC MUST**      |
+| `LR(degree + views + life_time)` | linear regression on full raw attrs                         | **HSCC MUST**      |
+| `MLP(raw attrs)`                 | 2-layer MLP, features = `[views_log, views/day, life_time]` | **HSCC MUST**      |
+| `LR/MLP + language`              | fairness versions nếu GNN dùng `language`                   | **HSCC SHOULD DO** |
+| Node2Vec + LR                    | dim=64, walks=**20** (không phải 200), walk_len=20          | 🟡 secondary       |
 
 ### Group 5: GNN — Architecture × Feature Ablation (v3.1)
 
 > **v3.2 update:** Architecture comparison phải đọc theo **2 regimes**.
+>
 > - `A0`: raw-attr 3 chiều là đủ cho contrast track.
 > - `HSCC`: feature policy phải explicit về `life_time` và `language`; nếu dùng `language` cho GNN thì phải bật fairness versions cho flat baselines.
 
@@ -842,7 +845,7 @@ def two_hop_expected_spread(node, G, degrees):
 | GraphSAGE    | `SAGEConv` | Mean (baseline)       | Hiện tại đang dùng; reference point                                                                                                               |
 | **GCN**      | `GCNConv`  | **Sym. norm. sum**    | Spectral baseline; **`D^{-1/2}AD^{-1/2}` structurally analogous to A2 diffusion rule** — additional inductive bias check nếu chạy A2 sensitivity  |
 | GIN          | `GINConv`  | Sum + MLP             | Sum agg. preserves multi-hop counts (WL-equivalent expressiveness); reference for non-degree-weighted IC dynamics                                 |
-| **GAT**      | `GATConv`  | **Learned attention** | ~~Hypothesis (confirm via C2)~~ **DROPPED — OOM tại A100-40GB, h=128. Dùng `--skip-gat`. H1 archived (xem Section 9.1).** |
+| **GAT**      | `GATConv`  | **Learned attention** | ~~Hypothesis (confirm via C2)~~ **DROPPED — OOM tại A100-40GB, h=128. Dùng `--skip-gat`. H1 archived (xem Section 9.1).**                         |
 | **APPNP**    | `APPNP`    | **K-step PPR**        | **H3:** embed-then-propagate với teleport/restart là structural analogy/inductive bias cho IC multi-hop; test như ứng viên “deep receptive field” |
 
 > **Ba inductive bias hypotheses (to be confirmed by C2):**
@@ -864,19 +867,19 @@ def two_hop_expected_spread(node, G, degrees):
 
 **Matrix thực nghiệm (priority):**
 
-|               | raw_attr | graph_only | centrality |
-| ------------- | -------- | ---------- | ---------- |
-| **GraphSAGE** | ✅ đã có | ✅ đã có   | ✅ đã có   |
-| **GCN**       | **MUST** | [IF TIME]  | [IF TIME]  |
-| **GIN**       | **MUST** | [IF TIME]  | [IF TIME]  |
-| **GAT**       | ~~MUST~~ **DROPPED** (OOM A100-40GB, h=128; dùng `--skip-gat`) | — | — |
-| **APPNP**     | **MUST** | [IF TIME]  | [IF TIME]  |
+|               | raw_attr                                                       | graph_only | centrality |
+| ------------- | -------------------------------------------------------------- | ---------- | ---------- |
+| **GraphSAGE** | ✅ đã có                                                       | ✅ đã có   | ✅ đã có   |
+| **GCN**       | **MUST**                                                       | [IF TIME]  | [IF TIME]  |
+| **GIN**       | **MUST**                                                       | [IF TIME]  | [IF TIME]  |
+| **GAT**       | ~~MUST~~ **DROPPED** (OOM A100-40GB, h=128; dùng `--skip-gat`) | —          | —          |
+| **APPNP**     | **MUST**                                                       | [IF TIME]  | [IF TIME]  |
 
 **Naming convention cho `surrogate_ranking_metrics_{regime}_clean.csv` (artifact names):**
 `gcn_raw_attr`, `gin_raw_attr`, `appnp_raw_attr` (+ `best_arch_raw_attr_rankloss` sau C2). `gat_raw_attr` = **dropped** (OOM; không xuất hiện trong official rerun — dùng `--skip-gat`). Mỗi regime ra 1 file riêng: `*_a0_clean.csv` và `*_hscc_clean.csv`.
 
 > **Lưu ý phân biệt:** Tên trong CSV artifact (`gcn_raw_attr`) khác với tên display trong paper table (`gnn_raw_attr (GCN)`).
-> Quy ước: CSV dùng snake*case prefix cho active architectures (`gcn*`, `gin*`, `appnp*`); paper table dùng `gnn_raw_attr (Architecture)` để nhất quán với G5 group labeling. `gat*` chỉ còn là legacy/archive naming, không thuộc official rerun.
+> Quy ước: CSV dùng snake*case prefix cho active architectures (`gcn*`, `gin*`, `appnp*`); paper table dùng `gnn_raw_attr (Architecture)`để nhất quán với G5 group labeling.`gat\*` chỉ còn là legacy/archive naming, không thuộc official rerun.
 
 **Tại sao cấu trúc này:**
 
@@ -1245,7 +1248,7 @@ ARCHITECTURES = ['sage', 'gcn', 'gin', 'appnp']
   - `HSCC raw_attr` = `[views_log_norm, views_per_day_norm, life_time_norm, language_encoded]` nếu mục tiêu là learn cross-community signal qua language structure
   - Nếu bật `language` cho GNN ở HSCC, phải chạy fairness baselines với `language`
 - **Cùng loss:** Huber (`delta=1.0`); **không early stopping** — `epochs=200` cố định
-- **Cùng hyperparams (conv-based archs):** `hidden_dim=128, n_layers=2, dropout=0.3, lr=1e-3`; GAT thêm `gat_heads=4` *(archived — GAT dropped OOM; param giữ lại cho reference code)*
+- **Cùng hyperparams (conv-based archs):** `hidden_dim=128, n_layers=2, dropout=0.3, lr=1e-3`; GAT thêm `gat_heads=4` _(archived — GAT dropped OOM; param giữ lại cho reference code)_
 - **APPNP-specific:** `K=10, alpha=0.15, dropout=0.3, lr=1e-3` (thay vì conv layers; xem `APPNPSurrogate`)
 - **5 seeds mỗi arch:** `[42, 123, 456, 789, 1024]` → report mean ± std
 
@@ -1508,7 +1511,7 @@ def compute_ic_edge_features(edge_index, degrees, rule='a0'):
 
 | Architecture                                 | Xem xét? | Verdict                          | Lý do chi tiết                                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GATv2** (Brody et al., ICLR 2022)          | ✅       | 🔵 Archive only                  | Historical note từ I-A branch cũ. Không thuộc active `A0 + HSCC` MAPR path; nếu muốn test thì để journal extension/post-MAPR.                                                                                                                                                              |
+| **GATv2** (Brody et al., ICLR 2022)          | ✅       | 🔵 Archive only                  | Historical note từ I-A branch cũ. Không thuộc active `A0 + HSCC` MAPR path; nếu muốn test thì để journal extension/post-MAPR.                                                                                                                                                             |
 | **GINE** (Hu et al., NeurIPS 2019)           | ✅       | ✅ **C5 supplemental** [IF TIME] | Edge features = IC prob — strongest explicit alignment; NOT feature-agnostic; không vào C2 fair comparison.                                                                                                                                                                               |
 | **GCNII** (Chen et al., ICML 2020)           | ✅       | ❌ Skip cho C2                   | Advantage chỉ xuất hiện tại L=16–64 layers. Tại `n_layers=2` (C2 locked), GCNII ≈ GCN + residual connection — không đủ khác biệt để justify thêm vào. Nếu muốn test, cần L=16 separate experiment, phá vỡ fair comparison.                                                                |
 | **HGT** (Hu et al., WWW 2020)                | ✅       | ❌ **Loại hoàn toàn**            | Designed cho heterogeneous graphs (multiple node/edge types). Twitch follower graph là **homogeneous** (1 node type, 1 edge type) → type-specific attention matrices collapse về 1 matrix → HGT = complex GAT variant với overhead không có lợi. Wrong problem type.                      |
@@ -1545,7 +1548,7 @@ Câu hỏi 4: Architecture cần edge features không có trong đồ thị?
 | **Inductive Generalization Test (9.1c)** | Cắt nếu bootstrap CI OK | **Rất cao** — "Train on one network, predict on another" = independent paper-level contribution | ICLR 2027 / NeurIPS 2027 graph learning track                            | Cần: 2nd dataset (Facebook MUSAE / Reddit / Twitch-ES). Thiết kế đã có trong 9.1c |
 | **GATv2 I-A branch**                     | Archive                 | **Trung bình** — GAT v1 vs GATv2 distinction for row-normalized IC is theoretically sound       | Journal extension sau MAPR (full architecture comparison per IC variant) | Không thuộc active v3.2 path                                                      |
 | **A1 source budget `p=1/deg(u)`**        | Cắt — marginal insight  | **Thấp** — Small variation of A0; no reviewer asks for it in isolation                          | Comprehensive sensitivity study (SNA journal)                            | Implement: 1-line change từ A0                                                    |
-| **II-B views-density `w(v)/deg(v)`**     | Archive                 | **Minimal** — historical attribute-informed fallback note                                      | Không thấy venue riêng biệt                                              | Giữ như archive/reference; không thuộc active MAPR path                           |
+| **II-B views-density `w(v)/deg(v)`**     | Archive                 | **Minimal** — historical attribute-informed fallback note                                       | Không thấy venue riêng biệt                                              | Giữ như archive/reference; không thuộc active MAPR path                           |
 | **Per-group prediction error**           | Cắt                     | **Trung bình** — Fairness angle: does GNN favor high-degree nodes?                              | FAccT 2027 / AIES 2027 / CIKM fairness track                             | Cần: `per_group_prediction_error.csv` (script exists in plan)                     |
 | **Louvain resolution sensitivity**       | Cắt                     | **Thấp** — Robustness check for community detection                                             | Methodological note trong journal appendix                               | ~1h additional; only if Louvain used in stability explanation                     |
 
@@ -1697,14 +1700,14 @@ def dead_account_audit(df_raw):
 
 ### Tổng quan cấu trúc
 
-| Section | Tiêu đề | Nội dung chính | Trang |
-| ------- | ------- | -------------- | ----- |
-| 1 | Introduction | Problem, Twitch context, vì sao cần so sánh operationalizations chứ không chỉ một IC formula | 0.5 |
-| 2 | Background | IC model, surrogate learning, GNN architectures, evaluation principles | 0.75 |
-| 3 | MC-IC as Comparative Operational Metric | `A0` và `HSCC`, discriminativeness, stability, regression justification, construct validity | **1.25** |
-| 4 | Surrogate Learning Across Operationalizations | setup, baseline tables, `A0` results, `HSCC` results, contrast analysis, runtime | **2.0** |
-| 5 | Discussion & Limitations | when graph learning helps, why `A0` and `HSCC` differ, HARKing and small-reach limitations | 0.5 |
-| Appendix | optional | `A2` sensitivity, extra stability diagnostics, oracle/ceiling notes | — |
+| Section  | Tiêu đề                                       | Nội dung chính                                                                               | Trang    |
+| -------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- | -------- |
+| 1        | Introduction                                  | Problem, Twitch context, vì sao cần so sánh operationalizations chứ không chỉ một IC formula | 0.5      |
+| 2        | Background                                    | IC model, surrogate learning, GNN architectures, evaluation principles                       | 0.75     |
+| 3        | MC-IC as Comparative Operational Metric       | `A0` và `HSCC`, discriminativeness, stability, regression justification, construct validity  | **1.25** |
+| 4        | Surrogate Learning Across Operationalizations | setup, baseline tables, `A0` results, `HSCC` results, contrast analysis, runtime             | **2.0**  |
+| 5        | Discussion & Limitations                      | when graph learning helps, why `A0` and `HSCC` differ, HARKing and small-reach limitations   | 0.5      |
+| Appendix | optional                                      | `A2` sensitivity, extra stability diagnostics, oracle/ceiling notes                          | —        |
 
 **Total target:** ~5.0 trang nội dung + 0.75 trang references.
 
@@ -1750,6 +1753,7 @@ def dead_account_audit(df_raw):
 ### Section 4 — Surrogate Learning Across Operationalizations (2.0 trang)
 
 **Figure 2 (bắt buộc):** 2-panel result figure:
+
 - left = `A0` panel with degree/two-hop reference lines,
 - right = `HSCC` panel with strongest non-graph baseline reference line.
 
@@ -1885,24 +1889,18 @@ baselines_a0:
 
 baselines_hscc:
   flat_must:
-    [
-      lr_life_time,
-      lr_views_life_time,
-      lr_degree_views_life_time,
-      mlp_raw_attr,
-    ]
+    [lr_life_time, lr_views_life_time, lr_degree_views_life_time, mlp_raw_attr]
   flat_fairness_if_language:
     [lr_views_life_time_lang, lr_degree_views_life_time_lang]
   structural_context:
     [degree_rank, one_hop_spread, two_hop_spread, pagerank, kshell]
-  forbidden_raw_features:
-    [community_id, cross_community_edge_fraction]
+  forbidden_raw_features: [community_id, cross_community_edge_fraction]
 
 # ─── GNN ───────────────────────────────────────────────────────
-gnn_architectures: [sage, gcn, gin, appnp]   # gat dropped — OOM A100-40GB h=128; --skip-gat
+gnn_architectures: [sage, gcn, gin, appnp] # gat dropped — OOM A100-40GB h=128; --skip-gat
 gnn_primary_arch_a0: auto_after_c2
 gnn_primary_arch_hscc: auto_after_c2
-gnn_gat_heads: 4                              # archived — not invoked when --skip-gat
+gnn_gat_heads: 4 # archived — not invoked when --skip-gat
 gnn_appnp_K: 10
 gnn_appnp_alpha: 0.15
 gnn_hidden_dim: 128
@@ -1916,15 +1914,16 @@ gnn_training_seeds: [42, 123, 456, 789, 1024]
 
 feature_sets:
   a0_raw_attr: [views_log_norm, views_per_day_norm, life_time_norm]
-  hscc_raw_attr: [views_log_norm, views_per_day_norm, life_time_norm, language_encoded]
+  hscc_raw_attr:
+    [views_log_norm, views_per_day_norm, life_time_norm, language_encoded]
   graph_only: [degree_norm]
   centrality: [degree_norm, pagerank_norm, kshell_norm]
 
 # ─── Bootstrap Comparators ────────────────────────────────────
 bootstrap_outputs:
-  a0: outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json          # C4
-  hscc: outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json    # C4
-  hscc_rankloss: outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json  # C3 [BOOST] — chỉ khi --include-rankloss-comparison
+  a0: outputs/mapr2026_v3_results/gnn_vs_degree_bootstrap_ci_a0.json # C4
+  hscc: outputs/mapr2026_v3_results/gnn_vs_baseline_bootstrap_ci_hscc.json # C4
+  hscc_rankloss: outputs/mapr2026_v3_results/gnn_vs_rankloss_bootstrap_ci_hscc.json # C3 [BOOST] — chỉ khi --include-rankloss-comparison
 bootstrap_equivalence_bound: 0.02
 
 # ─── Evaluation ───────────────────────────────────────────────
@@ -1949,28 +1948,28 @@ fdr_alpha: 0.05
 4. Dùng bootstrap với **đúng comparator theo regime**.
 5. Không mở thêm operationalization mới trong 9 ngày còn lại.
 
-| Ngày | Track A: IC & Artifacts | Track B: Baselines & Community | Track C: GNN & Paper |
-| ---- | ----------------------- | ------------------------------ | -------------------- |
-| **21/4** | Regenerate `regression_targets_hscc_refined.parquet`; freeze HSCC config; update registry | Confirm `community_features.parquet`; lock HSCC comparator set | Patch docs + align harness naming |
-| **22/4** | Lock `A0` + `HSCC` label artifacts | Run HSCC flat baselines incl. `life_time`; fairness versions if using `language` | Start regime-specific GNN training |
-| **23/4** | Optional `A2` only if main path stable | Assemble regime-specific baseline tables | Continue GNN on `A0` + `HSCC`; collect mean±std |
-| **24/4** | No new label regimes | Runtime + metrics consolidation | Bootstrap CI: `A0 vs degree`, `HSCC vs strongest flat baseline` |
-| **25/4** | Artifact freeze | Final result tables and contrast analysis | Draft Section 4 and Discussion |
-| **26/4** | Internal validation | Consistency sweep on terminology/artifacts | IEEE format check |
-| **27/4** | Buffer for missing artifacts only | Buffer for table fixes only | Full paper dry-run |
-| **28–29/4** | No scope expansion | Final edits only | Submission package finalize |
-| **30/4** | — | — | **SUBMIT** |
+| Ngày        | Track A: IC & Artifacts                                                                   | Track B: Baselines & Community                                                   | Track C: GNN & Paper                                            |
+| ----------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **21/4**    | Regenerate `regression_targets_hscc_refined.parquet`; freeze HSCC config; update registry | Confirm `community_features.parquet`; lock HSCC comparator set                   | Patch docs + align harness naming                               |
+| **22/4**    | Lock `A0` + `HSCC` label artifacts                                                        | Run HSCC flat baselines incl. `life_time`; fairness versions if using `language` | Start regime-specific GNN training                              |
+| **23/4**    | Optional `A2` only if main path stable                                                    | Assemble regime-specific baseline tables                                         | Continue GNN on `A0` + `HSCC`; collect mean±std                 |
+| **24/4**    | No new label regimes                                                                      | Runtime + metrics consolidation                                                  | Bootstrap CI: `A0 vs degree`, `HSCC vs strongest flat baseline` |
+| **25/4**    | Artifact freeze                                                                           | Final result tables and contrast analysis                                        | Draft Section 4 and Discussion                                  |
+| **26/4**    | Internal validation                                                                       | Consistency sweep on terminology/artifacts                                       | IEEE format check                                               |
+| **27/4**    | Buffer for missing artifacts only                                                         | Buffer for table fixes only                                                      | Full paper dry-run                                              |
+| **28–29/4** | No scope expansion                                                                        | Final edits only                                                                 | Submission package finalize                                     |
+| **30/4**    | —                                                                                         | —                                                                                | **SUBMIT**                                                      |
 
 ### Scope Reduction — thứ tự cắt mới (v3.2)
 
-| Cắt trước | Giữ bắt buộc |
-| --------- | ------------ |
-| `I-A`, `II-B`, archived views-based variants | `A0` contrast run |
-| `A1` source-budget | `HSCC` main run |
+| Cắt trước                                                          | Giữ bắt buộc                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `I-A`, `II-B`, archived views-based variants                       | `A0` contrast run                                             |
+| `A1` source-budget                                                 | `HSCC` main run                                               |
 | full exhaustive multi-arch trên cả hai regimes nếu thiếu thời gian | HSCC baseline fairness (`life_time`, `views+life_time`, etc.) |
-| `GNN-full`, `GNN-random`, inductive test | bootstrap đúng comparator cho từng regime |
-| ranking-loss sweep nhiều alpha | runtime table + contrast narrative |
-| `A2` nếu main path còn chưa khóa | community artifact đủ để support HSCC interpretation |
+| `GNN-full`, `GNN-random`, inductive test                           | bootstrap đúng comparator cho từng regime                     |
+| ranking-loss sweep nhiều alpha                                     | runtime table + contrast narrative                            |
+| `A2` nếu main path còn chưa khóa                                   | community artifact đủ để support HSCC interpretation          |
 
 ---
 
@@ -2128,14 +2127,14 @@ SNA_MAPR2026/
 
 ### 19.2 GNN Surrogate Risks (v3.1 — mới)
 
-| Rủi ro                                                                          | Xác suất   | Impact     | Mitigation                                                                                                                                     |
-| ------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/APPNP)         | Trung bình | Trung bình | Bootstrap CI (Section 8.5) → claim practical equivalence (nếu CI within ±0.02); "+0.099 without precomputed structural summaries" story vs MLP |
-| GAT không converge với current setup (4 heads, hidden=128)                      | ~~Thấp~~ **Resolved** | **N/A** | **Resolved:** GAT đã bị drop chính thức do OOM tại A100-40GB. Official rerun dùng `--skip-gat`. Không cần mitigation. |
-| Ranking loss không improve Spearman so với Huber                                | Trung bình | Thấp       | Report as negative finding (appendix note); Huber-trained GNN remains primary variant                                                          |
-| Degree-controlled variance test shows low IC variance (CV < 0.3)                | Thấp       | Trung bình | Honest limitation in paper: "IC ≈ degree at Twitch scale"; strengthen runtime story instead                                                    |
-| Bootstrap CI shows GNN significantly _lower_ than degree (CI entirely negative) | Thấp       | Cao        | Restructure Section 4 claim: focus on (1) no-centrality-precompute advantage + (2) message passing contribution (+0.099)                       |
-| Multiple architecture runs produce high variance (std > 0.05)                   | Thấp       | Trung bình | Report mean ± std across 5 seeds; highlight reproducibility; use more seeds (10) for final table                                               |
+| Rủi ro                                                                          | Xác suất              | Impact     | Mitigation                                                                                                                                     |
+| ------------------------------------------------------------------------------- | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| GNN không vượt degree sau full architecture search (SAGE/GCN/GIN/APPNP)         | Trung bình            | Trung bình | Bootstrap CI (Section 8.5) → claim practical equivalence (nếu CI within ±0.02); "+0.099 without precomputed structural summaries" story vs MLP |
+| GAT không converge với current setup (4 heads, hidden=128)                      | ~~Thấp~~ **Resolved** | **N/A**    | **Resolved:** GAT đã bị drop chính thức do OOM tại A100-40GB. Official rerun dùng `--skip-gat`. Không cần mitigation.                          |
+| Ranking loss không improve Spearman so với Huber                                | Trung bình            | Thấp       | Report as negative finding (appendix note); Huber-trained GNN remains primary variant                                                          |
+| Degree-controlled variance test shows low IC variance (CV < 0.3)                | Thấp                  | Trung bình | Honest limitation in paper: "IC ≈ degree at Twitch scale"; strengthen runtime story instead                                                    |
+| Bootstrap CI shows GNN significantly _lower_ than degree (CI entirely negative) | Thấp                  | Cao        | Restructure Section 4 claim: focus on (1) no-centrality-precompute advantage + (2) message passing contribution (+0.099)                       |
+| Multiple architecture runs produce high variance (std > 0.05)                   | Thấp                  | Trung bình | Report mean ± std across 5 seeds; highlight reproducibility; use more seeds (10) for final table                                               |
 
 ---
 
@@ -2194,14 +2193,14 @@ Paper claim: map theo interpretation của từng regime, không dùng một com
 
 > **Execution alignment note (v3.2):** Bảng dưới đây là 6-person reference để mô tả đầy đủ vai trò. Khi triển khai thực tế với team 3 người, **`docs/MAPR2026_v3_team_parallel_coding_plan.md` là bản execution override**. Từ v3.2, execution path được hiểu là `A0 contrast + HSCC main target`.
 
-| Người | Track     | Ngày 6–12/4                                        | Ngày 13–21/4                                                                        | Ngày 22–30/4     |
-| ----- | --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------- |
-| 1     | Data + IC | **Day 1 benchmarks**, preprocessing, IC (bg)       | IC finalize; **degree-controlled variance test** (Section 8.4)                      | Writing support  |
-| 2     | Data + IC | Sampling + KS, pilot diagnostics, stability        | Label stability write-up                                                            | Writing support  |
-| 3     | Baselines | Betweenness (bg), PageRank, k-shell, **community** | **bootstrap CI** (Sec 8.5)                                                          | Results tables   |
-| 4     | Baselines | One-hop, 2-hop, Node2Vec, MLP                      | Evaluation metrics, runtime; fill NDCG/P@10% in baseline table                      | Figures          |
+| Người | Track     | Ngày 6–12/4                                        | Ngày 13–21/4                                                                                                | Ngày 22–30/4     |
+| ----- | --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1     | Data + IC | **Day 1 benchmarks**, preprocessing, IC (bg)       | IC finalize; **degree-controlled variance test** (Section 8.4)                                              | Writing support  |
+| 2     | Data + IC | Sampling + KS, pilot diagnostics, stability        | Label stability write-up                                                                                    | Writing support  |
+| 3     | Baselines | Betweenness (bg), PageRank, k-shell, **community** | **bootstrap CI** (Sec 8.5)                                                                                  | Results tables   |
+| 4     | Baselines | One-hop, 2-hop, Node2Vec, MLP                      | Evaluation metrics, runtime; fill NDCG/P@10% in baseline table                                              | Figures          |
 | 5     | GNN       | PyG setup, GNN-raw-attr (SAGE) training            | **Architecture comparison (GCN/GIN/APPNP)** + **ranking loss** (9.1b); 5-seed results (**GAT dropped OOM**) | Paper Sec 4      |
-| 6     | Paper     | **Intro + Related Work từ Ngày 8**                 | Sec 3 draft (MC-IC as metric)                                                       | Paper Sec 1-2, 5 |
+| 6     | Paper     | **Intro + Related Work từ Ngày 8**                 | Sec 3 draft (MC-IC as metric)                                                                               | Paper Sec 1-2, 5 |
 
 > **v3.1 priority shift (execution mapping):** Person 3 (mapped từ role Person 5) tập trung vào architecture comparison + ranking loss (NEW MUST-HAVES) trước khi làm ablation variants. Person 3 chạy bootstrap CI sau khi có best-arch predictions.
 
@@ -2234,31 +2233,31 @@ Person 6 Section 4 write-up → finalize 20-21/4
 
 > ⚠ **Note:** Labels B1–B5 trong bảng này là "blocking task" numbers, KHÔNG phải "experiment C1–C5". Experiment numbering (C1/C2/C3/C4/C5) nằm ở Section 8.4–8.7 và Section 9.1.
 
-| # | Thực nghiệm / việc | Owner | Artifact expected | Status |
-| - | ------------------ | ----- | ----------------- | ------ |
-| B1 | Regenerate HSCC regression targets + freeze config | P1 | `regression_targets_hscc_refined.parquet` + registry entry | ☐ |
-| B2 | HSCC baseline fairness set hoàn chỉnh (Exp C1) | P3 | HSCC rows trong `baseline_ranking_metrics_hscc_clean.csv` | ☐ |
-| B3 | Architecture comparison trên `A0` + `HSCC` (Exp C2; `--skip-gat`, 4 archs) | P3 | `surrogate_ranking_metrics_a0_clean.csv` + `surrogate_ranking_metrics_hscc_clean.csv` | ☐ |
-| B4 | Bootstrap `A0`: GNN vs degree (Exp C4-A0) | P3 | `gnn_vs_degree_bootstrap_ci_a0.json` | ☐ |
-| B5 | Bootstrap `HSCC`: GNN vs strongest flat baseline (Exp C4-HSCC) | P3 | `gnn_vs_baseline_bootstrap_ci_hscc.json` | ☐ |
+| #   | Thực nghiệm / việc                                                         | Owner | Artifact expected                                                                     | Status |
+| --- | -------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------- | ------ |
+| B1  | Regenerate HSCC regression targets + freeze config                         | P1    | `regression_targets_hscc_refined.parquet` + registry entry                            | ☐      |
+| B2  | HSCC baseline fairness set hoàn chỉnh (Exp C1)                             | P3    | HSCC rows trong `baseline_ranking_metrics_hscc_clean.csv`                             | ☐      |
+| B3  | Architecture comparison trên `A0` + `HSCC` (Exp C2; `--skip-gat`, 4 archs) | P3    | `surrogate_ranking_metrics_a0_clean.csv` + `surrogate_ranking_metrics_hscc_clean.csv` | ☐      |
+| B4  | Bootstrap `A0`: GNN vs degree (Exp C4-A0)                                  | P3    | `gnn_vs_degree_bootstrap_ci_a0.json`                                                  | ☐      |
+| B5  | Bootstrap `HSCC`: GNN vs strongest flat baseline (Exp C4-HSCC)             | P3    | `gnn_vs_baseline_bootstrap_ci_hscc.json`                                              | ☐      |
 
 ### SHOULD HAVE
 
-| # | Thực nghiệm / việc | Owner | Artifact expected | Status |
-| - | ------------------ | ----- | ----------------- | ------ |
-| S1 | Rankloss variant trên HSCC (Exp C3 — [🟡 BOOST]) | P3 | `gnn_vs_rankloss_bootstrap_ci_hscc.json` | ☐ |
-| S2 | `A2` sensitivity nếu main path đã ổn | P1/P3 | `ic_scores_sensitivity_a2.parquet` | ☐ |
-| S3 | NDCG@10% + P@10% đầy đủ cho cả `A0` và `HSCC` tables | P3 | updated metrics CSVs | ☐ |
-| S4 | Ceiling/oracle appendix note cho HSCC | P1/P3 | appendix text / note | ☐ |
+| #   | Thực nghiệm / việc                                   | Owner | Artifact expected                        | Status |
+| --- | ---------------------------------------------------- | ----- | ---------------------------------------- | ------ |
+| S1  | Rankloss variant trên HSCC (Exp C3 — [🟡 BOOST])     | P3    | `gnn_vs_rankloss_bootstrap_ci_hscc.json` | ☐      |
+| S2  | `A2` sensitivity nếu main path đã ổn                 | P1/P3 | `ic_scores_sensitivity_a2.parquet`       | ☐      |
+| S3  | NDCG@10% + P@10% đầy đủ cho cả `A0` và `HSCC` tables | P3    | updated metrics CSVs                     | ☐      |
+| S4  | Ceiling/oracle appendix note cho HSCC                | P1/P3 | appendix text / note                     | ☐      |
 
 ### CUT FIRST
 
-| # | Item | Why cut first |
-| - | ---- | ------------- |
-| X1 | `I-A`, `II-B` | Không còn thuộc MAPR critical path |
-| X2 | multi-alpha rankloss sweep | Không làm đổi paper claim cốt lõi |
-| X3 | exhaustive architecture grid beyond main path | Tốn thời gian hơn giá trị trong 9 ngày cuối |
-| X4 | inductive / GINE / extra archive branches | Thuộc post-MAPR |
+| #   | Item                                          | Why cut first                               |
+| --- | --------------------------------------------- | ------------------------------------------- |
+| X1  | `I-A`, `II-B`                                 | Không còn thuộc MAPR critical path          |
+| X2  | multi-alpha rankloss sweep                    | Không làm đổi paper claim cốt lõi           |
+| X3  | exhaustive architecture grid beyond main path | Tốn thời gian hơn giá trị trong 9 ngày cuối |
+| X4  | inductive / GINE / extra archive branches     | Thuộc post-MAPR                             |
 
 ### Verification Checklist — Document Consistency
 

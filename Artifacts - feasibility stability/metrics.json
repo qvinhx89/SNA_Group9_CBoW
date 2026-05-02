@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-04-12T21:22:12.915094",
+  "backend": "python-louvain",
+  "n_nodes": 168114,
+  "n_runs": 10,
+  "best_run_index": 6,
+  "best_seed": 6,
+  "best_modularity": 0.4231252972487002,
+  "n_communities": 24,
+  "all_modularities": [
+    0.4224998554286398,
+    0.41803384756905526,
+    0.4213872051247635,
+    0.4187659707354109,
+    0.4231003523681143,
+    0.41990594438335244,
+    0.4231252972487002,
+    0.4222365687796259,
+    0.42158478370826746,
+    0.42069711346600047
+  ],
+  "mean_nmi_louvain": 0.6996795635692487,
+  "std_nmi_louvain": 0.02463446032655797,
+  "min_nmi_louvain": 0.6514597671958564,
+  "cross_community_edge_fraction_mean": 0.3917972626762281,
+  "cross_community_edge_fraction_std": 0.21598328487624704,
+  "nmi_threshold": 0.67,
+  "stability_warning": false
+}

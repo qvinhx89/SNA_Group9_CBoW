@@ -1,0 +1,20 @@
+# Experiment Configuration
+# This file tracks experiment-specific settings
+
+experiment:
+  name: "sna_twitch_baseline"
+  run_id: null  # Auto-generated
+  seed: 42
+
+# Override parameters here if needed
+# (base.yaml values will be used by default)
+
+# MAPR2026 v3.1 construct-validity locks (paper-facing; record-of-truth)
+# NOTE: These keys are intentionally descriptive and may not be consumed by code.
+mapr2026_v3_1:
+  graph_directed: false
+  graph_note: "Twitch Gamers edges are mutual-follow; treat graph as undirected."
+  calibration_mode: "variance_check"  # no target-reach calibration for primary
+  p_primary: "weighted_cascade"       # p(u,v)=1/deg(v) (parameter-free)
+  ic_backend: "csr_numpy"
+  ic_parallel: "joblib_loky"

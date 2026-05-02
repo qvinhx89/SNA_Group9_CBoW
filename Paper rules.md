@@ -1,5 +1,7 @@
 # Academic Writing Rules for MAPR 2026 Paper
+
 ## Canonical Writing Protocol
+
 ### Primary source for paper drafting and skeleton alignment
 
 ---
@@ -10,11 +12,11 @@ This is the **canonical writing style rulebook** for the paper — not the froze
 
 **Two-file authority model:**
 
-| Question type | Go to |
-|---|---|
-| What number/ρ/CI/comparator to use? | **`Paper guide.md`** — frozen values, paste-ready English sentences |
+| Question type                             | Go to                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| What number/ρ/CI/comparator to use?       | **`Paper guide.md`** — frozen values, paste-ready English sentences             |
 | How to write it (style, tone, structure)? | **This file (`Paper rules.md`)** — principles, language patterns, section rules |
-| What claim is allowed? | Both files together — guide provides the artifact; rules govern the framing |
+| What claim is allowed?                    | Both files together — guide provides the artifact; rules govern the framing     |
 
 When the two files appear to conflict on a factual matter (e.g., a number), **`Paper guide.md` wins** — it carries the frozen artifacts. When they conflict on a style or framing principle, **this file wins**.
 
@@ -183,8 +185,8 @@ Examples:
 - `rho = 0.826`
 - `NDCG@10 = 0.857`
 - `480.3 s`
-- `0.086 s`  ← headline runtime uses `hscc,gnn_raw_attr` in `runtime_breakdown.csv`
-- `5,590x`   ← speedup for the same row vs `mc_ic_labeling`; round to `5,500x` in paper prose
+- `0.086 s` ← headline runtime uses `hscc,gnn_raw_attr` in `runtime_breakdown.csv`
+- `5,590x` ← speedup for the same row vs `mc_ic_labeling`; round to `5,500x` in paper prose
 - `5,000 labeled nodes`
 
 Never round in a direction that flatters the paper.
@@ -199,12 +201,12 @@ Never round in a direction that flatters the paper.
 
 **Equivalence vs significance interpretation — four cases (exhaustive):**
 
-| Case | CI pattern | Example | Interpretation | Allowed wording |
-|---|---|---|---|---|
-| **Case 1** | Both bounds > 0 | [+0.021, +0.044] | significantly better | `significantly improves over` |
-| **Case 2** | Both bounds < 0 | [−0.029, −0.008] | significantly worse | `remains statistically below` |
-| **Case 3** | Spans zero, fully within [−δ₀, +δ₀] | [−0.015, +0.010] | practically equivalent | `practically equivalent under the pre-registered bound (δ₀=0.02)` |
-| **Case 4** | Spans zero, partially outside [−δ₀, +δ₀] | [−0.025, +0.010] | **inconclusive** | `results are inconclusive; the CI spans zero but extends beyond the equivalence window` |
+| Case       | CI pattern                               | Example          | Interpretation         | Allowed wording                                                                         |
+| ---------- | ---------------------------------------- | ---------------- | ---------------------- | --------------------------------------------------------------------------------------- |
+| **Case 1** | Both bounds > 0                          | [+0.021, +0.044] | significantly better   | `significantly improves over`                                                           |
+| **Case 2** | Both bounds < 0                          | [−0.029, −0.008] | significantly worse    | `remains statistically below`                                                           |
+| **Case 3** | Spans zero, fully within [−δ₀, +δ₀]      | [−0.015, +0.010] | practically equivalent | `practically equivalent under the pre-registered bound (δ₀=0.02)`                       |
+| **Case 4** | Spans zero, partially outside [−δ₀, +δ₀] | [−0.025, +0.010] | **inconclusive**       | `results are inconclusive; the CI spans zero but extends beyond the equivalence window` |
 
 **Important:** Case 4 is NOT equivalent and NOT significant. Do not silently drop one tail and claim equivalence. Report it honestly as inconclusive.
 
@@ -344,15 +346,15 @@ For the final paper, the abstract should not use preliminary inferential claims.
 
 **FROZEN CASE — Active template for this paper (use verbatim or adapt):**
 
-*A0 (gnn_significantly_worse):*
+_A0 (gnn_significantly_worse):_
 
 > Under degree-coupled IC (A0), the best GNN (GCN, raw node attributes) remains statistically below degree centrality (Δρ = −0.018, 95% CI [−0.029, −0.008]), consistent with a structural ceiling imposed by the degree-coupled operationalization. This result is not a failure — it confirms that analytical degree information already saturates most of the available surrogate signal under this regime.
 
-*HSCC (gnn_significantly_better):*
+_HSCC (gnn_significantly_better):_
 
 > Under source-community IC (HSCC), the best GNN (SAGE) significantly outperforms the strongest matched flat baseline — LR(degree, views, life_time, language), ρ = 0.884 — achieving ρ = 0.915 (Δρ = +0.033, 95% CI [+0.021, +0.044]), suggesting that neighborhood message passing captures residual community-propagation structure beyond what node-level source attributes alone encode.
 
-*C3 rankloss (inferential: vs comparator; descriptive: vs standard GNN):*
+_C3 rankloss (inferential: vs comparator; descriptive: vs standard GNN):_
 
 > Ranking-aware training (SAGE + combined Huber + pairwise ranking loss, α=0.5) achieves ρ = 0.924, a descriptive gain of +0.009 over standard Huber training, and significantly outperforms the flat comparator by Δρ = +0.041 (95% CI [+0.030, +0.053]).
 
@@ -520,9 +522,11 @@ Keep these justifications short and transparent.
 **Pre-empt the three reviewer questions that are nearly certain to appear:**
 
 1. **"Why rank normalization instead of raw `views`?"**
+
    > `views` has a heavy-tailed distribution; rank normalization prevents a small number of extremely large accounts from dominating the source term and keeps the scale stable across reruns.
 
 2. **"Why `log1p(views)/(1+life_time)` rather than raw `views`?"**
+
    > The term is a proxy for engagement velocity rather than cumulative popularity. `log1p` compresses outliers; dividing by `1+life_time` avoids rewarding accounts simply for existing longer.
 
 3. **"Why fix `λ`, `γ`, `p_max` instead of tuning them?"**
@@ -532,9 +536,9 @@ These three answers should appear in Section III of the paper (or in the Appendi
 
 **Placement in the paper — two acceptable styles:**
 
-*Option A (integrated prose):* Weave the answers into the HSCC formula paragraph itself, as a short parenthetical or follow-up sentence. Example: "The rank-based formulation is used because the raw views distribution is heavy-tailed — a small number of extremely active accounts would otherwise dominate the source term (see also Appendix §A)."
+_Option A (integrated prose):_ Weave the answers into the HSCC formula paragraph itself, as a short parenthetical or follow-up sentence. Example: "The rank-based formulation is used because the raw views distribution is heavy-tailed — a small number of extremely active accounts would otherwise dominate the source term (see also Appendix §A)."
 
-*Option B (compact FAQ block):* After the HSCC formula and its plain-language interpretation (Rule B2), add a 3-item bulleted block labeled "Operationalization design notes:" with one sentence per question. This is more reviewer-friendly but costs ~3–4 lines of space.
+_Option B (compact FAQ block):_ After the HSCC formula and its plain-language interpretation (Rule B2), add a 3-item bulleted block labeled "Operationalization design notes:" with one sentence per question. This is more reviewer-friendly but costs ~3–4 lines of space.
 
 Avoid: writing the three answers only in the Conclusion or Discussion section — reviewers may question the method before reaching those sections.
 
@@ -653,6 +657,7 @@ Shorter version for constrained space:
 > Degree centrality collapses from ρ = 0.826 (A0) to ρ = −0.006 (HSCC), marking a regime shift; the relevant HSCC comparator is LR(degree, views, life_time, language) at ρ = 0.884.
 
 Do not write:
+
 > Under HSCC, we compare GNN against degree.
 
 If degree appears in the HSCC table, add a footnote: "Degree included for regime-contrast reference only (ρ = −0.006); it is not the primary HSCC comparator."
@@ -694,7 +699,7 @@ Template for hardware exclusion (use verbatim or adapt):
 
 Keep the exclusion explanation to one sentence. Do not turn it into a subsection or defensive discussion.
 
-**Exception — Rule E12 interaction:** Rule E12 requires reporting the architecture-regime interaction (GCN@A0 vs SAGE@HSCC, GIN collapse) as a *finding*, not merely a footnote. This is compatible with Rule E7: keep the prose compact (one paragraph), but **do include the frozen values and the regime-alignment interpretation** that Rule E12 specifies. The one-paragraph limit of Rule E7 applies to the architecture discussion as a standalone section — if the architecture-regime interaction is integrated into the regime results section (§4.2 / §4.3), it can be woven into those result paragraphs without requiring a separate architecture section.
+**Exception — Rule E12 interaction:** Rule E12 requires reporting the architecture-regime interaction (GCN@A0 vs SAGE@HSCC, GIN collapse) as a _finding_, not merely a footnote. This is compatible with Rule E7: keep the prose compact (one paragraph), but **do include the frozen values and the regime-alignment interpretation** that Rule E12 specifies. The one-paragraph limit of Rule E7 applies to the architecture discussion as a standalone section — if the architecture-regime interaction is integrated into the regime results section (§4.2 / §4.3), it can be woven into those result paragraphs without requiring a separate architecture section.
 
 ## Rule E8 - Report variance, but do not over-analyze it
 
@@ -749,6 +754,7 @@ In the results table, place Node2Vec in a distinct row group labeled **"Shallow 
 The choice of best architecture differs by regime and must be reported explicitly in Section IV.
 
 **Frozen results (h=128 official rerun):**
+
 - Under A0 (degree-coupled): **GCN** (symmetric normalization) is best raw_attr arch (ρ=0.808). SAGE performed poorly (ρ=0.534). GCN's symmetric normalization aligns naturally with degree-coupled propagation.
 - Under HSCC (source-velocity): **SAGE** (mean aggregation) is best (ρ=0.915). GCN dropped to ρ=0.602. SAGE's mean aggregation suits source-side engagement signals.
 - **GIN exhibited near-random performance under HSCC** (ρ=0.028; std=0.046, not excluded by threshold). Report as a finding: GIN's sum aggregation collapsed under source-velocity operationalization.
@@ -766,27 +772,29 @@ Do not frame this as "GCN is better than SAGE" — regime context must always ac
 
 **GIN framing — this is a finding, not a model failure.** Do not write "GIN performed poorly." The correct framing treats the collapse as an empirical finding about architecture-operationalization fit, not as a deficiency of GIN in general. Preferred framing: "GIN's near-random result under HSCC reveals that sum aggregation without normalization does not align with source-velocity label structure..." — same scientific register used for the A0 structural ceiling result.
 
-**CI equivalence bound note (avoid confusion):** When writing about A0 equivalence, use this precise logic: for a CI of [−0.029, −0.008], practical equivalence under δ₀=0.02 requires the *entire* CI to fall within [−0.02, +0.02]. Here, the CI lower bound −0.029 lies outside this window (|−0.029| = 0.029 > 0.02), so equivalence is NOT supported. This means the CI is fully negative and `gnn_significantly_worse` is the correct interpretation, not `practically equivalent`. Do not write "CI lower bound is outside the equivalence bound" without the absolute value clarification — the directional phrasing is ambiguous to non-statistician reviewers.
+**CI equivalence bound note (avoid confusion):** When writing about A0 equivalence, use this precise logic: for a CI of [−0.029, −0.008], practical equivalence under δ₀=0.02 requires the _entire_ CI to fall within [−0.02, +0.02]. Here, the CI lower bound −0.029 lies outside this window (|−0.029| = 0.029 > 0.02), so equivalence is NOT supported. This means the CI is fully negative and `gnn_significantly_worse` is the correct interpretation, not `practically equivalent`. Do not write "CI lower bound is outside the equivalence bound" without the absolute value clarification — the directional phrasing is ambiguous to non-statistician reviewers.
 
 ## Rule E13 - Binary instability claim: scope of evidence is A0-only; extension to HSCC must be framed as topology argument
 
 The formal stability diagnostic (Jaccard, gap-to-noise sweep) was conducted under **A0 only** (weighted-cascade, using the frozen Person 1 A0 score artifact — `ic_scores_a0.parquet` in the current team handoff). Key artifacts:
 
-| Artifact | Path | Scope |
-|---|---|---|
-| `stability_explanation.json` | `outputs/day1_benchmark/` | A0; community field is graph-topology |
-| `ic_label_stability.json` | `outputs/day1_benchmark/` | A0 — Jaccard=0.307 across 3 MC seeds |
-| `phase1_community_overlap.json` | `outputs/ic_feasibility/` | A0 scores; community structure regime-invariant |
-| `phase2_threshold_analysis.json` | `outputs/ic_feasibility/` | A0 only |
-| `pivot_decision_report.json` | `outputs/ic_feasibility/` | A0 only; has `evidence_statement_for_paper` |
+| Artifact                         | Path                      | Scope                                           |
+| -------------------------------- | ------------------------- | ----------------------------------------------- |
+| `stability_explanation.json`     | `outputs/day1_benchmark/` | A0; community field is graph-topology           |
+| `ic_label_stability.json`        | `outputs/day1_benchmark/` | A0 — Jaccard=0.307 across 3 MC seeds            |
+| `phase1_community_overlap.json`  | `outputs/ic_feasibility/` | A0 scores; community structure regime-invariant |
+| `phase2_threshold_analysis.json` | `outputs/ic_feasibility/` | A0 only                                         |
+| `pivot_decision_report.json`     | `outputs/ic_feasibility/` | A0 only; has `evidence_statement_for_paper`     |
 
 **Do NOT write:** "Jaccard=0.31 under HSCC" — that is an A0 measurement only.
 
 **DO write for HSCC:** One of the following scoped extensions:
-- *"The community-overlap structural argument (84.2% communities spanning top-k boundary) is a graph-topology property invariant to IC model parameterization, and therefore extends directly to HSCC."*
-- *"Under HSCC, degree collapse (ρ = −0.006) renders any degree-anchored binary threshold meaningless independently of Jaccard stability."*
+
+- _"The community-overlap structural argument (84.2% communities spanning top-k boundary) is a graph-topology property invariant to IC model parameterization, and therefore extends directly to HSCC."_
+- _"Under HSCC, degree collapse (ρ = −0.006) renders any degree-anchored binary threshold meaningless independently of Jaccard stability."_
 
 **Contribution bullet scope correction:** When listing contributions, use:
+
 > "We show that binary top-k IC labels are structurally unstable (formal diagnostic under A0; structural cause extends to HSCC via community topology)."
 
 This avoids overclaiming while preserving the general regression motivation for both regimes.
@@ -838,6 +846,7 @@ All quantitative evidence should already appear in the results section, tables, 
 **Primary metric:** Spearman ρ — only metric backed by frozen bootstrap CI artifacts. All inferential claims (significantly better/worse/equivalent) derive from Spearman bootstrap CIs.
 
 **Secondary metrics:** NDCG@10% and Precision@10% — reported in tables for completeness and reader reference, but:
+
 - Do NOT make inferential claims based on NDCG or P@10 alone ("GNN significantly improves NDCG" is not allowed without a separate NDCG bootstrap CI artifact — which does not exist for this paper)
 - Do NOT use NDCG trends to override a Spearman-based claim (e.g., "NDCG improves even though Spearman is below degree — therefore GNN is better" is invalid)
 - If NDCG and Spearman disagree, acknowledge the divergence as descriptive: "NDCG@10% improves slightly, but the Spearman-based bootstrap test indicates GNN remains statistically below degree centrality"
@@ -851,12 +860,14 @@ All quantitative evidence should already appear in the results section, tables, 
 When one architecture performs well in one regime but poorly in another, follow this discipline:
 
 **Framing order for prose:**
+
 1. State A0 winner with frozen ρ: "Under A0, GCN achieves the best raw_attr performance (ρ=0.808)"
 2. State HSCC winner with frozen ρ: "Under HSCC, SAGE achieves the best performance (ρ=0.915)"
 3. State the interaction: "This architecture-regime interaction is consistent with..."
 4. Report GIN collapse: "GIN's near-random HSCC result (ρ=0.028) further illustrates this interaction"
 
 **Forbidden framings:**
+
 - "GCN is generally better than SAGE" — regime context is MANDATORY
 - "SAGE is the best architecture" — only under HSCC
 - "GIN performed poorly" — must say "GIN collapsed under HSCC" (not in A0)
@@ -877,16 +888,17 @@ Do NOT: describe APPNP's exclusion as a failure or bug. Do NOT: omit APPNP from 
 
 ## Rule F4a - Model naming convention (addendum to Rule F4)
 
-| Context | Correct name | Incorrect |
-|---|---|---|
-| First use in main text | "GraphSAGE (mean aggregation)" | "SAGE", "gnn_raw_attr" |
-| Subsequent main text | "SAGE" or "GraphSAGE" | "gnn_raw_attr", "graph_sage" |
-| Table row label | "SAGE" or "GNN (SAGE, raw_attr)" | "gnn_raw_attr" |
-| Figure legend | "SAGE (mean agg.)" | "gnn_raw_attr", "SAGE-raw" |
-| Artifact code reference (inline backtick) | `` `gnn_raw_attr` `` | "gnn raw attr", "gnn-raw-attr" |
-| Method section | "GraphSAGE [Hamilton et al., 2017] with mean aggregation" | just "SAGE" without citation on first use |
+| Context                                   | Correct name                                              | Incorrect                                 |
+| ----------------------------------------- | --------------------------------------------------------- | ----------------------------------------- |
+| First use in main text                    | "GraphSAGE (mean aggregation)"                            | "SAGE", "gnn_raw_attr"                    |
+| Subsequent main text                      | "SAGE" or "GraphSAGE"                                     | "gnn_raw_attr", "graph_sage"              |
+| Table row label                           | "SAGE" or "GNN (SAGE, raw_attr)"                          | "gnn_raw_attr"                            |
+| Figure legend                             | "SAGE (mean agg.)"                                        | "gnn_raw_attr", "SAGE-raw"                |
+| Artifact code reference (inline backtick) | `` `gnn_raw_attr` ``                                      | "gnn raw attr", "gnn-raw-attr"            |
+| Method section                            | "GraphSAGE [Hamilton et al., 2017] with mean aggregation" | just "SAGE" without citation on first use |
 
 Same convention applies to other architectures:
+
 - "GCN" after first use as "Graph Convolutional Network (GCN) [Kipf & Welling, 2017]"
 - "GIN" after first use as "Graph Isomorphism Network (GIN) [Xu et al., 2019]"
 - "APPNP" after first use as "APPNP [Klicpera et al., 2019]"
@@ -897,16 +909,16 @@ Same convention applies to other architectures:
 
 Writers looking for a specific model's constraints — find the relevant rule here:
 
-| Model | Key writing constraint | See Rule(s) |
-|-------|----------------------|-------------|
-| **GCN** | "Graph Convolutional Network (GCN)" at first use; "GCN" thereafter; never "GCN surrogate" | Rule F4a |
-| **SAGE / GraphSAGE** | Tables: "SAGE"; prose: "GraphSAGE" at first use, then "SAGE" or "GraphSAGE" (consistent per paper); NEVER "gnn_raw_attr" in prose | Rule F4a |
-| **GIN** | Collapse under HSCC (ρ=0.028) is a **finding** — frame as "architecture-operationalization fit", not "GIN failed" or "GIN performed poorly" | Rule E12a |
-| **APPNP** | Dagger (†) in table rows; one-sentence exclusion explanation in main text; report results in appendix for completeness; do NOT use double-dagger (‡) unless already reserved for another annotation | Rules E12a, F7 |
-| **Node2Vec** | Separate "Shallow Embedding" group in tables; runtime MUST show precomp (~153s offline) separately from inference (~0.04s); NEVER merge precomp time with GNN inference time | Rule E11, Section 11 |
-| **degree** | A0: primary comparator (analytical baseline); HSCC: contextual only — footnote "included for regime-contrast reference only; ρ = −0.006" — NOT the HSCC claim comparator | Rules E4, E5 |
-| **`lr_degree_views_life_time_lang`** | HSCC primary comparator — LOCKED; name explicitly at least once in main text, table, or caption; mark with ★ or bold in table | Rule HSCC-F1 (guide), Rule F3 |
-| **SAGE (all feats) / ‡ row** | Double-dagger (‡) in table; footnote "diagnostic row only; oracle feature access (full graph attributes) not available at inference time — excluded from main comparisons" | Rule F7 note |
+| Model                                | Key writing constraint                                                                                                                                                                              | See Rule(s)                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **GCN**                              | "Graph Convolutional Network (GCN)" at first use; "GCN" thereafter; never "GCN surrogate"                                                                                                           | Rule F4a                      |
+| **SAGE / GraphSAGE**                 | Tables: "SAGE"; prose: "GraphSAGE" at first use, then "SAGE" or "GraphSAGE" (consistent per paper); NEVER "gnn_raw_attr" in prose                                                                   | Rule F4a                      |
+| **GIN**                              | Collapse under HSCC (ρ=0.028) is a **finding** — frame as "architecture-operationalization fit", not "GIN failed" or "GIN performed poorly"                                                         | Rule E12a                     |
+| **APPNP**                            | Dagger (†) in table rows; one-sentence exclusion explanation in main text; report results in appendix for completeness; do NOT use double-dagger (‡) unless already reserved for another annotation | Rules E12a, F7                |
+| **Node2Vec**                         | Separate "Shallow Embedding" group in tables; runtime MUST show precomp (~153s offline) separately from inference (~0.04s); NEVER merge precomp time with GNN inference time                        | Rule E11, Section 11          |
+| **degree**                           | A0: primary comparator (analytical baseline); HSCC: contextual only — footnote "included for regime-contrast reference only; ρ = −0.006" — NOT the HSCC claim comparator                            | Rules E4, E5                  |
+| **`lr_degree_views_life_time_lang`** | HSCC primary comparator — LOCKED; name explicitly at least once in main text, table, or caption; mark with ★ or bold in table                                                                       | Rule HSCC-F1 (guide), Rule F3 |
+| **SAGE (all feats) / ‡ row**         | Double-dagger (‡) in table; footnote "diagnostic row only; oracle feature access (full graph attributes) not available at inference time — excluded from main comparisons"                          | Rule F7 note                  |
 
 Cross-reference: for full paste-ready sentences and frozen ρ values, see `Paper guide.md` Sections 11–12.
 
@@ -916,18 +928,18 @@ Cross-reference: for full paste-ready sentences and frozen ρ values, see `Paper
 
 Define at first use; abbreviate consistently thereafter. Do NOT alternate between full form and abbreviation within a section.
 
-| Full form | Standard abbreviation | First definition | Notes |
-|-----------|-----------------------|-----------------|-------|
-| Independent Cascade | IC | §2.1 | |
-| Monte Carlo Independent Cascade | MC-IC | §2.1 or §3 | Always hyphenated |
-| Twitch Gamers graph | Twitch graph | §3.1 | Use the dataset name "Twitch Gamers" (Rozemberczki & Sarkar, 2021); do not label it as "EN". |
-| Graph Neural Network | GNN | §1 or §2.3 | "GNNs" (plural OK) |
-| Logistic Regression | LR | §4.1 | Tables: "LR(...)"; prose: spell out at first mention |
-| Spearman rank correlation | ρ | §4.1 | Always lowercase Greek; define as "Spearman ρ" at first use |
-| Normalized Discounted Cumulative Gain | NDCG@k | §4.1 | Include @k value (e.g., NDCG@10); define at first use in §4 |
-| GraphSAGE | SAGE (tables only) | §4.1 | In prose: "GraphSAGE" at first mention; see Rule F4a for prose vs table rules |
-| IC regime A0 | A0 | §3.2 | Define as "weighted cascade regime (A0)" |
-| IC regime HSCC | HSCC | §3.2 | Define as "source-community regime (HSCC)"; expand acronym once |
+| Full form                             | Standard abbreviation | First definition | Notes                                                                                        |
+| ------------------------------------- | --------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
+| Independent Cascade                   | IC                    | §2.1             |                                                                                              |
+| Monte Carlo Independent Cascade       | MC-IC                 | §2.1 or §3       | Always hyphenated                                                                            |
+| Twitch Gamers graph                   | Twitch graph          | §3.1             | Use the dataset name "Twitch Gamers" (Rozemberczki & Sarkar, 2021); do not label it as "EN". |
+| Graph Neural Network                  | GNN                   | §1 or §2.3       | "GNNs" (plural OK)                                                                           |
+| Logistic Regression                   | LR                    | §4.1             | Tables: "LR(...)"; prose: spell out at first mention                                         |
+| Spearman rank correlation             | ρ                     | §4.1             | Always lowercase Greek; define as "Spearman ρ" at first use                                  |
+| Normalized Discounted Cumulative Gain | NDCG@k                | §4.1             | Include @k value (e.g., NDCG@10); define at first use in §4                                  |
+| GraphSAGE                             | SAGE (tables only)    | §4.1             | In prose: "GraphSAGE" at first mention; see Rule F4a for prose vs table rules                |
+| IC regime A0                          | A0                    | §3.2             | Define as "weighted cascade regime (A0)"                                                     |
+| IC regime HSCC                        | HSCC                  | §3.2             | Define as "source-community regime (HSCC)"; expand acronym once                              |
 
 **Do NOT abbreviate:** "degree centrality" (always spell out in results prose), "influence score" (always spell out), "community" (always spell out).
 
@@ -1002,10 +1014,12 @@ A table caption should tell the reader:
 
 **Worked examples of locked table captions (use or adapt):**
 
-*Table 2 (A0 results):*
+_Table 2 (A0 results):_
+
 > Surrogate ranking performance under the degree-coupled IC regime (A0). Primary comparator: degree centrality (ρ = 0.826). All GNN results averaged over 5 random seeds; ± values are standard deviations. †APPNP excluded from best-arch comparison (seed std > 0.1 threshold). ‡Node2Vec: embedding precomputation ~153s offline; reported inference time is downstream LR only.
 
-*Table 3 (HSCC results):*
+_Table 3 (HSCC results):_
+
 > Surrogate ranking performance under the source-community IC regime (HSCC). Primary comparator: LR(degree, views, life_time, language) — `lr_degree_views_life_time_lang`, ρ = 0.884 — official comparator per frozen bootstrap CI artifact. Note: `lr_views_life_time_lang` (ρ = 0.88442) is within 0.001 points — a practical tie; comparator selection is justified by artifact pre-specification. Degree included for regime-contrast reference only (ρ = −0.006). All GNN results averaged over 5 random seeds. †APPNP excluded from best-arch comparison (seed std > 0.1). ‡Node2Vec: precomputation ~153s offline.
 
 These captions are frozen — use them as the reference for all subsequent paper drafts. Do not silently change the comparator row or footnote content without updating claim sentences simultaneously.
@@ -1025,6 +1039,7 @@ Before finalizing any results table, confirm all 7 points are satisfied:
 These 7 checks apply to Table 2 (A0 results), Table 3 (HSCC results), and any appendix table containing GNN or baseline ρ values.
 
 **Comparator notation — both forms are acceptable; pick one and keep it consistent:**
+
 - Code-style (for methods section): `` `lr_degree_views_life_time_lang` ``
 - Prose-style (for results text): `LR(degree, views, life_time, language)` or `LR(dvtl+lang)`
 - Caption-style (for table captions): `LR(degree, views, life_time, language)` — spell out in full on first use
@@ -1131,6 +1146,7 @@ Use:
 If Node2Vec appears in a runtime table, its row must show **precomputation time separately** from downstream LR inference time. Do not merge these two into a single number.
 
 **Frozen timing reference (from `runtime_breakdown.csv` — use these exact values):**
+
 - Precomputation: **~153 seconds (~2.5 minutes)** per regime
 - Downstream LR prediction (inference only): **~0.040 seconds** ← `inference_sec_full_graph` in CSV
 - Note: `train_sec` = 153s bundles embedding generation + LR fit together; 0.040s is predict-only
@@ -1155,6 +1171,7 @@ If Node2Vec appears in a runtime table, its row must show **precomputation time 
 **Placement guidance (main paper vs appendix):**
 
 The rankloss result fits naturally as:
+
 - A bolded row in Table 3 (HSCC results) labeled **"SAGE + rankloss (C3)"**, placed directly below the standard `gnn_raw_attr` row
 - One short sentence in §4.3 prose noting the improvement: "A ranking-aware variant further improves to ρ = 0.924 (+0.009 over standard training, Δρ = +0.041 over comparator, 95% CI [+0.030, +0.053])."
 - One optional sentence in the conclusion (see Rule C2)
@@ -1168,11 +1185,12 @@ Do NOT move rankloss entirely to the appendix — the artifact is frozen and the
 These are templates, not predictions.
 
 **Quick navigation — find your template:**
-- Evidence still preliminary → *"If evidence is still preliminary"* below
+
+- Evidence still preliminary → _"If evidence is still preliminary"_ below
 - A0 result (frozen: `gnn_significantly_worse`) → **"If A0 is significantly below degree ← ✅ ACTIVE"**
 - HSCC result (frozen: `gnn_significantly_better`) → **"If HSCC significantly improves ← ✅ ACTIVE"**
 - C3 rankloss (frozen: significant improvement) → **"C3 Rankloss Outcome Templates ← ✅ ACTIVE"**
-- HSCC tie or loss (not active; archived) → *"If HSCC is approximately tied"* / *"If HSCC is significantly below"*
+- HSCC tie or loss (not active; archived) → _"If HSCC is approximately tied"_ / _"If HSCC is significantly below"_
 
 ## If evidence is still preliminary or mixed
 
@@ -1196,7 +1214,7 @@ Use wording like:
 
 > Under A0, the best GNN significantly improves over degree, indicating that the degree-coupled operationalization still leaves recoverable graph-structured signal beyond the analytical ceiling implied by simple centrality alone.
 
-## If A0 is significantly below degree  ← ✅ ACTIVE TEMPLATE (frozen result)
+## If A0 is significantly below degree ← ✅ ACTIVE TEMPLATE (frozen result)
 
 Use wording like:
 
@@ -1204,11 +1222,11 @@ Use wording like:
 
 **Frozen values:** GCN ρ=0.808, degree ρ=0.826, delta=−0.018, CI=[−0.029, −0.008].
 
-**Do NOT use "practically equivalent" for A0.** Practical equivalence requires the *entire* CI to lie within the pre-registered equivalence window [−δ₀, +δ₀] = [−0.02, +0.02]. The frozen CI = [−0.029, −0.008]: both bounds are negative and the lower bound |−0.029| = 0.029 exceeds δ₀ = 0.02. This means the CI is fully negative (GNN is below degree) AND the magnitude is too large for equivalence — the correct interpretation is `gnn_significantly_worse`, not `practically equivalent`.
+**Do NOT use "practically equivalent" for A0.** Practical equivalence requires the _entire_ CI to lie within the pre-registered equivalence window [−δ₀, +δ₀] = [−0.02, +0.02]. The frozen CI = [−0.029, −0.008]: both bounds are negative and the lower bound |−0.029| = 0.029 exceeds δ₀ = 0.02. This means the CI is fully negative (GNN is below degree) AND the magnitude is too large for equivalence — the correct interpretation is `gnn_significantly_worse`, not `practically equivalent`.
 
 **How to frame this positively for reviewers:** The A0 result is NOT a failure of the GNN. The correct framing is that the degree-coupled operationalization is analytically saturated — degree itself is the structural prior embedded in the label-generation mechanism, so no graph model can outperform it. This is the structural ceiling hypothesis confirmed, not a model deficiency.
 
-## If HSCC significantly improves over the strongest flat baseline  ← ✅ ACTIVE TEMPLATE (frozen result)
+## If HSCC significantly improves over the strongest flat baseline ← ✅ ACTIVE TEMPLATE (frozen result)
 
 Use wording like:
 
@@ -1245,10 +1263,10 @@ Use wording like:
 
 **Claim precision note — two separate claims, different evidence levels:**
 
-| Claim | Evidence | Allowed wording |
-|---|---|---|
-| Rankloss vs flat comparator | ✅ Inferential — `gnn_vs_rankloss_bootstrap_ci_hscc.json` Δρ=+0.041, CI=[+0.030, +0.053] | "significantly outperforms the flat comparator" |
-| Rankloss vs standard Huber SAGE | ✅ Descriptive only — point estimate 0.924 − 0.915 = +0.009 | "achieves +0.009 Spearman points above standard training (descriptive)" |
+| Claim                           | Evidence                                                                                 | Allowed wording                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Rankloss vs flat comparator     | ✅ Inferential — `gnn_vs_rankloss_bootstrap_ci_hscc.json` Δρ=+0.041, CI=[+0.030, +0.053] | "significantly outperforms the flat comparator"                         |
+| Rankloss vs standard Huber SAGE | ✅ Descriptive only — point estimate 0.924 − 0.915 = +0.009                              | "achieves +0.009 Spearman points above standard training (descriptive)" |
 
 Do **not** write "significantly improves over the standard Huber-trained GNN" — no paired bootstrap between rankloss and standard SAGE exists in the frozen artifacts. The +0.009 is a point estimate, not an inferential result.
 

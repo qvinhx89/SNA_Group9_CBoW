@@ -1,0 +1,30 @@
+{
+  "label_regime": "a0",
+  "gnn_model": "gcn_raw_attr",
+  "comparator_model": "degree",
+  "surrogate_csv_used": "/workspace/SNA_Group9_CBoW/outputs/mapr2026_v3_results/surrogate_ranking_metrics_a0_clean.csv",
+  "feature_policy": {
+    "include_language": false,
+    "gnn_model": "gcn_raw_attr",
+    "hidden_channels": 128,
+    "appnp_k": 10,
+    "gat_heads": 4,
+    "appnp_alpha": 0.15,
+    "gnn_std_threshold": 0.1
+  },
+  "n_test": 1000,
+  "n_bootstrap": 1000,
+  "equivalence_bound": 0.02,
+  "spearman": {
+    "delta_mean": -0.018403720777637408,
+    "ci_95_lower": -0.02875649925782552,
+    "ci_95_upper": -0.008445009627254406,
+    "interpretation": "gnn_significantly_worse"
+  },
+  "ndcg_at_10pct": {
+    "delta_mean": -0.04505101327792443,
+    "ci_95_lower": -0.07610523317150984,
+    "ci_95_upper": -0.01342106266434421,
+    "interpretation": "gnn_significantly_worse"
+  }
+}

@@ -347,3 +347,210 @@ Khi gui ket qua moi cho team, nen bao cao toi thieu:
 - governance note: GAT `excluded_OOM` chinh thuc (`gat_excluded_reason: OOM_A100_40GB_hidden128`). Neu co ket qua h=64 tu lan chay cu, co the ghi footnote trong paper voi ρ_A0=0.344, ρ_HSCC=0.513 nhung khong dua vao main table.
 - governance note: APPNP status (`stable std<0.1` / `excluded_high_variance std=X`)
 - node2vec status: `rerun` / `carry_forward` / `de_scoped`
+
+---
+
+## 9. Bo sung cho Person 3 — graph-augmented flat baseline + HSCC gamma sensitivity (paper path)
+
+Hai script sau **khong** thay the Buoc 1–6 o tren; chung la **artifact bo sung** cho narrative HSCC (1-hop engineered signal + mechanism check gamma). Chay tu **cung thu muc** nhu Section 2:
+
+```powershell
+cd "D:\UIT\Y3 - S2\Social Network Analysis\SNA_Group9_CBoW\src\mapr2026_v3"
+```
+
+### 9.0 Duong dan — **phai doc truoc khi copy-run**
+
+Hai script dung `resolve_project_path()` trong `src/mapr2026_v3/*.py`: moi path **tuong doi** duoc noi voi **repo root** (`Path(__file__).resolve().parents[2]`, tuc thu muc chua `src/`), **khong** phai thu muc hien tai (cwd).
+
+- **Dung:** `$DP = "data\processed"` hoac `$DP = "Data protocol"` — se thanh `REPO_ROOT\data\processed\...`.
+- **Sai / nguy hiem:** `$DP = "..\..\data\processed"` — Python se noi `REPO_ROOT\..\..\data\processed` va `Path.resolve()` co the tro ra **ngoai repo** (sai artifact).
+- **Absolute path:** duoc ho tro (`resolve_project_path` giu nguyen path tuyet doi). Tu cwd `src\mapr2026_v3`, co the: `$DPabs = (Resolve-Path "..\..\data\processed").Path` roi truyen `"$DPabs\regression_targets_hscc_refined.parquet"` vao tung flag — **an toan**. Tranh truyen chuoi **tuong doi** dang `..\..\data\processed\...` vao `--*-path` vi se noi voi repo root va co the resolve ra ngoai repo.
+
+**Kiem tra nhanh parser (sau khi pull code moi nhat):**
+
+```powershell
+python run_graph_augmented_flat_baseline.py --help | Select-String "fit-mask"
+python run_hscc_gamma_sensitivity.py --help | Select-String "lr-1hop|sage-predictions"
+```
+
+Neu khong thay `--fit-mask` / `--lr-1hop-fit-mask` / `--sage-predictions-dir` thi ban dang o **ban script cu** — bo cac flag do trong lenh hoac cap nhat repo. Ban hien tai trong mon repo da co cac flag nay.
+
+**Lock labeled nodes (`--primary-ic-path`):** phai trung artifact team dung de freeze tap labeled (thuong `data/processed/ic_scores_primary.parquet` theo `_shared.py`). Neu registry doi ten (vi du chi co `ic_scores_a0.parquet`), **doi dung duong dan** — script chi can parquet co cot `node_id` + IC theo policy `ic_labels_hscc_refined`.
+
+### 9.1 Nguyen tac (khop governance Section 1)
+
+- HSCC (`regression_targets_hscc_refined`): **bat** `--include-language` cho ca hai script (khop Buoc 2 / Buoc 4 HSCC).
+- A0: **khong** ap dung section nay (cac lenh duoi la HSCC-only).
+- Du lieu freeze: uu tien **mot** nguon path xuyen suot — `data/processed/` (default trong code) **hoac** `Data protocol/` neu do la ban team da chot; **khong** tron hai nguon cho cung mot bang paper.
+- **OFAT gamma:** sensitivity chi la **local / one-factor-at-a time** mechanism check; khong thay the global sensitivity — ghi ro trong paper/limitations neu can. (Xem NIST Engineering Statistics Handbook — one variable at a time.)
+- **GPU:** `run_graph_augmented_flat_baseline.py` = CPU. `run_hscc_gamma_sensitivity.py`:
+  - `--skip-sage` = khong can train GNN (ROI cao).
+  - Bo `--skip-sage` = can PyTorch + PyG; nen co GPU.
+  - MC labeling gamma != 1: `ic_labels_hscc_refined.py` nhan `--device auto|cpu|cuda` (tuy may).
+
+### 9.2 Thu tu chay khuyen nghi (3 tang — theo muc tieu paper)
+
+1. **Tang 2 (bat buoc):** `run_graph_augmented_flat_baseline.py` — chot `LR(own + 1-hop attrs)` tren HSCC gamma=1, **khong** so bootstrap vs GNN trong buoc nay (`--skip-gnn-comparison`).
+2. **Tang 1 (bat buoc):** `run_hscc_gamma_sensitivity.py` — bang gamma `{0, 0.5, 1.0}`, **`--skip-sage`**, **`--include-language`**. Chi dung `--skip-labeling` khi da co san artifact MC cho gamma=0 va 0.5 trong `--work-dir` (xem 9.4).
+3. **Tang 3 (optional):** cung script gamma nhung **bo** `--skip-sage` **hoac** dung `--sage-predictions-dir` neu da co parquet SAGE theo tag — chi khi PyG/GPU on va can bootstrap SAGE vs LR.
+
+### 9.3 Tang 2 — Graph-augmented flat baseline (HSCC, gamma=1)
+
+**LENH MAC DINH** (`$DP` la **repo-root relative**, khong dung `..\..`):
+
+```powershell
+$DP = "data\processed"
+
+python run_graph_augmented_flat_baseline.py `
+  --targets-path "$DP\regression_targets_hscc_refined.parquet" `
+  --split-mask-path "$DP\split_masks.parquet" `
+  --node-attributes-path "$DP\node_attributes.parquet" `
+  --csr-npz-path "$DP\graph_csr.npz" `
+  --community-labels-path "$DP\community_labels.parquet" `
+  --include-language `
+  --skip-gnn-comparison
+```
+
+**Neu freeze nam trong `Data protocol`:**
+
+```powershell
+$DP = "Data protocol"
+```
+
+**Output mac dinh:**
+
+- `outputs/mapr2026_v3_results/graph_augmented_flat_metrics_hscc.csv` (1 row: spearman / ndcg / p@10% tren test).
+
+**Ghi chinh fit mask (de ghi registry / paper methods):**
+
+- Mac dinh script: `--fit-mask surrogate_train` (train tru 10% dau cua train ids — khop default `run_surrogates`).
+- Neu muon khop **dung** convention `bootstrap_ci._build_linear_predictions` (toan bo `split==train`): them `--fit-mask parquet_train` va **ghi ro** trong registry vi spearman co the lech nhe so voi dong tren.
+
+**Tuy chon stress-test Louvain (khong bat buoc MAPR core):**
+
+- Them `--include-comm` de append `cross_community_edge_fraction` (ghi ro la **diagnostic**, khong dung lam comparator chinh neu chua pre-specify).
+
+**Neu muon so bootstrap vs GNN** (khong khuyen truoc deadline — can surrogate CSV + train/reuse GNN preds):
+
+- Bo `--skip-gnn-comparison` va dam bao `outputs/mapr2026_v3_results/surrogate_ranking_metrics_hscc_clean.csv` ton tai (sau Buoc 4).
+- Tot nhat co `--gnn-predictions-parquet` frozen khop Table II; neu khong, script se **retrain** best GNN tu CSV — diem so co the lech nhe so voi frozen paper.
+
+### 9.4 Tang 1 — HSCC gamma sensitivity (khong SAGE; mechanism table)
+
+Script: `run_hscc_gamma_sensitivity.py`. OFAT: **chi** thay `gamma`; giu `lambda=1`, `p_max=1`, partition, split, primary IC, N_runs nhu subprocess.
+
+**Bien `$DP`:** giong 9.3 — vi du `$DP = "data\processed"`.
+
+**Lan dau (chua co `ic_scores_hscc_gamma_0.parquet` / `..._0p5...` trong work-dir):** **KHONG** them `--skip-labeling` — se chay MC cho gamma=0 va 0.5; gamma=1 van dung **frozen** (`--gamma1-*` default) neu khong `--regenerate-gamma1`.
+
+```powershell
+$DP = "data\processed"
+
+python run_hscc_gamma_sensitivity.py `
+  --gammas 0 0.5 1.0 `
+  --csr-npz-path "$DP\graph_csr.npz" `
+  --node-attributes-path "$DP\node_attributes.parquet" `
+  --community-labels-path "$DP\community_labels.parquet" `
+  --split-mask-path "$DP\split_masks.parquet" `
+  --primary-ic-path "$DP\ic_scores_primary.parquet" `
+  --gamma1-targets-path "$DP\regression_targets_hscc_refined.parquet" `
+  --eval-models `
+  --skip-sage `
+  --include-language
+```
+
+**Cac lan sau (da co artifact gamma 0 / 0p5 trong `outputs/mapr2026_v3_results/hscc_gamma_sensitivity`):** them `--skip-labeling` de tiet MC time. Xac nhan file ton tai:
+
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity/ic_scores_hscc_gamma_0.parquet`
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity/regression_targets_hscc_gamma_0.parquet`
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity/ic_scores_hscc_gamma_0p5.parquet`
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity/regression_targets_hscc_gamma_0p5.parquet`
+
+```powershell
+python run_hscc_gamma_sensitivity.py `
+  --gammas 0 0.5 1.0 `
+  --csr-npz-path "$DP\graph_csr.npz" `
+  --node-attributes-path "$DP\node_attributes.parquet" `
+  --community-labels-path "$DP\community_labels.parquet" `
+  --split-mask-path "$DP\split_masks.parquet" `
+  --primary-ic-path "$DP\ic_scores_primary.parquet" `
+  --gamma1-targets-path "$DP\regression_targets_hscc_refined.parquet" `
+  --eval-models `
+  --skip-sage `
+  --include-language `
+  --skip-labeling
+```
+
+**Output mac dinh:**
+
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity_summary.csv` — doc cho bang paper (mean_reach, CV, spearman vs degree/phi, vs y_gamma1, LR attr / LR 1-hop rho, v.v.).
+- `outputs/mapr2026_v3_results/hscc_gamma_sensitivity_bootstrap.json` — metadata (`fit_mask_policy`, `label_source`, ...).
+
+**Ghi chinh LR 1-hop vs LR attr (canh bao phien ban script):**
+
+- Ban script trong repo: mac dinh `--lr-1hop-fit-mask parquet_train` (khop `_build_linear_predictions`). De khop default `run_graph_augmented_flat_baseline.py` (surrogate carve): `--lr-1hop-fit-mask surrogate_train` + ghi registry.
+- Neu `python run_hscc_gamma_sensitivity.py --help` **khong** liet ke `--lr-1hop-fit-mask`, bo flag nay (LR 1-hop se theo code cu).
+
+### 9.5 Tang 3 — Optional: GraphSAGE + bootstrap tren moi gamma
+
+**Chi chay** khi PyG/GPU on va can cot `sage_spearman` + delta/bootstrap trong summary.
+
+**Canh bao phien ban:** `--sage-predictions-dir` chi co trong `run_hscc_gamma_sensitivity.py` ban moi; kiem `python run_hscc_gamma_sensitivity.py --help | Select-String sage`. Neu khong co, chi dung **Cach A** (retrain) hoac cap nhat code.
+
+**Cach A — Retrain SAGE moi gamma** (lau; rho co the lech Table II frozen):
+
+```powershell
+$DP = "data\processed"
+
+python run_hscc_gamma_sensitivity.py `
+  --gammas 0 0.5 1.0 `
+  --csr-npz-path "$DP\graph_csr.npz" `
+  --node-attributes-path "$DP\node_attributes.parquet" `
+  --community-labels-path "$DP\community_labels.parquet" `
+  --split-mask-path "$DP\split_masks.parquet" `
+  --primary-ic-path "$DP\ic_scores_primary.parquet" `
+  --gamma1-targets-path "$DP\regression_targets_hscc_refined.parquet" `
+  --skip-labeling `
+  --eval-models `
+  --include-language `
+  --device auto
+```
+
+**Cach B — Frozen SAGE predictions (uu tien neu co parquet):** dat file trong thu muc **repo-root relative**, vi du `outputs\mapr2026_v3_results\sage_gamma_preds\`:
+
+- `sage_predictions_hscc_gamma_0.parquet`
+- `sage_predictions_hscc_gamma_0p5.parquet`
+- `sage_predictions_hscc_gamma_1.parquet`  
+  (moi file: cot `node_id`, `y_pred`)
+
+```powershell
+$SAGE = "outputs\mapr2026_v3_results\sage_gamma_preds"
+$DP = "data\processed"
+
+python run_hscc_gamma_sensitivity.py `
+  --gammas 0 0.5 1.0 `
+  --csr-npz-path "$DP\graph_csr.npz" `
+  --node-attributes-path "$DP\node_attributes.parquet" `
+  --community-labels-path "$DP\community_labels.parquet" `
+  --split-mask-path "$DP\split_masks.parquet" `
+  --primary-ic-path "$DP\ic_scores_primary.parquet" `
+  --gamma1-targets-path "$DP\regression_targets_hscc_refined.parquet" `
+  --skip-labeling `
+  --eval-models `
+  --include-language `
+  --sage-predictions-dir $SAGE
+```
+
+**Governance bootstrap / GNN:** neu dung retrain, giu `--max-epochs`, `--hidden-channels`, `--appnp-alpha`, `--appnp-k`, `--gat-heads`, `--seeds` **khop** policy Section 1 / Buoc 4 (hidden 128; surrogate da drop GAT — sensitivity goi `gnn_raw_attr` trong `bootstrap_ci`, khong co GAT path).
+
+### 9.6 Checklist nhanh sau Section 9
+
+- [ ] **Khong** dung `..\..` trong `--*-path` / `$DP` tru khi la **absolute path** (da `Resolve-Path` tu repo root).
+- [ ] `Test-Path` (hoac kiem tay) file lock: `.../ic_scores_primary.parquet` (hoac dung dung ten artifact primary IC team da chot).
+- [ ] `python run_graph_augmented_flat_baseline.py --help` co `--fit-mask` truoc khi ghi flag vao lenh / paper.
+- [ ] `python run_hscc_gamma_sensitivity.py --help` co `--lr-1hop-fit-mask` va (neu dung Cach B) `--sage-predictions-dir`.
+- [ ] `graph_augmented_flat_metrics_hscc.csv` ton tai; cot `include_language=true` trong row (neu script ghi).
+- [ ] `hscc_gamma_sensitivity_summary.csv` co du 3 gamma (0, 0.5, 1.0) khi da chay du MC / `--skip-labeling` dung.
+- [ ] Hang `gamma=1.0` trong summary **sanity** voi frozen (khi dung cung target/split): vi du mean reach ~4.83, `spearman_y_degree_test` ~-0.006, `spearman_y_phi_test` ~0.88 (lech nhe cho phep float; neu lac hoan toan thi kiem lai path / artifact).
+- [ ] `fit_mask_policy` trong JSON gamma sensitivity khop quyet dinh paper (LR attr = parquet train; LR 1-hop = `parquet_train` hoac `surrogate_train` — thong nhat voi flat baseline).
+- [ ] Registry / team note: gamma sensitivity la **mechanism check (OFAT)**, **khong** dung nhu hyperparameter search; HSCC chinh van `gamma=1` frozen.

@@ -1,0 +1,840 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from scipy.stats import spearmanr
+from sklearn.linear_model import LinearRegression
+
+from _shared import PATHS, ensure_parent
+from eval_ranking_harness import apply_test_mask, compute_metrics, load_split_mask
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def resolve_project_path(path_like: str | Path) -> Path:
+    path = Path(path_like)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
+def _ensure_node_id_str(df: pd.DataFrame) -> pd.DataFrame:
+    local_df = df.copy()
+    local_df["node_id"] = local_df["node_id"].astype(str).str.replace(r"\.0$", "", regex=True)
+    return local_df
+
+
+def _import_run_baselines_symbols() -> dict[str, Any]:
+    from run_baselines import (
+        MLPRegressor,
+        TRAINING_SEEDS as BASELINE_SEEDS,
+        _derive_features,
+        get_loss_function,
+    )
+
+    return {
+        "MLPRegressor": MLPRegressor,
+        "BASELINE_SEEDS": BASELINE_SEEDS,
+        "derive_features": _derive_features,
+        "get_loss_function": get_loss_function,
+    }
+
+
+def _import_run_surrogates_symbols() -> dict[str, Any]:
+    from run_surrogates import (
+        TRAINING_SEEDS as SURROGATE_SEEDS,
+        load_surrogate_data_bundle,
+        train_surrogate_5seeds,
+    )
+
+    return {
+        "SURROGATE_SEEDS": SURROGATE_SEEDS,
+        "load_surrogate_data_bundle": load_surrogate_data_bundle,
+        "train_surrogate_5seeds": train_surrogate_5seeds,
+    }
+
+
+def _compute_spearman(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    result = spearmanr(y_true, y_pred)
+    statistic = getattr(result, "statistic", result[0])
+    return float(np.asarray(statistic).item())
+
+
+def _bootstrap_spearman_ndcg_ci(
+    y_true: np.ndarray,
+    y_pred_a: np.ndarray,
+    y_pred_b: np.ndarray,
+    n_bootstrap: int,
+    seed: int,
+) -> dict[str, float]:
+    random_generator = np.random.default_rng(int(seed))
+    n = int(len(y_true))
+    if n == 0:
+        raise ValueError("Bootstrap input is empty.")
+
+    spearman_deltas: list[float] = []
+    ndcg_deltas: list[float] = []
+
+    for _ in range(int(n_bootstrap)):
+        sample_idx = random_generator.integers(0, n, size=n)
+        y_sample = y_true[sample_idx]
+        pred_a_sample = y_pred_a[sample_idx]
+        pred_b_sample = y_pred_b[sample_idx]
+
+        metric_a = compute_metrics(y_sample, pred_a_sample)
+        metric_b = compute_metrics(y_sample, pred_b_sample)
+
+        spearman_deltas.append(float(metric_a.spearman_rho - metric_b.spearman_rho))
+        ndcg_deltas.append(float(metric_a.ndcg_at_10pct - metric_b.ndcg_at_10pct))
+
+    spearman_arr = np.asarray(spearman_deltas, dtype=float)
+    ndcg_arr = np.asarray(ndcg_deltas, dtype=float)
+
+    return {
+        "spearman_delta_mean": float(np.mean(spearman_arr)),
+        "spearman_ci_95_lower": float(np.percentile(spearman_arr, 2.5)),
+        "spearman_ci_95_upper": float(np.percentile(spearman_arr, 97.5)),
+        "ndcg_delta_mean": float(np.mean(ndcg_arr)),
+        "ndcg_ci_95_lower": float(np.percentile(ndcg_arr, 2.5)),
+        "ndcg_ci_95_upper": float(np.percentile(ndcg_arr, 97.5)),
+    }
+
+
+def _interpret_ci(ci_lower: float, ci_upper: float, equivalence_bound: float) -> str:
+    bound = float(abs(equivalence_bound))
+    if ci_lower > 0:
+        return "gnn_significantly_better"
+    if ci_upper < 0:
+        return "gnn_significantly_worse"
+    if ci_lower >= -bound and ci_upper <= bound:
+        return "practically_equivalent"
+    return "no_clear_superiority"
+
+
+def _load_targets_df(targets_path: str | Path) -> pd.DataFrame:
+    targets = pd.read_parquet(resolve_project_path(targets_path))
+    targets = _ensure_node_id_str(targets)
+    if "node_id" not in targets.columns or "y" not in targets.columns:
+        raise ValueError(f"Invalid targets schema in {targets_path}: need node_id,y")
+    targets = targets[["node_id", "y"]].copy()
+    targets["y"] = pd.to_numeric(targets["y"], errors="coerce")
+    return targets
+
+
+def _select_best_gnn_model_name(
+    surrogate_csv: Path,
+    label_regime: str,
+    std_threshold: float = float("inf"),
+) -> str:
+    df = pd.read_csv(surrogate_csv)
+    if "label_regime" in df.columns:
+        df = df.loc[df["label_regime"].astype(str).str.lower() == str(label_regime).lower()].copy()
+
+    allowed = [
+        "gnn_raw_attr",
+        "gcn_raw_attr",
+        "gin_raw_attr",
+        "gat_raw_attr",
+        "appnp_raw_attr",
+    ]
+    df = df.loc[df["model_name"].astype(str).isin(allowed)].copy()
+    if df.empty:
+        raise RuntimeError(f"No C2 GNN rows found for label_regime={label_regime} in {surrogate_csv}")
+
+    # Std gate: exclude models whose spearman_rho_std exceeds threshold.
+    # Catches APPNP catastrophic instability (std=0.697 observed on A0 dense graph).
+    if std_threshold < float("inf") and "spearman_rho_std" in df.columns:
+        before = len(df)
+        df = df.loc[df["spearman_rho_std"].fillna(0.0) <= float(std_threshold)].copy()
+        excluded = before - len(df)
+        if excluded:
+            print(
+                f"[INFO] _select_best_gnn_model_name: excluded {excluded} model(s) with "
+                f"spearman_rho_std > {std_threshold} (regime={label_regime})"
+            )
+        if df.empty:
+            raise RuntimeError(
+                f"All C2 GNN models excluded by --gnn-std-threshold {std_threshold} for "
+                f"label_regime={label_regime}. Lower the threshold or rerun surrogates."
+            )
+
+    priority = {"appnp_raw_attr": 0, "gat_raw_attr": 1, "gin_raw_attr": 2, "gcn_raw_attr": 3, "gnn_raw_attr": 4}
+    best_score = float(df["spearman_rho_mean"].max())
+    tie = df.loc[(best_score - df["spearman_rho_mean"]).abs() < 0.001].copy()
+    tie["priority"] = tie["model_name"].map(priority)
+    tie = tie.sort_values(["priority", "model_name"], ascending=[True, True])
+    return str(tie.iloc[0]["model_name"])
+
+
+def _model_name_to_arch(model_name: str) -> str:
+    mapping = {
+        "gnn_raw_attr": "sage",
+        "gcn_raw_attr": "gcn",
+        "gin_raw_attr": "gin",
+        "gat_raw_attr": "gat",
+        "appnp_raw_attr": "appnp",
+    }
+    if model_name not in mapping:
+        raise ValueError(f"Unsupported GNN model_name for C4 bootstrap: {model_name}")
+    return mapping[model_name]
+
+
+def _predict_gnn_best(
+    targets_path: str | Path,
+    split_mask_path: str | Path,
+    model_name: str,
+    max_epochs: int,
+    seeds: list[int] | None,
+    include_language: bool,
+    gat_heads: int,
+    appnp_alpha: float,
+    appnp_k: int = 10,
+    hidden_channels: int = 128,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    surrogate_symbols = _import_run_surrogates_symbols()
+    load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
+    train_surrogate_5seeds = surrogate_symbols["train_surrogate_5seeds"]
+
+    arch = _model_name_to_arch(model_name)
+    bundle = load_surrogate_data_bundle(
+        feature_mode="raw_attr",
+        targets_path=targets_path,
+        split_mask_path=split_mask_path,
+        node_scope="all",
+        include_language=include_language,
+    )
+    _, y_pred = train_surrogate_5seeds(
+        bundle=bundle,
+        max_epochs=int(max_epochs),
+        model_name=model_name,
+        arch=arch,
+        randomize_train_target=False,
+        early_stop=False,
+        patience=20,
+        seeds=seeds,
+        loss_mode="huber",
+        rankloss_alpha=0.5,
+        gat_heads=int(gat_heads),
+        appnp_alpha=float(appnp_alpha),
+        appnp_k=int(appnp_k),
+        hidden_channels=int(hidden_channels),
+    )
+    prediction_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
+    return bundle.split_mask_df, prediction_df
+
+
+def _predict_rankloss_best(
+    surrogate_csv: Path,
+    label_regime: str,
+    targets_path: str | Path,
+    split_mask_path: str | Path,
+    include_language: bool,
+    max_epochs: int,
+    seeds: list[int] | None,
+    gat_heads: int,
+    appnp_alpha: float,
+    appnp_k: int = 10,
+    hidden_channels: int = 128,
+    std_threshold: float = float("inf"),
+    rankloss_alpha: float = 0.5,
+) -> tuple[str, pd.DataFrame]:
+    """Retrain the C2-winning architecture with rankloss_combined (C3) for bootstrap CI comparison.
+
+    Selects the best C2 raw-attr architecture from surrogate_csv, retrains it with
+    loss_mode='rankloss_combined' (alpha*Huber + (1-alpha)*PairwiseRank) — matching the
+    exact mode used in run_surrogates.py --include-c3-rankloss. Returns a
+    (model_label, prediction_df) pair ready for bootstrap CI against the strongest flat baseline.
+    HSCC only.
+    """
+    surrogate_symbols = _import_run_surrogates_symbols()
+    load_surrogate_data_bundle = surrogate_symbols["load_surrogate_data_bundle"]
+    train_surrogate_5seeds = surrogate_symbols["train_surrogate_5seeds"]
+
+    best_arch_name = _select_best_gnn_model_name(
+        surrogate_csv, label_regime=label_regime, std_threshold=std_threshold
+    )
+    arch = _model_name_to_arch(best_arch_name)
+
+    bundle = load_surrogate_data_bundle(
+        feature_mode="raw_attr",
+        targets_path=targets_path,
+        split_mask_path=split_mask_path,
+        node_scope="all",
+        include_language=include_language,
+    )
+    _, y_pred = train_surrogate_5seeds(
+        bundle=bundle,
+        max_epochs=int(max_epochs),
+        model_name=best_arch_name,
+        arch=arch,
+        randomize_train_target=False,
+        early_stop=False,
+        patience=20,
+        seeds=seeds,
+        loss_mode="rankloss_combined",
+        rankloss_alpha=float(rankloss_alpha),
+        gat_heads=int(gat_heads),
+        appnp_alpha=float(appnp_alpha),
+        appnp_k=int(appnp_k),
+        hidden_channels=int(hidden_channels),
+    )
+    pred_df = pd.DataFrame({"node_id": bundle.node_ids.astype(str), "y_pred": y_pred.astype(float)})
+    return f"best_arch_raw_attr_rankloss({arch})", pred_df
+
+
+def _build_linear_predictions(
+    targets_df: pd.DataFrame,
+    split_mask_df: pd.DataFrame,
+    node_attributes: pd.DataFrame,
+    feature_cols: list[str],
+    include_language: bool,
+) -> np.ndarray:
+    baseline_symbols = _import_run_baselines_symbols()
+    derive_features = baseline_symbols["derive_features"]
+
+    feature_frame = derive_features(node_attributes, include_language=include_language)
+    if "degree" in feature_cols:
+        degree_source = _ensure_node_id_str(node_attributes)[["node_id", "degree"]].copy()
+        feature_frame = feature_frame.merge(degree_source, on="node_id", how="left")
+
+    merged = targets_df[["node_id", "y"]].merge(feature_frame, on="node_id", how="left")
+    for col in feature_cols:
+        merged[col] = pd.to_numeric(merged[col], errors="coerce").fillna(0.0)
+
+    train_ids = set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].astype(str).tolist())
+    train_mask = merged["node_id"].astype(str).isin(train_ids).to_numpy()
+    if train_mask.sum() == 0:
+        raise RuntimeError("Train split is empty for linear baseline bootstrap comparator.")
+
+    regressor = LinearRegression()
+    x = merged[feature_cols].to_numpy(dtype=np.float32)
+    y = merged["y"].to_numpy(dtype=np.float32)
+    regressor.fit(x[train_mask], y[train_mask])
+    return regressor.predict(x).astype(float)
+
+
+def _predict_mlp_raw_attr(
+    targets_df: pd.DataFrame,
+    split_mask_df: pd.DataFrame,
+    node_attributes: pd.DataFrame,
+    max_epochs: int,
+    seeds: list[int] | None,
+    include_language: bool,
+) -> np.ndarray:
+    import torch
+
+    baseline_symbols = _import_run_baselines_symbols()
+    MLPRegressor = baseline_symbols["MLPRegressor"]
+    derive_features = baseline_symbols["derive_features"]
+    get_loss_function = baseline_symbols["get_loss_function"]
+    BASELINE_SEEDS = baseline_symbols["BASELINE_SEEDS"]
+
+    features = derive_features(node_attributes, include_language=include_language)
+    merged = targets_df[["node_id", "y"]].merge(features, on="node_id", how="left")
+    feature_cols = [c for c in merged.columns if c not in {"node_id", "y"}]
+    for col in feature_cols:
+        merged[col] = pd.to_numeric(merged[col], errors="coerce").fillna(0.0)
+
+    x = torch.tensor(merged[feature_cols].to_numpy(dtype=np.float32), dtype=torch.float32)
+    y = torch.tensor(merged["y"].to_numpy(dtype=np.float32), dtype=torch.float32)
+
+    train_ids = set(split_mask_df.loc[split_mask_df["split"] == "train", "node_id"].astype(str).tolist())
+    train_mask = torch.tensor(merged["node_id"].astype(str).isin(train_ids).to_numpy(), dtype=torch.bool)
+
+    training_seeds = BASELINE_SEEDS if seeds is None else list(seeds)
+    if len(training_seeds) == 0:
+        raise ValueError("Empty seeds for MLP comparator.")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    x = x.to(device)
+    y = y.to(device)
+    train_mask = train_mask.to(device)
+
+    predictions: list[np.ndarray] = []
+    for seed in training_seeds:
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
+        np.random.seed(int(seed))
+
+        model = MLPRegressor(in_features=int(x.shape[1]), hidden_dim=128, dropout=0.3).to(device)
+        model.reset_parameters()
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        loss_fn = get_loss_function()
+
+        for _ in range(int(max_epochs)):
+            model.train()
+            optimizer.zero_grad()
+            pred = model(x)
+            loss = loss_fn(pred[train_mask], y[train_mask])
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        with torch.no_grad():
+            pred = model(x).detach().cpu().numpy().astype(np.float32)
+        predictions.append(pred)
+
+    return np.mean(np.stack(predictions, axis=0), axis=0).astype(float)
+
+
+def _select_strongest_flat_baseline_hscc(
+    targets_df: pd.DataFrame,
+    split_mask_df: pd.DataFrame,
+    node_attributes: pd.DataFrame,
+    max_epochs: int,
+    seeds: list[int] | None,
+    include_language: bool,
+) -> tuple[str, np.ndarray, float]:
+    baseline_symbols = _import_run_baselines_symbols()
+    derive_features = baseline_symbols["derive_features"]
+
+    candidates: list[tuple[str, np.ndarray]] = []
+
+    linear_specs = [
+        ("lr_life_time", ["life_time"]),
+        ("lr_views_life_time", ["views_log", "life_time"]),
+        ("lr_degree_views_life_time", ["degree", "views_log", "life_time"]),
+    ]
+
+    derived = derive_features(node_attributes, include_language=include_language)
+    lang_cols = [col for col in derived.columns if col.startswith("lang_")]
+    if len(lang_cols) > 0:
+        linear_specs.extend(
+            [
+                ("lr_views_life_time_lang", ["views_log", "life_time", *lang_cols]),
+                ("lr_degree_views_life_time_lang", ["degree", "views_log", "life_time", *lang_cols]),
+            ]
+        )
+
+    for model_name, feature_cols in linear_specs:
+        pred = _build_linear_predictions(
+            targets_df=targets_df,
+            split_mask_df=split_mask_df,
+            node_attributes=node_attributes,
+            feature_cols=feature_cols,
+            include_language=include_language,
+        )
+        candidates.append((model_name, pred))
+
+    mlp_pred = _predict_mlp_raw_attr(
+        targets_df=targets_df,
+        split_mask_df=split_mask_df,
+        node_attributes=node_attributes,
+        max_epochs=max_epochs,
+        seeds=seeds,
+        include_language=include_language,
+    )
+    candidates.append(("mlp_raw_attr", mlp_pred))
+
+    eval_target = targets_df[["node_id", "y"]].copy()
+    eval_target = apply_test_mask(eval_target, split_mask_df, node_id_col="node_id")
+
+    best_model = ""
+    best_pred: np.ndarray | None = None
+    best_rho = -np.inf
+
+    for model_name, pred in candidates:
+        pred_df = pd.DataFrame({"node_id": targets_df["node_id"].astype(str), "y_pred": pred.astype(float)})
+        pred_test = apply_test_mask(pred_df, split_mask_df, node_id_col="node_id")
+        merged = eval_target.merge(pred_test, on="node_id", how="inner")
+        rho = _compute_spearman(
+            merged["y"].to_numpy(dtype=float),
+            merged["y_pred"].to_numpy(dtype=float),
+        )
+        if rho > best_rho:
+            best_rho = float(rho)
+            best_model = model_name
+            best_pred = pred
+
+    if best_pred is None:
+        raise RuntimeError("Failed to build HSCC strongest flat baseline predictions.")
+
+    return best_model, best_pred, best_rho
+
+
+def _build_degree_predictions(targets_df: pd.DataFrame, node_attributes: pd.DataFrame) -> np.ndarray:
+    degree_df = _ensure_node_id_str(node_attributes)[["node_id", "degree"]].copy()
+    merged = targets_df[["node_id"]].merge(degree_df, on="node_id", how="left")
+    return pd.to_numeric(merged["degree"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    out = ensure_parent(path)
+    with out.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="MAPR2026 v3.2 bootstrap CI runner for Person 3")
+    parser.add_argument("--surrogate-csv", default=str(Path(PATHS.results_dir) / "surrogate_ranking_metrics.csv"))
+    parser.add_argument("--surrogate-csv-a0", default="", help="Optional A0-specific surrogate CSV. Falls back to --surrogate-csv.")
+    parser.add_argument("--surrogate-csv-hscc", default="", help="Optional HSCC-specific surrogate CSV. Falls back to --surrogate-csv.")
+    parser.add_argument("--targets-a0", default="data/processed/regression_targets_a0.parquet")
+    parser.add_argument("--targets-hscc", default="data/processed/regression_targets_hscc_refined.parquet")
+    parser.add_argument("--split-mask-path", default=PATHS.split_masks)
+    parser.add_argument("--node-attributes-path", default=PATHS.node_attributes)
+    parser.add_argument("--n-bootstrap", type=int, default=1000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--equivalence-bound", type=float, default=0.02)
+    parser.add_argument("--max-epochs", type=int, default=200)
+    parser.add_argument("--seeds", default="", help="Comma-separated training seeds override.")
+    parser.add_argument("--gat-heads", type=int, default=4, help="GAT heads used when bootstrap reruns a GAT best-model.")
+    parser.add_argument("--appnp-alpha", type=float, default=0.15, help="APPNP alpha used when bootstrap reruns an APPNP best-model.")
+    parser.add_argument(
+        "--appnp-k",
+        type=int,
+        default=10,
+        help="APPNP K propagation steps — must match the value used in run_surrogates.py (plan default: 10).",
+    )
+    parser.add_argument(
+        "--hidden-channels",
+        type=int,
+        default=128,
+        help=(
+            "Hidden dim for all GNN architectures — must match the value used in run_surrogates.py (plan default: 128). "
+            "If surrogates were run with --hidden-channels 64, pass the same value here."
+        ),
+    )
+    parser.add_argument(
+        "--gnn-std-threshold",
+        type=float,
+        default=float("inf"),
+        help=(
+            "Exclude C2 GNN models with spearman_rho_std > threshold from best-model selection. "
+            "Use 0.1 to exclude catastrophically unstable models (e.g. APPNP std=0.697 on A0). "
+            "Default: inf (no filtering, backward compatible)."
+        ),
+    )
+    parser.add_argument(
+        "--out-a0",
+        default=str(Path(PATHS.results_dir) / "gnn_vs_degree_bootstrap_ci_a0.json"),
+    )
+    parser.add_argument(
+        "--out-hscc",
+        default=str(Path(PATHS.results_dir) / "gnn_vs_baseline_bootstrap_ci_hscc.json"),
+    )
+    parser.add_argument("--include-language-hscc", action="store_true", help="Use language-aware raw_attr/full features for HSCC comparators and GNN reruns.")
+    parser.add_argument(
+        "--rankloss-alpha",
+        type=float,
+        default=0.5,
+        help=(
+            "Alpha in combined rankloss: alpha*Huber + (1-alpha)*PairwiseRank. "
+            "Must match the value used in run_surrogates.py --rankloss-alpha (plan default: 0.5). "
+            "Only used when --include-rankloss-comparison is set."
+        ),
+    )
+    parser.add_argument(
+        "--include-rankloss-comparison",
+        action="store_true",
+        help=(
+            "Also run bootstrap CI for best_arch_raw_attr_rankloss vs strongest flat baseline (HSCC only). "
+            "Retrains the C2-winning architecture with loss_mode=rankloss_combined. "
+            "Adds C3 validation. Default: off (backward compatible)."
+        ),
+    )
+    parser.add_argument(
+        "--out-hscc-rankloss",
+        default=str(Path(PATHS.results_dir) / "gnn_vs_rankloss_bootstrap_ci_hscc.json"),
+        help="Output path for rankloss bootstrap CI JSON (HSCC only; only written when --include-rankloss-comparison is set).",
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    surrogate_csv_legacy = resolve_project_path(args.surrogate_csv)
+    surrogate_csv_a0 = resolve_project_path(args.surrogate_csv_a0) if str(args.surrogate_csv_a0).strip() else surrogate_csv_legacy
+    surrogate_csv_hscc = resolve_project_path(args.surrogate_csv_hscc) if str(args.surrogate_csv_hscc).strip() else surrogate_csv_legacy
+    split_mask_path = resolve_project_path(args.split_mask_path)
+    targets_a0_path = resolve_project_path(args.targets_a0)
+    targets_hscc_path = resolve_project_path(args.targets_hscc)
+    node_attributes_path = resolve_project_path(args.node_attributes_path)
+    include_language_hscc = bool(args.include_language_hscc)
+
+    if args.dry_run:
+        print("[OK] bootstrap_ci dry-run")
+        print(f" - surrogate_csv_legacy={surrogate_csv_legacy}")
+        print(f" - surrogate_csv_a0={surrogate_csv_a0}")
+        print(f" - surrogate_csv_hscc={surrogate_csv_hscc}")
+        print(f" - split_mask={split_mask_path}")
+        print(f" - targets_a0={targets_a0_path}")
+        print(f" - targets_hscc={targets_hscc_path}")
+        print(f" - include_language_hscc={include_language_hscc}")
+        print(f" - gat_heads={int(args.gat_heads)}")
+        print(f" - appnp_alpha={float(args.appnp_alpha)}")
+        print(f" - appnp_k={int(args.appnp_k)}")
+        print(f" - hidden_channels={int(args.hidden_channels)}")
+        print(f" - gnn_std_threshold={float(args.gnn_std_threshold)}")
+        print(f" - include_rankloss_comparison={bool(args.include_rankloss_comparison)}")
+        if args.include_rankloss_comparison:
+            print(f" - rankloss_alpha={float(args.rankloss_alpha)}")
+            print(f" - out_hscc_rankloss={resolve_project_path(args.out_hscc_rankloss)}")
+        return
+
+    split_mask_df = load_split_mask(split_mask_path)
+    split_mask_df = _ensure_node_id_str(split_mask_df)
+
+    if str(args.seeds).strip():
+        seed_list = [int(part.strip()) for part in str(args.seeds).split(",") if part.strip()]
+    else:
+        seed_list = None
+
+    surrogate_symbols = _import_run_surrogates_symbols()
+    baseline_symbols = _import_run_baselines_symbols()
+    SURROGATE_SEEDS = surrogate_symbols["SURROGATE_SEEDS"]
+    BASELINE_SEEDS = baseline_symbols["BASELINE_SEEDS"]
+
+    node_attributes = pd.read_parquet(node_attributes_path)
+    node_attributes = _ensure_node_id_str(node_attributes)
+
+    best_a0_name = _select_best_gnn_model_name(
+        surrogate_csv_a0, label_regime="a0", std_threshold=float(args.gnn_std_threshold)
+    )
+    _, gnn_pred_a0_df = _predict_gnn_best(
+        targets_path=targets_a0_path,
+        split_mask_path=split_mask_path,
+        model_name=best_a0_name,
+        max_epochs=int(args.max_epochs),
+        seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+        include_language=False,
+        gat_heads=int(args.gat_heads),
+        appnp_alpha=float(args.appnp_alpha),
+        appnp_k=int(args.appnp_k),
+        hidden_channels=int(args.hidden_channels),
+    )
+
+    targets_a0 = _load_targets_df(targets_a0_path)
+    degree_pred = _build_degree_predictions(targets_a0, node_attributes=node_attributes)
+
+    y_a0_df = apply_test_mask(targets_a0[["node_id", "y"]], split_mask_df, node_id_col="node_id")
+    pred_gnn_a0_df = apply_test_mask(gnn_pred_a0_df, split_mask_df, node_id_col="node_id")
+    pred_degree_df = apply_test_mask(
+        pd.DataFrame({"node_id": targets_a0["node_id"].astype(str), "y_pred": degree_pred}),
+        split_mask_df,
+        node_id_col="node_id",
+    )
+    merged_a0 = y_a0_df.merge(pred_gnn_a0_df, on="node_id", how="inner", suffixes=("", "_gnn"))
+    merged_a0 = merged_a0.merge(pred_degree_df, on="node_id", how="inner", suffixes=("_gnn", "_cmp"))
+
+    ci_a0 = _bootstrap_spearman_ndcg_ci(
+        y_true=merged_a0["y"].to_numpy(dtype=float),
+        y_pred_a=merged_a0["y_pred_gnn"].to_numpy(dtype=float),
+        y_pred_b=merged_a0["y_pred_cmp"].to_numpy(dtype=float),
+        n_bootstrap=int(args.n_bootstrap),
+        seed=int(args.seed),
+    )
+    payload_a0 = {
+        "label_regime": "a0",
+        "gnn_model": best_a0_name,
+        "comparator_model": "degree",
+        "surrogate_csv_used": str(surrogate_csv_a0),
+        "feature_policy": {
+            "include_language": False,
+            "gnn_model": best_a0_name,
+            "hidden_channels": int(args.hidden_channels),
+            "appnp_k": int(args.appnp_k),
+            "gat_heads": int(args.gat_heads),
+            "appnp_alpha": float(args.appnp_alpha),
+            "gnn_std_threshold": float(args.gnn_std_threshold),
+        },
+        "n_test": int(merged_a0.shape[0]),
+        "n_bootstrap": int(args.n_bootstrap),
+        "equivalence_bound": float(args.equivalence_bound),
+        "spearman": {
+            "delta_mean": ci_a0["spearman_delta_mean"],
+            "ci_95_lower": ci_a0["spearman_ci_95_lower"],
+            "ci_95_upper": ci_a0["spearman_ci_95_upper"],
+            "interpretation": _interpret_ci(
+                ci_a0["spearman_ci_95_lower"],
+                ci_a0["spearman_ci_95_upper"],
+                equivalence_bound=float(args.equivalence_bound),
+            ),
+        },
+        "ndcg_at_10pct": {
+            "delta_mean": ci_a0["ndcg_delta_mean"],
+            "ci_95_lower": ci_a0["ndcg_ci_95_lower"],
+            "ci_95_upper": ci_a0["ndcg_ci_95_upper"],
+            "interpretation": _interpret_ci(
+                ci_a0["ndcg_ci_95_lower"],
+                ci_a0["ndcg_ci_95_upper"],
+                equivalence_bound=float(args.equivalence_bound),
+            ),
+        },
+    }
+    _write_json(resolve_project_path(args.out_a0), payload_a0)
+
+    best_hscc_name = _select_best_gnn_model_name(
+        surrogate_csv_hscc, label_regime="hscc", std_threshold=float(args.gnn_std_threshold)
+    )
+    _, gnn_pred_hscc_df = _predict_gnn_best(
+        targets_path=targets_hscc_path,
+        split_mask_path=split_mask_path,
+        model_name=best_hscc_name,
+        max_epochs=int(args.max_epochs),
+        seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+        include_language=include_language_hscc,
+        gat_heads=int(args.gat_heads),
+        appnp_alpha=float(args.appnp_alpha),
+        appnp_k=int(args.appnp_k),
+        hidden_channels=int(args.hidden_channels),
+    )
+
+    targets_hscc = _load_targets_df(targets_hscc_path)
+    strongest_name, strongest_pred, strongest_rho = _select_strongest_flat_baseline_hscc(
+        targets_df=targets_hscc,
+        split_mask_df=split_mask_df,
+        node_attributes=node_attributes,
+        max_epochs=int(args.max_epochs),
+        seeds=seed_list if seed_list is not None else list(BASELINE_SEEDS),
+        include_language=include_language_hscc,
+    )
+
+    y_hscc_df = apply_test_mask(targets_hscc[["node_id", "y"]], split_mask_df, node_id_col="node_id")
+    pred_gnn_hscc_df = apply_test_mask(gnn_pred_hscc_df, split_mask_df, node_id_col="node_id")
+    pred_cmp_hscc_df = apply_test_mask(
+        pd.DataFrame({"node_id": targets_hscc["node_id"].astype(str), "y_pred": strongest_pred}),
+        split_mask_df,
+        node_id_col="node_id",
+    )
+    merged_hscc = y_hscc_df.merge(pred_gnn_hscc_df, on="node_id", how="inner", suffixes=("", "_gnn"))
+    merged_hscc = merged_hscc.merge(pred_cmp_hscc_df, on="node_id", how="inner", suffixes=("_gnn", "_cmp"))
+
+    ci_hscc = _bootstrap_spearman_ndcg_ci(
+        y_true=merged_hscc["y"].to_numpy(dtype=float),
+        y_pred_a=merged_hscc["y_pred_gnn"].to_numpy(dtype=float),
+        y_pred_b=merged_hscc["y_pred_cmp"].to_numpy(dtype=float),
+        n_bootstrap=int(args.n_bootstrap),
+        seed=int(args.seed),
+    )
+    payload_hscc = {
+        "label_regime": "hscc",
+        "gnn_model": best_hscc_name,
+        "comparator_model": strongest_name,
+        "comparator_spearman_on_test": float(strongest_rho),
+        "surrogate_csv_used": str(surrogate_csv_hscc),
+        "feature_policy": {
+            "include_language": include_language_hscc,
+            "gnn_model": best_hscc_name,
+            "hidden_channels": int(args.hidden_channels),
+            "appnp_k": int(args.appnp_k),
+            "gat_heads": int(args.gat_heads),
+            "appnp_alpha": float(args.appnp_alpha),
+            "gnn_std_threshold": float(args.gnn_std_threshold),
+        },
+        "n_test": int(merged_hscc.shape[0]),
+        "n_bootstrap": int(args.n_bootstrap),
+        "equivalence_bound": float(args.equivalence_bound),
+        "spearman": {
+            "delta_mean": ci_hscc["spearman_delta_mean"],
+            "ci_95_lower": ci_hscc["spearman_ci_95_lower"],
+            "ci_95_upper": ci_hscc["spearman_ci_95_upper"],
+            "interpretation": _interpret_ci(
+                ci_hscc["spearman_ci_95_lower"],
+                ci_hscc["spearman_ci_95_upper"],
+                equivalence_bound=float(args.equivalence_bound),
+            ),
+        },
+        "ndcg_at_10pct": {
+            "delta_mean": ci_hscc["ndcg_delta_mean"],
+            "ci_95_lower": ci_hscc["ndcg_ci_95_lower"],
+            "ci_95_upper": ci_hscc["ndcg_ci_95_upper"],
+            "interpretation": _interpret_ci(
+                ci_hscc["ndcg_ci_95_lower"],
+                ci_hscc["ndcg_ci_95_upper"],
+                equivalence_bound=float(args.equivalence_bound),
+            ),
+        },
+    }
+    _write_json(resolve_project_path(args.out_hscc), payload_hscc)
+
+    # C3/C4 rankloss comparison: best_arch_raw_attr_rankloss vs strongest flat baseline (HSCC only)
+    if args.include_rankloss_comparison:
+        print("[INFO] Running rankloss bootstrap comparison (C3 validation) ...")
+        rankloss_label, rankloss_pred_df = _predict_rankloss_best(
+            surrogate_csv=surrogate_csv_hscc,
+            label_regime="hscc",
+            targets_path=targets_hscc_path,
+            split_mask_path=split_mask_path,
+            include_language=include_language_hscc,
+            max_epochs=int(args.max_epochs),
+            seeds=seed_list if seed_list is not None else list(SURROGATE_SEEDS),
+            gat_heads=int(args.gat_heads),
+            appnp_alpha=float(args.appnp_alpha),
+            appnp_k=int(args.appnp_k),
+            hidden_channels=int(args.hidden_channels),
+            std_threshold=float(args.gnn_std_threshold),
+            rankloss_alpha=float(args.rankloss_alpha),
+        )
+        pred_rankloss_hscc_df = apply_test_mask(rankloss_pred_df, split_mask_df, node_id_col="node_id")
+        # Reuse y_hscc_df and pred_cmp_hscc_df from the HSCC C4 block above (same test set, same comparator)
+        merged_rankloss = y_hscc_df.merge(pred_rankloss_hscc_df, on="node_id", how="inner", suffixes=("", "_gnn"))
+        merged_rankloss = merged_rankloss.merge(pred_cmp_hscc_df, on="node_id", how="inner", suffixes=("_gnn", "_cmp"))
+
+        ci_rankloss = _bootstrap_spearman_ndcg_ci(
+            y_true=merged_rankloss["y"].to_numpy(dtype=float),
+            y_pred_a=merged_rankloss["y_pred_gnn"].to_numpy(dtype=float),
+            y_pred_b=merged_rankloss["y_pred_cmp"].to_numpy(dtype=float),
+            n_bootstrap=int(args.n_bootstrap),
+            seed=int(args.seed),
+        )
+        payload_rankloss = {
+            "label_regime": "hscc",
+            "gnn_model": rankloss_label,
+            "comparator_model": strongest_name,
+            "comparator_spearman_on_test": float(strongest_rho),
+            "surrogate_csv_used": str(surrogate_csv_hscc),
+            "feature_policy": {
+                "include_language": include_language_hscc,
+                "gnn_model": rankloss_label,
+                "loss_mode": "rankloss_combined",
+                "rankloss_alpha": float(args.rankloss_alpha),
+                "hidden_channels": int(args.hidden_channels),
+                "appnp_k": int(args.appnp_k),
+                "gat_heads": int(args.gat_heads),
+                "appnp_alpha": float(args.appnp_alpha),
+                "gnn_std_threshold": float(args.gnn_std_threshold),
+            },
+            "n_test": int(merged_rankloss.shape[0]),
+            "n_bootstrap": int(args.n_bootstrap),
+            "equivalence_bound": float(args.equivalence_bound),
+            "spearman": {
+                "delta_mean": ci_rankloss["spearman_delta_mean"],
+                "ci_95_lower": ci_rankloss["spearman_ci_95_lower"],
+                "ci_95_upper": ci_rankloss["spearman_ci_95_upper"],
+                "interpretation": _interpret_ci(
+                    ci_rankloss["spearman_ci_95_lower"],
+                    ci_rankloss["spearman_ci_95_upper"],
+                    equivalence_bound=float(args.equivalence_bound),
+                ),
+            },
+            "ndcg_at_10pct": {
+                "delta_mean": ci_rankloss["ndcg_delta_mean"],
+                "ci_95_lower": ci_rankloss["ndcg_ci_95_lower"],
+                "ci_95_upper": ci_rankloss["ndcg_ci_95_upper"],
+                "interpretation": _interpret_ci(
+                    ci_rankloss["ndcg_ci_95_lower"],
+                    ci_rankloss["ndcg_ci_95_upper"],
+                    equivalence_bound=float(args.equivalence_bound),
+                ),
+            },
+        }
+        _write_json(resolve_project_path(args.out_hscc_rankloss), payload_rankloss)
+
+    print("[OK] Bootstrap CI artifacts written")
+    print(f" - a0={resolve_project_path(args.out_a0)}")
+    print(f" - hscc={resolve_project_path(args.out_hscc)}")
+    if args.include_rankloss_comparison:
+        print(f" - hscc_rankloss={resolve_project_path(args.out_hscc_rankloss)}")
+
+
+if __name__ == "__main__":
+    main()

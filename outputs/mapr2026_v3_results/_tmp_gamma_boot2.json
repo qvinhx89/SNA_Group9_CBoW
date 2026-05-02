@@ -1,0 +1,30 @@
+{
+  "role": "hscc_gamma_mechanism_sensitivity",
+  "gammas": [
+    1.0
+  ],
+  "fixed": {
+    "lambda": 1.0,
+    "p_max": 1.0,
+    "louvain_partition": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\data\\processed\\community_labels.parquet",
+    "split_mask": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\Data protocol\\split_masks.parquet",
+    "primary_ic_node_lock": "D:\\UIT\\Y3 - S2\\Social Network Analysis\\SNA_Group9_CBoW\\Data protocol\\ic_scores_primary.parquet",
+    "n_runs": 200
+  },
+  "fit_mask_policy": {
+    "lr_attr": "parquet_train",
+    "lr_1hop": "parquet_train",
+    "note": "LR attr uses all split==train node_ids (bootstrap_ci._build_linear_predictions). LR 1-hop uses _labeled_masks_for_fit with the chosen lr_1hop mode."
+  },
+  "per_gamma": [
+    {
+      "gamma": 1.0,
+      "gamma_tag": "1",
+      "label_source": "frozen_main",
+      "n_test_eval_nodes": 1000,
+      "spearman_y_vs_gamma1_y_all": 1.0,
+      "spearman_y_vs_gamma1_y_test": 1.0,
+      "note": "GraphSAGE skipped (--skip-sage)"
+    }
+  ]
+}

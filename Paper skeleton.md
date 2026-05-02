@@ -1,4 +1,5 @@
 # When Does Graph Learning Add Value Beyond Strong Baselines?
+
 ## A Comparative Study of IC Operationalizations for Influence Approximation on Social Networks
 
 ---
@@ -8,10 +9,12 @@
 > **Authority for drafting:** Factual numbers (ρ, Δρ, CIs, comparator names) follow [Paper guide.md](Paper%20guide.md) and the frozen outputs below. Framing, tone, and claim discipline follow [Paper rules.md](Paper%20rules.md). This skeleton is a drafting scaffold, not a second source of truth for numbers.
 >
 > **Provenance of numbers:**
+>
 > - `[✅ FROZEN]` — from clean output files listed below; cite in final paper only if those files are the submission freeze
 > - `[🔲 PLACEHOLDER]` — reserved for items explicitly left open in the writing plan (e.g. full A0 IC distribution table); not for reruns
 >
 > **Data sources (frozen Person 3 run):**
+>
 > - A0 baselines: `baseline_ranking_metrics_a0_clean.csv` ✅
 > - A0 GNN surrogates: `surrogate_ranking_metrics_a0_clean.csv` ✅
 > - HSCC baselines: `baseline_ranking_metrics_hscc_clean.csv` ✅
@@ -32,11 +35,13 @@
 > **Step 2 — Strip inline markers:** Remove all ` [✅]` and ` [🔲]` tags from prose and table cells. Keep `†` and `‡` daggers — these belong in the submission.
 >
 > **Step 3 — Use clean paragraphs from AUTHOR NOTEs (not scaffold text):**
+>
 > - §5.1: Use the paste-ready paragraph from the §5.1 AUTHOR NOTE (not the scaffold prose above it)
 > - §6 Conclusion: Use the 5-sentence template from the §6 AUTHOR NOTE
 > - §4.5 prose: Follow the 6-step order from the §4.5 AUTHOR NOTE
 >
 > **Step 4 — Resolve remaining [🔲] placeholders:**
+>
 > - HSCC labeling time (§3.3): verify from HSCC simulation logs before citing
 > - Any remaining `[🔲]` in prose: do not submit with unresolved placeholders
 >
@@ -82,7 +87,7 @@ In this paper, we investigate how the choice of IC operationalization determines
 
 ### 2.1 Independent Cascade and Influence Estimation
 
-Kempe, Kleinberg, and Tardos [1] formalized the Independent Cascade (IC) model and the influence maximization (IM) problem. In IC, each directed edge (u,v) is independently activated with probability p(u,v), and activated nodes in turn attempt to activate their neighbors in subsequent rounds. For influence estimation without cascade logs, a common operational choice is the *weighted cascade* model, where p(u,v) = 1/deg(v), proposed by Kempe et al. and used subsequently in related learning-based influence maximization methods. GNN-based approaches to influence *estimation* (as opposed to seed-set maximization) are discussed in §2.2. Our task differs from seed-set optimization: we perform node-level IC score regression to learn a surrogate that rapidly approximates simulation-derived influence scores.
+Kempe, Kleinberg, and Tardos [1] formalized the Independent Cascade (IC) model and the influence maximization (IM) problem. In IC, each directed edge (u,v) is independently activated with probability p(u,v), and activated nodes in turn attempt to activate their neighbors in subsequent rounds. For influence estimation without cascade logs, a common operational choice is the _weighted cascade_ model, where p(u,v) = 1/deg(v), proposed by Kempe et al. and used subsequently in related learning-based influence maximization methods. GNN-based approaches to influence _estimation_ (as opposed to seed-set maximization) are discussed in §2.2. Our task differs from seed-set optimization: we perform node-level IC score regression to learn a surrogate that rapidly approximates simulation-derived influence scores.
 
 ### 2.2 Node Importance and Structural Baselines
 
@@ -90,7 +95,7 @@ Prior work has established several strong structural baselines for ranking influ
 
 Node2Vec [14] generates structure-aware node embeddings via biased random walk sampling on the graph, providing a shallow structural baseline that is separate from both analytical centrality measures and flat attribute models. We include it to distinguish graph-structure signal (captured through walk-based co-occurrence statistics) from learned message-passing signal (captured through GNN neighborhood aggregation).
 
-Prior GNN-based approaches to social influence estimation — most notably DeepInf [3] (Qiu et al., KDD 2018), which predicts local social influence using graph attention networks trained on observed interaction logs — have demonstrated that neighborhood structure improves influence prediction when behavioral cascade data is available for supervision. Our setting differs in a key respect: we lack observed cascade logs and instead use Monte Carlo IC simulation to generate influence score labels from the static follower graph. This motivates our regime-dependent analysis: we ask when GNN message passing adds value *beyond* degree centrality and flat source-attribute models, given that the supervision signal itself is simulation-derived rather than observed.
+Prior GNN-based approaches to social influence estimation — most notably DeepInf [3] (Qiu et al., KDD 2018), which predicts local social influence using graph attention networks trained on observed interaction logs — have demonstrated that neighborhood structure improves influence prediction when behavioral cascade data is available for supervision. Our setting differs in a key respect: we lack observed cascade logs and instead use Monte Carlo IC simulation to generate influence score labels from the static follower graph. This motivates our regime-dependent analysis: we ask when GNN message passing adds value _beyond_ degree centrality and flat source-attribute models, given that the supervision signal itself is simulation-derived rather than observed.
 
 ### 2.3 GNN Architectures for Node-Level Surrogate Regression
 
@@ -102,7 +107,7 @@ We evaluate four GNN architectures under a unified training protocol: GraphSAGE 
 
 ### 3.1 Construct Validity
 
-The Twitch dataset [2] provides a follower graph where edges represent mutual follower relationships, not observed diffusion pathways. We treat the follower graph as a structural substrate for simulation: it specifies the topology through which influence could propagate, rather than recording actual propagation events. All findings in this paper are therefore properties of *simulation-defined influence approximation*, not measurements of real influence. We make no claim that MC-IC scores correspond to actual empirical influence in real-world propagation. Our contribution is a comparative study of how operationalization choice affects the learnability of the resulting influence surrogate.
+The Twitch dataset [2] provides a follower graph where edges represent mutual follower relationships, not observed diffusion pathways. We treat the follower graph as a structural substrate for simulation: it specifies the topology through which influence could propagate, rather than recording actual propagation events. All findings in this paper are therefore properties of _simulation-defined influence approximation_, not measurements of real influence. We make no claim that MC-IC scores correspond to actual empirical influence in real-world propagation. Our contribution is a comparative study of how operationalization choice affects the learnability of the resulting influence surrogate.
 
 ### 3.2 Operationalizations
 
@@ -120,19 +125,19 @@ where the source engagement velocity term is:
 
 $$\phi(u) = \frac{\text{rank}\!\left(\frac{\log(1 + \text{views}_u)}{1 + \text{life\_time}_u}\right)}{N}$$
 
-This operationalization combines source-side engagement intensity (the φ(u) velocity term) with a structural incentive for cross-community spread (the 1+γ·𝟏[c_u≠c_v] amplification), making transmission probability depend on the *source* node's relative activity rather than the target's connectivity.
+This operationalization combines source-side engagement intensity (the φ(u) velocity term) with a structural incentive for cross-community spread (the 1+γ·𝟏[c_u≠c_v] amplification), making transmission probability depend on the _source_ node's relative activity rather than the target's connectivity.
 
 Fixed parameters: λ=1.0, γ=1.0, p_max=1.0. Three design choices merit brief justification:
 
 - **Rank normalization on φ(u):** The views distribution is heavy-tailed; rank normalization bounds the source term to [0, 1] and prevents a small number of extreme accounts from distorting the transmission scale.
-- **log1p(views)/(1+life\_time):** This inner term approximates engagement velocity rather than cumulative popularity — log1p compresses outliers, and dividing by (1+life\_time) avoids rewarding longevity alone.
+- **log1p(views)/(1+life_time):** This inner term approximates engagement velocity rather than cumulative popularity — log1p compresses outliers, and dividing by (1+life_time) avoids rewarding longevity alone.
 - **Community amplification (1+γ·𝟏[c\_u≠c\_v]):** Encodes the structural-hole interpretation of cross-community bridging [12]; nodes at community boundaries have heightened transmission probability toward cross-community neighbors.
 
-All parameters (λ, γ, p\_max) are fixed prior to any model training and not tuned to maximize downstream surrogate performance.
+All parameters (λ, γ, p_max) are fixed prior to any model training and not tuned to maximize downstream surrogate performance.
 
 HSCC is introduced as a domain-informed comparative operationalization rather than as a validated generative law of Twitch diffusion. The fixed community-amplification configuration is kept as a transparent, frozen comparative setting instead of being tuned to maximize downstream surrogate gains. Estimating edge-level transmission probabilities from behavioral data would require supervised cascade logs unavailable in this dataset; weighted cascade and HSCC therefore provide principled zero-shot alternatives.
 
-> **[AUTHOR NOTE — delete before submission]** Anticipating reviewer pushback on HSCC validity: we claim only that HSCC is a *comparative operationalization*, not a validated generative model of Twitch behavior. Its role is to introduce source-side and community-side signal into label generation in a transparent, frozen configuration, allowing a controlled test of whether graph message passing recovers structure that source-attribute flat models cannot. The §3.1 construct validity statement handles this.
+> **[AUTHOR NOTE — delete before submission]** Anticipating reviewer pushback on HSCC validity: we claim only that HSCC is a _comparative operationalization_, not a validated generative model of Twitch behavior. Its role is to introduce source-side and community-side signal into label generation in a transparent, frozen configuration, allowing a controlled test of whether graph message passing recovers structure that source-attribute flat models cannot. The §3.1 construct validity statement handles this.
 
 ### 3.3 Dataset and Simulation Protocol
 
@@ -140,13 +145,13 @@ We use the Twitch Gamers dataset [2]: **168,114 nodes**, **6,797,557 edges** (un
 
 HSCC IC score summary (from `outputs/mapr2026_v3_results/hscc_refined_label_diagnostics.json`) [✅]:
 
-| Statistic | Value |
-|-----------|-------|
-| Mean reach | 4.83 nodes |
-| Max reach | 16.31 nodes |
-| Std | 2.82 |
-| CV (coefficient of variation) | 0.583 |
-| n_runs | 200 |
+| Statistic                     | Value       |
+| ----------------------------- | ----------- |
+| Mean reach                    | 4.83 nodes  |
+| Max reach                     | 16.31 nodes |
+| Std                           | 2.82        |
+| CV (coefficient of variation) | 0.583       |
+| n_runs                        | 200         |
 
 A0 IC scores exhibit heavy-tailed, degree-coupled behavior: nodes in the top degree band (degree 93–7,613) achieve mean IC reach of 109.3 nodes (std=176.6), while low-degree nodes (degree 1–10) achieve mean IC reach of only 2.5 nodes. HSCC reach is substantially lower (mean=4.83, max=16.31), reflecting selective local-community diffusion rather than broad viral spread.
 
@@ -154,10 +159,10 @@ A0 IC scores exhibit heavy-tailed, degree-coupled behavior: nodes in the top deg
 
 ### 3.4 Discriminativeness and Regime Contrast
 
-| Regime | Mean Reach | Max | CV | Degree Signal |
-|--------|-----------|-----|----|---------------|
-| A0 | [🔲 full dist] | [🔲] | [🔲] | Very strong (p∝1/deg(v)) |
-| HSCC | 4.83 [✅] | 16.31 [✅] | 0.583 [✅] | Absent (degree ρ=−0.006 [✅]) |
+| Regime | Mean Reach     | Max        | CV         | Degree Signal                 |
+| ------ | -------------- | ---------- | ---------- | ----------------------------- |
+| A0     | [🔲 full dist] | [🔲]       | [🔲]       | Very strong (p∝1/deg(v))      |
+| HSCC   | 4.83 [✅]      | 16.31 [✅] | 0.583 [✅] | Absent (degree ρ=−0.006 [✅]) |
 
 Both operationalizations generate non-degenerate continuous targets (CV > 0 in both regimes). The key contrast is that A0 is structurally dominated by degree, while HSCC completely decouples from degree: the Spearman correlation between degree centrality and HSCC IC scores is −0.006 [✅].
 
@@ -182,6 +187,7 @@ All downstream evaluation uses Spearman rank correlation (ρ), NDCG@10%, and Pre
 **Dataset split:** 5,000 labeled nodes; transductive setting; 1,000 test nodes held out; remaining 4,000 used for training. Split is regime-independent and consistent across all models.
 
 **Feature access (locked per regime):**
+
 - A0: `raw_attr` = [degree, life_time, views] (3 features; `include_language=False`)
 - HSCC: `raw_attr` = [degree, life_time, views, language_dummies] (24 features; `include_language=True`)
 - All flat fairness baselines receive the same feature access as the GNN comparator for that regime.
@@ -200,31 +206,31 @@ Under A0, the degree-coupled label generation creates a structural ceiling that 
 
 #### Table 2: A0 Surrogate Results — Spearman ρ, NDCG@10%, and P@10% on 1,000 held-out test nodes; primary comparator: degree centrality (ρ=0.826). GNN rows averaged over 5 random seeds (± std). Analytical and flat baselines are deterministic. [✅ FROZEN]
 
-| Model | Type | ρ (mean) | ρ (std) | NDCG@10% | P@10% |
-|-------|------|---------|--------|---------|-------|
-| **degree** | Analytical | **0.826** | — | 0.881 | 0.60 |
-| pagerank | Analytical | 0.824 | — | 0.857 | 0.56 |
-| kshell | Analytical | 0.816 | — | 0.687 | 0.50 |
-| two_hop | Analytical | 0.804 | — | 0.848 | 0.55 |
-| one_hop | Analytical | 0.688 | — | 0.833 | 0.52 |
-| betweenness | Analytical | 0.716 | — | 0.735 | 0.42 |
-| LR(deg+views+life_time) | Flat | 0.522 | — | 0.803 | 0.52 |
-| MLP(raw_attr) | Flat | 0.435 | 0.004 | 0.601 | 0.42 |
-| Node2Vec + LR | Shallow Embedding | 0.810 | 0.005 | 0.859 | 0.58 |
-| **GCN (raw_attr)** | **GNN** | **0.808** | **0.001** | **0.825** | **0.53** |
-| GIN (raw_attr) | GNN | 0.615 | 0.022 | 0.731 | 0.39 |
-| SAGE (raw_attr) | GNN | 0.534 | 0.009 | 0.674 | 0.45 |
-| APPNP (raw_attr)† | GNN | 0.585 | 0.417 | 0.724 | 0.49 |
-| SAGE (centrality feats)‡ | Diag. | 0.828 | 0.0002 | 0.881 | 0.62 |
+| Model                    | Type              | ρ (mean)  | ρ (std)   | NDCG@10%  | P@10%    |
+| ------------------------ | ----------------- | --------- | --------- | --------- | -------- |
+| **degree**               | Analytical        | **0.826** | —         | 0.881     | 0.60     |
+| pagerank                 | Analytical        | 0.824     | —         | 0.857     | 0.56     |
+| kshell                   | Analytical        | 0.816     | —         | 0.687     | 0.50     |
+| two_hop                  | Analytical        | 0.804     | —         | 0.848     | 0.55     |
+| one_hop                  | Analytical        | 0.688     | —         | 0.833     | 0.52     |
+| betweenness              | Analytical        | 0.716     | —         | 0.735     | 0.42     |
+| LR(deg+views+life_time)  | Flat              | 0.522     | —         | 0.803     | 0.52     |
+| MLP(raw_attr)            | Flat              | 0.435     | 0.004     | 0.601     | 0.42     |
+| Node2Vec + LR            | Shallow Embedding | 0.810     | 0.005     | 0.859     | 0.58     |
+| **GCN (raw_attr)**       | **GNN**           | **0.808** | **0.001** | **0.825** | **0.53** |
+| GIN (raw_attr)           | GNN               | 0.615     | 0.022     | 0.731     | 0.39     |
+| SAGE (raw_attr)          | GNN               | 0.534     | 0.009     | 0.674     | 0.45     |
+| APPNP (raw_attr)†        | GNN               | 0.585     | 0.417     | 0.724     | 0.49     |
+| SAGE (centrality feats)‡ | Diag.             | 0.828     | 0.0002    | 0.881     | 0.62     |
 
 ‡ SAGE (centrality feats): uses degree/pagerank/kshell as input features — diagnostic ceiling only; oracle feature access not available at inference time; excluded from main comparisons.
-*Node2Vec: `train_sec` ≈153s bundles embedding + LR fit; reported runtime column in baselines is inference/predict only (~0.04s). If the team de-scopes Node2Vec before submission, synchronize deletion across all 4 locations: (a) §4.1 setup list (this mention), (b) Table 2 and Table 3 rows, (c) §4.5 runtime table, (d) §2.3 background mention. Search keyword "Node2Vec" in both Paper guide.md and Paper rules.md to confirm full sync.*
-*† APPNP excluded from best-architecture selection: seed σ=0.417 ≥ `--gnn-std-threshold 0.1`; kept in table for completeness with dagger footnote (Rule B3).*
+_Node2Vec: `train_sec` ≈153s bundles embedding + LR fit; reported runtime column in baselines is inference/predict only (~0.04s). If the team de-scopes Node2Vec before submission, synchronize deletion across all 4 locations: (a) §4.1 setup list (this mention), (b) Table 2 and Table 3 rows, (c) §4.5 runtime table, (d) §2.3 background mention. Search keyword "Node2Vec" in both Paper guide.md and Paper rules.md to confirm full sync._
+_† APPNP excluded from best-architecture selection: seed σ=0.417 ≥ `--gnn-std-threshold 0.1`; kept in table for completeness with dagger footnote (Rule B3)._
 
 **Key finding (A0) [✅]:** The best raw-attribute GNN remains statistically below degree centrality under bootstrap testing:
 
-> **Bootstrap A0:** GCN(raw_attr) vs degree — Δρ=−0.018, 95% CI [−0.029, −0.008] — *gnn_significantly_worse* [✅]
-> NDCG@10%: Δ=−0.045, 95% CI [−0.076, −0.013] — *gnn_significantly_worse* [✅]
+> **Bootstrap A0:** GCN(raw_attr) vs degree — Δρ=−0.018, 95% CI [−0.029, −0.008] — _gnn_significantly_worse_ [✅]
+> NDCG@10%: Δ=−0.045, 95% CI [−0.076, −0.013] — _gnn_significantly_worse_ [✅]
 
 **Interpretation:** Under A0, the degree-coupled operationalization yields a structural ceiling that degree centrality nearly saturates; the binding constraint is the operationalization, not the model family. The centrality-feature diagnostic indicates the ceiling is reachable when degree-type information is explicitly provided as input features.
 
@@ -237,38 +243,38 @@ The near-tie disclosure and comparator-lock justification are given once in the 
 
 #### Table 3: HSCC Surrogate Results — Spearman ρ, NDCG@10%, and P@10% on 1,000 held-out test nodes; **primary comparator (bootstrap):** LR(degree, views, life_time, language) — `lr_degree_views_life_time_lang` (ρ=0.884) [✅]. GNN rows averaged over 5 random seeds (± std). [✅ FROZEN]
 
-| Model | Type | ρ (mean) | ρ (std) | NDCG@10% | P@10% |
-|-------|------|---------|--------|---------|-------|
-| degree | Analytical | −0.006 [✅] | — | 0.465 | 0.04 |
-| kshell | Analytical | −0.027 [✅] | — | 0.425 | 0.05 |
-| betweenness | Analytical | 0.040 [✅] | — | 0.498 | 0.09 |
-| one_hop | Analytical | 0.081 [✅] | — | 0.498 | 0.05 |
-| LR(life_time) | Flat | 0.790 [✅] | — | 0.827 | 0.46 |
-| LR(views+life_time) | Flat | 0.868 [✅] | — | 0.800 | 0.41 |
-| LR(deg+views+life_time) | Flat | 0.868 [✅] | — | 0.801 | 0.41 |
-| MLP(raw_attr) | Flat | 0.837 [✅] | 0.026 | 0.751 | 0.29 |
-| Node2Vec + LR | Shallow Embedding | 0.570 | 0.015 | 0.723 | 0.29 |
-| **LR(deg+views+life_time+lang)** | **Flat** | **0.884 [✅]** | — | **0.829** | **0.45** |
-| LR(views+life_time+lang) | Flat | 0.884 [✅] | — | 0.830 | 0.45 |
-| **SAGE (`gnn_raw_attr`)** | **GNN** | **0.915** | **0.004** | **0.902** | **0.58** |
-| SAGE + rankloss (C3) | GNN | 0.924 | 0.002 | 0.911 | 0.60 |
-| SAGE (all feats)‡ | GNN | 0.916 | 0.005 | 0.908 | 0.62 |
-| GCN (raw_attr) | GNN | 0.602 | 0.014 | 0.694 | 0.21 |
-| GIN (raw_attr) | GNN | 0.028 | 0.046 | 0.469 | 0.04 |
-| APPNP (raw_attr)† | GNN | −0.037 | 0.146 | 0.491 | 0.03 |
+| Model                            | Type              | ρ (mean)       | ρ (std)   | NDCG@10%  | P@10%    |
+| -------------------------------- | ----------------- | -------------- | --------- | --------- | -------- |
+| degree                           | Analytical        | −0.006 [✅]    | —         | 0.465     | 0.04     |
+| kshell                           | Analytical        | −0.027 [✅]    | —         | 0.425     | 0.05     |
+| betweenness                      | Analytical        | 0.040 [✅]     | —         | 0.498     | 0.09     |
+| one_hop                          | Analytical        | 0.081 [✅]     | —         | 0.498     | 0.05     |
+| LR(life_time)                    | Flat              | 0.790 [✅]     | —         | 0.827     | 0.46     |
+| LR(views+life_time)              | Flat              | 0.868 [✅]     | —         | 0.800     | 0.41     |
+| LR(deg+views+life_time)          | Flat              | 0.868 [✅]     | —         | 0.801     | 0.41     |
+| MLP(raw_attr)                    | Flat              | 0.837 [✅]     | 0.026     | 0.751     | 0.29     |
+| Node2Vec + LR                    | Shallow Embedding | 0.570          | 0.015     | 0.723     | 0.29     |
+| **LR(deg+views+life_time+lang)** | **Flat**          | **0.884 [✅]** | —         | **0.829** | **0.45** |
+| LR(views+life_time+lang)         | Flat              | 0.884 [✅]     | —         | 0.830     | 0.45     |
+| **SAGE (`gnn_raw_attr`)**        | **GNN**           | **0.915**      | **0.004** | **0.902** | **0.58** |
+| SAGE + rankloss (C3)             | GNN               | 0.924          | 0.002     | 0.911     | 0.60     |
+| SAGE (all feats)‡                | GNN               | 0.916          | 0.005     | 0.908     | 0.62     |
+| GCN (raw_attr)                   | GNN               | 0.602          | 0.014     | 0.694     | 0.21     |
+| GIN (raw_attr)                   | GNN               | 0.028          | 0.046     | 0.469     | 0.04     |
+| APPNP (raw_attr)†                | GNN               | −0.037         | 0.146     | 0.491     | 0.03     |
 
-*Comparator (bootstrap): `lr_degree_views_life_time_lang` — official per frozen `gnn_vs_baseline_bootstrap_ci_hscc.json`. Near-tie: `lr_views_life_time_lang` ρ=0.88442 vs `lr_degree_views_life_time_lang` ρ=0.88430 (Δ=0.00012); selection justified by pre-specification, not margin.*
-*† APPNP excluded from best-architecture pool: σ=0.146 ≥ 0.1 (HSCC); σ=0.417 (A0). Listed for completeness.*
-*Node2Vec: `train_sec` ≈153s bundles embedding + LR fit; inference ≈0.04s is predict-only (see §4.1).*
-*Degree row: included for regime-contrast reference only (ρ=−0.006); not the HSCC decision comparator.*
-*‡ SAGE (all feats): includes language dummies + degree/pagerank/kshell as input features — diagnostic ceiling only, not a fair main comparator (oracle feature access).*
+_Comparator (bootstrap): `lr_degree_views_life_time_lang` — official per frozen `gnn_vs_baseline_bootstrap_ci_hscc.json`. Near-tie: `lr_views_life_time_lang` ρ=0.88442 vs `lr_degree_views_life_time_lang` ρ=0.88430 (Δ=0.00012); selection justified by pre-specification, not margin._
+_† APPNP excluded from best-architecture pool: σ=0.146 ≥ 0.1 (HSCC); σ=0.417 (A0). Listed for completeness._
+_Node2Vec: `train_sec` ≈153s bundles embedding + LR fit; inference ≈0.04s is predict-only (see §4.1)._
+_Degree row: included for regime-contrast reference only (ρ=−0.006); not the HSCC decision comparator._
+_‡ SAGE (all feats): includes language dummies + degree/pagerank/kshell as input features — diagnostic ceiling only, not a fair main comparator (oracle feature access)._
 
 **Key finding (HSCC) [✅]:** Paired bootstrap vs the official flat comparator gives:
 
-> **Bootstrap HSCC:** `gnn_raw_attr` vs `lr_degree_views_life_time_lang` — Δρ=+0.033, 95% CI [+0.021, +0.044] — *gnn_significantly_better* [✅]
-> NDCG@10%: Δ=+0.074, 95% CI [+0.050, +0.099] — *gnn_significantly_better* [✅]
+> **Bootstrap HSCC:** `gnn_raw_attr` vs `lr_degree_views_life_time_lang` — Δρ=+0.033, 95% CI [+0.021, +0.044] — _gnn_significantly_better_ [✅]
+> NDCG@10%: Δ=+0.074, 95% CI [+0.050, +0.099] — _gnn_significantly_better_ [✅]
 
-**C3 rankloss [✅ frozen — optional for page budget only]:** `gnn_vs_rankloss_bootstrap_ci_hscc.json` — `best_arch_raw_attr_rankloss(sage)` vs same comparator: Δρ=+0.041, 95% CI [+0.030, +0.053] (*gnn_significantly_better*). The +0.009 gap vs standard SAGE (0.924 − 0.915) is **descriptive only** — no paired bootstrap vs standard training in artifacts; do not call it “significant.”
+**C3 rankloss [✅ frozen — optional for page budget only]:** `gnn_vs_rankloss_bootstrap_ci_hscc.json` — `best_arch_raw_attr_rankloss(sage)` vs same comparator: Δρ=+0.041, 95% CI [+0.030, +0.053] (_gnn_significantly_better_). The +0.009 gap vs standard SAGE (0.924 − 0.915) is **descriptive only** — no paired bootstrap vs standard training in artifacts; do not call it “significant.”
 
 **Interpretation [✅]:** Under HSCC, GraphSAGE message passing significantly outperforms the official matched flat comparator under bootstrap testing, consistent with residual neighborhood-structured signal beyond node-level attributes. The architecture–regime interaction (e.g., GCN strongest under A0 vs SAGE strongest under HSCC; GIN collapsing under HSCC) is summarized in §4.4 and the Appendix.
 
@@ -280,18 +286,18 @@ The near-tie disclosure and comparator-lock justification are given once in the 
 
 The contrast between A0 and HSCC reveals that surrogate learnability is not a property of the model alone; rather, it is jointly determined by the diffusion operationalization and the information already recoverable by simple baselines.
 
-| Property | A0 | HSCC |
-|----------|-----|------|
-| Label signal source | Target degree (structural) | Source velocity + community bridging |
-| Best analytical baseline | degree ρ=0.826 [✅] | degree ρ=−0.006 [✅] — collapses |
-| Best trained (flat) baseline | LR(deg+views+life_time) ρ=0.522 [✅] | Official comparator: `lr_degree_views_life_time_lang` ρ≈0.884 [✅]; near-tie `lr_views_life_time_lang` |
-| Best GNN (raw attrs) | GCN ρ=0.808 [✅] | SAGE (`gnn_raw_attr`) ρ=0.915 [✅] |
-| Optional C3 (`best_arch_raw_attr_rankloss`) | — | SAGE ρ=0.924 [✅]; inferential Δρ vs same flat comparator |
-| Bootstrap comparator | degree (analytical) | `lr_degree_views_life_time_lang` (locked in HSCC JSON) |
-| Bootstrap result | Δρ=−0.018, CI [−0.029, −0.008] — *gnn_significantly_worse* [✅] | Δρ=+0.033, CI [+0.021, +0.044] — *gnn_significantly_better* [✅] |
-| Best GNN architecture | GCN | GraphSAGE |
-| APPNP seed variance (std) | 0.417 — excluded from best-arch pool [✅] | 0.146 — excluded [✅] |
-| Primary insight | Degree-coupled IC = degree ceiling | Comparator shifts to language-aware flat models; SAGE adds inferential margin vs official comparator [✅] |
+| Property                                    | A0                                                              | HSCC                                                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Label signal source                         | Target degree (structural)                                      | Source velocity + community bridging                                                                      |
+| Best analytical baseline                    | degree ρ=0.826 [✅]                                             | degree ρ=−0.006 [✅] — collapses                                                                          |
+| Best trained (flat) baseline                | LR(deg+views+life_time) ρ=0.522 [✅]                            | Official comparator: `lr_degree_views_life_time_lang` ρ≈0.884 [✅]; near-tie `lr_views_life_time_lang`    |
+| Best GNN (raw attrs)                        | GCN ρ=0.808 [✅]                                                | SAGE (`gnn_raw_attr`) ρ=0.915 [✅]                                                                        |
+| Optional C3 (`best_arch_raw_attr_rankloss`) | —                                                               | SAGE ρ=0.924 [✅]; inferential Δρ vs same flat comparator                                                 |
+| Bootstrap comparator                        | degree (analytical)                                             | `lr_degree_views_life_time_lang` (locked in HSCC JSON)                                                    |
+| Bootstrap result                            | Δρ=−0.018, CI [−0.029, −0.008] — _gnn_significantly_worse_ [✅] | Δρ=+0.033, CI [+0.021, +0.044] — _gnn_significantly_better_ [✅]                                          |
+| Best GNN architecture                       | GCN                                                             | GraphSAGE                                                                                                 |
+| APPNP seed variance (std)                   | 0.417 — excluded from best-arch pool [✅]                       | 0.146 — excluded [✅]                                                                                     |
+| Primary insight                             | Degree-coupled IC = degree ceiling                              | Comparator shifts to language-aware flat models; SAGE adds inferential margin vs official comparator [✅] |
 
 Under A0, degree-coupling creates a ceiling that raw-attribute GNNs do not exceed vs degree (bootstrap [✅]). Under HSCC, flat models reach ρ≈0.884 under matched features; SAGE (`gnn_raw_attr`) adds a significant increment vs the **official** flat comparator per frozen bootstrap (Δρ=+0.033 [✅]), with an optional rankloss variant at ρ=0.924 and Δρ=+0.041 vs the same comparator (CI [✅]; +0.009 vs standard SAGE is descriptive only).
 The best-performing raw-attribute architecture differs by regime (GCN under A0; SAGE under HSCC), while APPNP is excluded from the best-architecture pool by the variance threshold; full architecture sensitivity is summarized in the Appendix.
@@ -302,22 +308,23 @@ All surrogates provide inference dramatically faster than MC-IC simulation.
 
 #### Table 4: Runtime Summary [✅ FROZEN]
 
-| Model | Inference (full graph) | Training | Speedup vs MC-IC |
-|-------|----------------------|----------|-----------------|
-| MC-IC labeling (training labels; 5,000 nodes × 200 runs) | 480.3 s [✅] | — | 1× |
-| degree (analytical) | 0.004 s [✅] | — | ~120,000× |
-| LR (flat) | <0.003 s [✅] | <0.004 s | ~160,000× |
-| Node2Vec + LR (shallow embedding) | ~0.040 s (predict) [✅] | ~153 s (embedding + LR fit bundled) [✅] | — |
-| SAGE (raw_attr) | 0.086 s [✅] | ~27 s | ~5,590× |
-| GCN (raw_attr) | 0.165 s [✅] | ~59 s | ~2,900× |
-| GIN (raw_attr) | 0.067 s [✅] | ~24 s | ~7,200× |
-| APPNP (raw_attr) | 0.790 s [✅] | ~286 s | ~610× |
+| Model                                                    | Inference (full graph)  | Training                                 | Speedup vs MC-IC |
+| -------------------------------------------------------- | ----------------------- | ---------------------------------------- | ---------------- |
+| MC-IC labeling (training labels; 5,000 nodes × 200 runs) | 480.3 s [✅]            | —                                        | 1×               |
+| degree (analytical)                                      | 0.004 s [✅]            | —                                        | ~120,000×        |
+| LR (flat)                                                | <0.003 s [✅]           | <0.004 s                                 | ~160,000×        |
+| Node2Vec + LR (shallow embedding)                        | ~0.040 s (predict) [✅] | ~153 s (embedding + LR fit bundled) [✅] | —                |
+| SAGE (raw_attr)                                          | 0.086 s [✅]            | ~27 s                                    | ~5,590×          |
+| GCN (raw_attr)                                           | 0.165 s [✅]            | ~59 s                                    | ~2,900×          |
+| GIN (raw_attr)                                           | 0.067 s [✅]            | ~24 s                                    | ~7,200×          |
+| APPNP (raw_attr)                                         | 0.790 s [✅]            | ~286 s                                   | ~610×            |
 
-*GNN inference times: full 168K-node graph in a single forward pass. Training: averaged over 5 seeds. MC-IC baseline: 480.3s for generating training labels (5,000 nodes × 200 runs; `mc_ic_labeling` in `runtime_breakdown.csv`). **Headline runtime anchor:** use SAGE `gnn_raw_attr` in the HSCC row. Speedup vs MC-IC for SAGE: ≈480.3 / 0.086 ≈ **5,590×** — round narrative to **~5,500×** (guide §4.5) to avoid false precision. Node2Vec: **`train_sec` ≈153s** = offline embedding training + LR fit bundled; **`inference_sec` ≈0.04s** = LR prediction only — not comparable to degree/LR(raw) without the precomputation disclaimer.*
+_GNN inference times: full 168K-node graph in a single forward pass. Training: averaged over 5 seeds. MC-IC baseline: 480.3s for generating training labels (5,000 nodes × 200 runs; `mc_ic_labeling` in `runtime_breakdown.csv`). **Headline runtime anchor:** use SAGE `gnn_raw_attr` in the HSCC row. Speedup vs MC-IC for SAGE: ≈480.3 / 0.086 ≈ **5,590×** — round narrative to **~5,500×** (guide §4.5) to avoid false precision. Node2Vec: **`train_sec` ≈153s** = offline embedding training + LR fit bundled; **`inference_sec` ≈0.04s** = LR prediction only — not comparable to degree/LR(raw) without the precomputation disclaimer._
 
-*Runtime framing is regime-dependent: under A0, degree is ~120K× faster than MC-IC and near ceiling; under HSCC, flat baselines and GNNs achieve fast inference, while the **inferential** HSCC story comes from bootstrap JSONs, not wall-clock.*
+_Runtime framing is regime-dependent: under A0, degree is ~120K× faster than MC-IC and near ceiling; under HSCC, flat baselines and GNNs achieve fast inference, while the **inferential** HSCC story comes from bootstrap JSONs, not wall-clock._
 
 > **[AUTHOR NOTE — guide §4.5 prose order for writing the runtime paragraph (6 steps):]**
+>
 > 1. MC-IC cost first: "A single MC-IC labeling pass requires 480 seconds" (the expensive step being replaced)
 > 2. GNN inference cost: "Once trained, the GNN provides full-graph inference in approximately 0.086 seconds"
 > 3. Speedup ratio: "a speedup of approximately 5,500×"
@@ -382,39 +389,40 @@ We have shown that the value of GNN surrogates for Monte Carlo influence estimat
 
 ## References
 
-[1] D. Kempe, J. Kleinberg, and É. Tardos, "Maximizing the spread of influence through a social network," in *Proc. KDD*, 2003.
+[1] D. Kempe, J. Kleinberg, and É. Tardos, "Maximizing the spread of influence through a social network," in _Proc. KDD_, 2003.
 
 [2] B. Rozemberczki and R. Sarkar, "Twitch Gamers: a Dataset for Evaluating Proximity Preserving and Structural Role-based Node Embeddings," arXiv:2101.03091, 2021.
 
-[3] J. Qiu, J. Tang, H. Ma, Y. Dong, K. Wang, and J. Tang, "DeepInf: Social influence prediction with deep learning," in *Proc. ACM KDD*, 2018, pp. 2110–2119.
+[3] J. Qiu, J. Tang, H. Ma, Y. Dong, K. Wang, and J. Tang, "DeepInf: Social influence prediction with deep learning," in _Proc. ACM KDD_, 2018, pp. 2110–2119.
 
 [4] L. Page, S. Brin, R. Motwani, and T. Winograd, "The PageRank citation ranking: Bringing order to the web," Stanford Technical Report, 1999.
 
-[5] M. Kitsak, L. K. Gallos, S. Havlin, et al., "Identification of influential spreaders in complex networks," *Nature Physics*, vol. 6, pp. 888–893, 2010.
+[5] M. Kitsak, L. K. Gallos, S. Havlin, et al., "Identification of influential spreaders in complex networks," _Nature Physics_, vol. 6, pp. 888–893, 2010.
 
-[6] A. Guille, H. Hacid, C. Favre, and D. A. Zighed, "Information diffusion in online social networks: A survey," *SIGMOD Record*, vol. 42, no. 2, 2013.
+[6] A. Guille, H. Hacid, C. Favre, and D. A. Zighed, "Information diffusion in online social networks: A survey," _SIGMOD Record_, vol. 42, no. 2, 2013.
 
-[7] W. L. Hamilton, Z. Ying, and J. Leskovec, "Inductive representation learning on large graphs," in *Proc. NeurIPS*, 2017.
+[7] W. L. Hamilton, Z. Ying, and J. Leskovec, "Inductive representation learning on large graphs," in _Proc. NeurIPS_, 2017.
 
-[8] T. N. Kipf and M. Welling, "Semi-supervised classification with graph convolutional networks," in *Proc. ICLR*, 2017.
+[8] T. N. Kipf and M. Welling, "Semi-supervised classification with graph convolutional networks," in _Proc. ICLR_, 2017.
 
-[9] K. Xu, W. Hu, J. Leskovec, and S. Jegelka, "How powerful are graph neural networks?" in *Proc. ICLR*, 2019.
+[9] K. Xu, W. Hu, J. Leskovec, and S. Jegelka, "How powerful are graph neural networks?" in _Proc. ICLR_, 2019.
 
-[10] J. Klicpera, A. Bojchevski, and S. Günnemann, "Predict then propagate: Graph neural networks meet personalized PageRank," in *Proc. ICLR*, 2019.
+[10] J. Klicpera, A. Bojchevski, and S. Günnemann, "Predict then propagate: Graph neural networks meet personalized PageRank," in _Proc. ICLR_, 2019.
 
-[11] V. D. Blondel, J.-L. Guillaume, R. Lambiotte, and E. Lefebvre, "Fast unfolding of communities in large networks," *J. Statistical Mechanics*, 2008.
+[11] V. D. Blondel, J.-L. Guillaume, R. Lambiotte, and E. Lefebvre, "Fast unfolding of communities in large networks," _J. Statistical Mechanics_, 2008.
 
-[12] R. S. Burt, *Structural Holes: The Social Structure of Competition*. Harvard University Press, 1992.
+[12] R. S. Burt, _Structural Holes: The Social Structure of Competition_. Harvard University Press, 1992.
 
-[13] M. De Domenico, A. Lima, P. Mougel, and M. Musolesi, "The anatomy of a scientific rumor," *Scientific Reports*, vol. 3, no. 2980, 2013. [Higgs Twitter dataset: real retweet/reply/mention cascades following the Higgs boson discovery announcement.]
+[13] M. De Domenico, A. Lima, P. Mougel, and M. Musolesi, "The anatomy of a scientific rumor," _Scientific Reports_, vol. 3, no. 2980, 2013. [Higgs Twitter dataset: real retweet/reply/mention cascades following the Higgs boson discovery announcement.]
 
-[14] A. Grover and J. Leskovec, "node2vec: Scalable feature learning for networks," in *Proc. ACM KDD*, 2016.
+[14] A. Grover and J. Leskovec, "node2vec: Scalable feature learning for networks," in _Proc. ACM KDD_, 2016.
 
 > **[AUTHOR NOTE — References budget guidance for 6-page IEEE format]**
 >
 > Current count: 14 references. Target for final submission: ~12–14 (depends on venue template column width).
 >
 > **Lowest-priority references (candidates for removal if space is tight):**
+>
 > - **[13] Higgs dataset (De Domenico et al.):** Cited only in §5.2 Limitation 6 as a future-work dataset. If the limitation is reworded to "graphs with observed behavioral cascade logs" without naming a specific dataset, [13] can be removed.
 >
 > **Must-keep references (do not remove):** [1] Kempe (IC model), [2] Rozemberczki & Sarkar (Twitch Gamers dataset), [3] Qiu/DeepInf (closest prior GNN influence work), [7] Hamilton/SAGE, [8] Kipf/GCN, [9] Xu/GIN, [10] Klicpera/APPNP, [11] Blondel/Louvain (community detection used in HSCC), [14] Grover/Node2Vec.
@@ -443,7 +451,9 @@ These hypotheses suggest that aggregation strategy and degree normalization choi
 > [ℹ For paper typesetting — team should generate these figures from frozen output files]
 
 ### Figure 1: Pipeline Diagram
+
 Five-box left-to-right pipeline (no feedback loops; Operationalization box uses fork shape):
+
 - **Box 1 — Input:** "Twitch Gamers Graph (168K nodes, 6.8M edges) + node attributes (views, life_time, language)"
 - **Box 2 — Operationalization (fork):**
   - Branch A0: "p(u,v) = 1/deg(v)" → degree-coupled labels
@@ -456,24 +466,25 @@ Five-box left-to-right pipeline (no feedback loops; Operationalization box uses 
 Each box ≤ 2 lines of text. Arrows: strictly left → right.
 
 ### Figure 2: Two-Panel Results Figure
+
 - Left panel (A0): Dot plot with 95% error bars, x-axis = Spearman ρ, y-axis = models (degree baseline highlighted with dashed line, GCN highlighted as best GNN). Show regime where GNNs cluster below degree. [✅ layout confirmed from frozen A0 data]
-- Right panel (HSCC): Dot plot with 95% error bars, x-axis = Spearman ρ, y-axis = models (vertical dashed line at official comparator LR(degree, views, life_time, language) ρ≈0.884; highlight SAGE `gnn_raw_attr` ρ=0.915; optional SAGE+rankloss ρ=0.924; dagger † on APPNP). Bootstrap label from `gnn_vs_baseline_bootstrap_ci_hscc.json`: *gnn_significantly_better* [✅].
+- Right panel (HSCC): Dot plot with 95% error bars, x-axis = Spearman ρ, y-axis = models (vertical dashed line at official comparator LR(degree, views, life_time, language) ρ≈0.884; highlight SAGE `gnn_raw_attr` ρ=0.915; optional SAGE+rankloss ρ=0.924; dagger † on APPNP). Bootstrap label from `gnn_vs_baseline_bootstrap_ci_hscc.json`: _gnn_significantly_better_ [✅].
 - Grayscale-compatible; both panels share same x-axis scale [−0.1, 1.0].
 
 ---
 
 ## Section Status Tracker
 
-| Section | Status | Action |
-|---------|--------|--------|
-| Abstract | Frozen Δρ/CIs + correct direction [✅] | Trim to ≤150 words for venue limit; remove [✅] tags; keep C3 only if Table 3 includes rankloss row |
-| §1 Introduction | Draft — core numbers frozen; HSCC timing unverified | Polishing pass; do NOT cite an HSCC labeling-time number without verifying |
-| §2 Background | Draft — [3] resolved as DeepInf (Qiu et al. KDD 2018) [✅]; GNN prior work paragraph added to §2.2 [✅]; Node2Vec [14] added [✅] | Done — proofread §2.2 prose flow before submission |
-| §3 MC-IC Metric | Draft — HSCC stats [✅]; A0 regime row 🔲 placeholder | Optional: fill A0 full distribution row from `ic_scores_a0.parquet` |
-| §4 Results | Frozen surrogate + bootstrap values [✅]; APPNP †, SAGE (all feats) ‡ marked | Decide C3 row under page limit; write prose using §4.3 paste-ready sentences |
-| §4.5 Runtime | Frozen [✅]; AUTHOR NOTE with 6-step prose order added | Use 0.086s / ~5,590× (round to ~5,500× in prose); write per AUTHOR NOTE order |
-| §5.1 | Scaffold + AUTHOR NOTE with clean paste-ready paragraph [✅] | Use AUTHOR NOTE paragraph for submission prose |
-| §5.2 Limitations | Rewritten to guide paste-ready English [✅]; 6 limitations | Trim to 5 if space-constrained (cut L5 HSCC reach first) |
-| §6 Conclusion | Scaffold + AUTHOR NOTE with 5-sentence template [✅] | Use AUTHOR NOTE template for submission; remove [✅] tags |
-| References | [3] resolved as DeepInf (Qiu et al., KDD 2018) [✅]; [14] Grover & Leskovec 2016 [✅]; 14 total refs | See AUTHOR NOTE after refs for budget guidance if page-constrained |
-| Appendix | Optional — architecture note [✅] | Cut first if tight |
+| Section          | Status                                                                                                                            | Action                                                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Abstract         | Frozen Δρ/CIs + correct direction [✅]                                                                                            | Trim to ≤150 words for venue limit; remove [✅] tags; keep C3 only if Table 3 includes rankloss row |
+| §1 Introduction  | Draft — core numbers frozen; HSCC timing unverified                                                                               | Polishing pass; do NOT cite an HSCC labeling-time number without verifying                          |
+| §2 Background    | Draft — [3] resolved as DeepInf (Qiu et al. KDD 2018) [✅]; GNN prior work paragraph added to §2.2 [✅]; Node2Vec [14] added [✅] | Done — proofread §2.2 prose flow before submission                                                  |
+| §3 MC-IC Metric  | Draft — HSCC stats [✅]; A0 regime row 🔲 placeholder                                                                             | Optional: fill A0 full distribution row from `ic_scores_a0.parquet`                                 |
+| §4 Results       | Frozen surrogate + bootstrap values [✅]; APPNP †, SAGE (all feats) ‡ marked                                                      | Decide C3 row under page limit; write prose using §4.3 paste-ready sentences                        |
+| §4.5 Runtime     | Frozen [✅]; AUTHOR NOTE with 6-step prose order added                                                                            | Use 0.086s / ~5,590× (round to ~5,500× in prose); write per AUTHOR NOTE order                       |
+| §5.1             | Scaffold + AUTHOR NOTE with clean paste-ready paragraph [✅]                                                                      | Use AUTHOR NOTE paragraph for submission prose                                                      |
+| §5.2 Limitations | Rewritten to guide paste-ready English [✅]; 6 limitations                                                                        | Trim to 5 if space-constrained (cut L5 HSCC reach first)                                            |
+| §6 Conclusion    | Scaffold + AUTHOR NOTE with 5-sentence template [✅]                                                                              | Use AUTHOR NOTE template for submission; remove [✅] tags                                           |
+| References       | [3] resolved as DeepInf (Qiu et al., KDD 2018) [✅]; [14] Grover & Leskovec 2016 [✅]; 14 total refs                              | See AUTHOR NOTE after refs for budget guidance if page-constrained                                  |
+| Appendix         | Optional — architecture note [✅]                                                                                                 | Cut first if tight                                                                                  |
