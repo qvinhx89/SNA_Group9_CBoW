@@ -1,0 +1,50 @@
+{
+  "role": "hscc_gamma_mechanism_sensitivity",
+  "gammas": [
+    0.0,
+    0.5,
+    1.0
+  ],
+  "fixed": {
+    "lambda": 1.0,
+    "p_max": 1.0,
+    "louvain_partition": "/workspace/SNA_Group9_CBoW/data/processed/community_labels.parquet",
+    "split_mask": "/workspace/SNA_Group9_CBoW/data/processed/split_masks.parquet",
+    "primary_ic_node_lock": "/workspace/SNA_Group9_CBoW/data/processed/ic_scores_primary.parquet",
+    "n_runs": 200
+  },
+  "fit_mask_policy": {
+    "lr_attr": "parquet_train",
+    "lr_1hop": "parquet_train",
+    "note": "LR attr uses all split==train node_ids (bootstrap_ci._build_linear_predictions). LR 1-hop uses _labeled_masks_for_fit with the chosen lr_1hop mode."
+  },
+  "per_gamma": [
+    {
+      "gamma": 0.0,
+      "gamma_tag": "0",
+      "label_source": "generated",
+      "n_test_eval_nodes": 1000,
+      "spearman_y_vs_gamma1_y_all": 0.9057377397991278,
+      "spearman_y_vs_gamma1_y_test": 0.897943053243368,
+      "note": "GraphSAGE skipped (--skip-sage)"
+    },
+    {
+      "gamma": 0.5,
+      "gamma_tag": "0p5",
+      "label_source": "generated",
+      "n_test_eval_nodes": 1000,
+      "spearman_y_vs_gamma1_y_all": 0.9593082652341867,
+      "spearman_y_vs_gamma1_y_test": 0.9564175755429215,
+      "note": "GraphSAGE skipped (--skip-sage)"
+    },
+    {
+      "gamma": 1.0,
+      "gamma_tag": "1",
+      "label_source": "frozen_main",
+      "n_test_eval_nodes": 1000,
+      "spearman_y_vs_gamma1_y_all": 1.0,
+      "spearman_y_vs_gamma1_y_test": 1.0,
+      "note": "GraphSAGE skipped (--skip-sage)"
+    }
+  ]
+}
