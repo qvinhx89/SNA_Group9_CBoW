@@ -22,20 +22,44 @@
     {
       "gamma": 0.0,
       "gamma_tag": "0",
-      "label_source": "generated",
+      "label_source": "skipped_existing",
       "n_test_eval_nodes": 1000,
       "spearman_y_vs_gamma1_y_all": 0.9057377397991278,
       "spearman_y_vs_gamma1_y_test": 0.897943053243368,
-      "note": "GraphSAGE skipped (--skip-sage)"
+      "sage_source": "retrained",
+      "sage_vs_lr_attr": {
+        "delta_mean": -0.009655228294527453,
+        "ci_95_lower": -0.01745953687416272,
+        "ci_95_upper": -0.0026301706065040373,
+        "interpretation": "gnn_significantly_worse"
+      },
+      "sage_vs_lr_1hop": {
+        "delta_mean": -0.01891166216985728,
+        "ci_95_lower": -0.025406353200028257,
+        "ci_95_upper": -0.012846061746360434,
+        "interpretation": "gnn_significantly_worse"
+      }
     },
     {
       "gamma": 0.5,
       "gamma_tag": "0p5",
-      "label_source": "generated",
+      "label_source": "skipped_existing",
       "n_test_eval_nodes": 1000,
       "spearman_y_vs_gamma1_y_all": 0.9593082652341867,
       "spearman_y_vs_gamma1_y_test": 0.9564175755429215,
-      "note": "GraphSAGE skipped (--skip-sage)"
+      "sage_source": "retrained",
+      "sage_vs_lr_attr": {
+        "delta_mean": 0.01144080209461997,
+        "ci_95_lower": 0.0025722217383045477,
+        "ci_95_upper": 0.019424721443680015,
+        "interpretation": "gnn_significantly_better"
+      },
+      "sage_vs_lr_1hop": {
+        "delta_mean": -0.009821031337824134,
+        "ci_95_lower": -0.01598539375621196,
+        "ci_95_upper": -0.004396219336751617,
+        "interpretation": "gnn_significantly_worse"
+      }
     },
     {
       "gamma": 1.0,
@@ -44,7 +68,19 @@
       "n_test_eval_nodes": 1000,
       "spearman_y_vs_gamma1_y_all": 1.0,
       "spearman_y_vs_gamma1_y_test": 1.0,
-      "note": "GraphSAGE skipped (--skip-sage)"
+      "sage_source": "retrained",
+      "sage_vs_lr_attr": {
+        "delta_mean": 0.03252611285711441,
+        "ci_95_lower": 0.02103173176672376,
+        "ci_95_upper": 0.04361182348559193,
+        "interpretation": "gnn_significantly_better"
+      },
+      "sage_vs_lr_1hop": {
+        "delta_mean": -0.004210300150123461,
+        "ci_95_lower": -0.011644993068809678,
+        "ci_95_upper": 0.002735485180908127,
+        "interpretation": "practically_equivalent"
+      }
     }
   ]
 }
