@@ -1,0 +1,19 @@
+{
+  "timestamp":"2026-05-03T07:56:40",
+  "formula":"hscc_refined",
+  "lambda_coef":1.0,
+  "gamma":0.5,
+  "p_max":1.0,
+  "n_labeled":5000,
+  "n_runs":200,
+  "elapsed_sec":816.3205823898,
+  "ic_score_mean_summary":{
+    "min":1.0,
+    "max":7.495,
+    "mean":2.980685,
+    "std":1.3461869245,
+    "cv":0.4516367629
+  },
+  "ic_out":"\/workspace\/SNA_Group9_CBoW\/outputs\/mapr2026_v3_results\/hscc_gamma_sensitivity\/ic_scores_hscc_gamma_0p5.parquet",
+  "reg_out":"\/workspace\/SNA_Group9_CBoW\/outputs\/mapr2026_v3_results\/hscc_gamma_sensitivity\/regression_targets_hscc_gamma_0p5.parquet"
+}

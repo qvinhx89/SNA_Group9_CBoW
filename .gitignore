@@ -90,6 +90,26 @@ Thumbs.db
 .vscode/
 .gitnexus
 
+# Local env / editor configs
+.env
+.env.*
+!.env.example
+.idea/
+.vs/
+*.code-workspace
+.cursorrules
+
+# Type check / linter / coverage caches
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+*.log
+*.tmp
+
 # code-review-graph (local SQLite graph)
 .code-review-graph/
 
@@ -102,3 +122,7 @@ undefined/
 
 # Local eval / CR harness (large clones + reports — keep off remote unless you choose)
 evaluate/
+
+# Docs (ignore all Markdown except root README)
+*.md
+!/README.md
