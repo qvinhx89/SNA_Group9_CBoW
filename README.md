@@ -1,71 +1,25 @@
-# SNA Twitch Influencer Project
+# SNA Twitch Influencer Project (MAPR2026 v3)
 
-Implementation scaffold for the project: **Finding the Most Influential Users in Online Communities**.
+This repository studies influence approximation on the Twitch Gamers graph, with
+the current execution path centered on `src/mapr2026_v3`.
 
-## Project Goal
+## Current Scope
 
-Build an end-to-end, reproducible pipeline to:
+Main workflow in this repo:
 
-- Compute structural influence signals (Degree, PageRank, Betweenness, k-shell).
-- Construct SIS and 2x2 typology (True, Hidden, Overrated, Non-influencer).
-- Validate with single-seed and multi-seed IC simulations.
-- Test detectability using surface-metric ML baselines.
+1. Build graph artifacts and IC labels (A0 / optional alternatives).
+2. Build diffusion proxies and typology diagnostics.
+3. Train and evaluate baselines + graph-aware surrogates.
+4. Export paper-facing artifacts in `outputs/mapr2026_v3_results`.
 
-## Folder Structure
+Paper draft lives in `paper main.md`.
 
-```text
-.
-|-- data/
-|   |-- raw/
-|   |-- interim/
-|   `-- processed/
-|-- notebooks/
-|-- src/
-|   |-- config/
-|   |-- data/
-|   |-- graph/
-|   |-- sis/
-|   |-- simulation/
-|   |-- ml/
-|   |-- evaluation/
-|   `-- utils/
-|-- scripts/
-|-- reports/
-|   |-- figures/
-|   |-- tables/
-|   `-- drafts/
-|-- outputs/
-|   |-- stage1/
-|   |-- stage2/
-|   |-- stage3/
-|   |-- stage4_single_seed/
-|   |-- stage5_multi_seed/
-|   `-- stage6_ml/
-|-- logs/
-|   |-- run_history/
-|   |-- timing/
-|   `-- errors/
-|-- tests/
-|-- docs/
-|-- requirements.txt
-`-- README.md
-```
+## Python and Environment
 
-## Quick Start
+- Required Python: `3.10` to `3.12` (64-bit).
+- Python `3.13` is not supported by pinned dependencies.
 
-### Prerequisites
-
-- **Python: 3.10–3.12 (64-bit)**
-  - The pinned dependencies in `requirements.txt` are not compatible with Python 3.13.
-
-1. Create and activate a virtual environment.
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-#### Recommended (Windows + Anaconda): create a Python 3.12 conda env
+Recommended setup (Windows + Conda):
 
 ```powershell
 conda env create -f environment.yml
@@ -74,32 +28,78 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-3. Put source dataset files into `data/raw/`.
-4. Run stage scripts in order (PowerShell):
+## Repository Layout
+
+- `src/mapr2026_v3/`: active MAPR2026 v3 scripts and shared contracts.
+- `src/data`, `src/graph`, `src/sis`: legacy stage-0..3 pipeline pieces still used for base artifacts.
+- `data/processed/`: canonical inputs/outputs consumed across tracks.
+- `outputs/day1_benchmark/`: day-1 benchmark, stability, uncertainty, and quality-gate artifacts.
+- `outputs/mapr2026_v3_results/`: main experiment outputs used in analysis/paper.
+- `tests/`: unit tests for MAPR v3 contracts and determinism.
+- `docs/`: execution plans, runbooks, and decision logs.
+- `evaluate/test_repos/`: external benchmark corpora (not core project logic).
+
+## Quickstart (Current MAPR v3 Path)
+
+Run from repository root.
+
+### 1) Build base graph artifacts (if missing)
 
 ```powershell
-./scripts/run_stage1_centrality.ps1
-./scripts/run_stage2_structure.ps1
-./scripts/run_stage3_sis.ps1
-./scripts/run_stage4_single_seed_ic.ps1
-./scripts/run_stage5_multi_seed_ic.ps1
-./scripts/run_stage6_ml.ps1
+python run_all.py --stage 0
+python run_all.py --stage 1
+python run_all.py --stage 2
+python run_all.py --stage 3
 ```
 
-Or run full pipeline:
+### 2) MAPR v3 core artifacts
 
 ```powershell
-./scripts/run_all.ps1
+python src/mapr2026_v3/export_csr.py --run
+python src/mapr2026_v3/day1_benchmark.py --n-jobs -1
+python src/mapr2026_v3/ic_labels_primary.py --n-runs 200 --n-sample 5000 --n-jobs -1
+python src/mapr2026_v3/ic_label_uncertainty.py
+python src/mapr2026_v3/diffusion_proxies.py
+python src/mapr2026_v3/typology_ic_views.py
 ```
 
-## Reproducibility Rules
+### 3) Baselines and surrogates
 
-- Keep raw data immutable in `data/raw/`.
-- Save all stage outputs under `outputs/`.
-- Log params and random seeds for every experiment.
-- Keep figure/table links in `reports/` aligned with outputs.
+```powershell
+python src/mapr2026_v3/run_baselines.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0
+python src/mapr2026_v3/run_surrogates.py --targets-path data/processed/regression_targets_a0.parquet --label-regime a0
+```
 
-## Git Notes
+### 4) Preflight check
 
-- `.gitkeep` files are included so empty directories are tracked.
-- Do not commit large raw datasets unless your GitHub repo supports LFS.
+```powershell
+python src/mapr2026_v3/preflight_person2.py
+```
+
+## Key Artifacts
+
+Core contracts:
+
+- `data/processed/graph_csr.npz`
+- `data/processed/ic_scores_primary.parquet`
+- `data/processed/regression_targets.parquet`
+- `data/processed/classification_labels.parquet`
+- `data/processed/split_masks.parquet`
+
+Main result files:
+
+- `outputs/mapr2026_v3_results/baseline_ranking_metrics.csv`
+- `outputs/mapr2026_v3_results/surrogate_ranking_metrics.csv`
+- `outputs/mapr2026_v3_results/runtime_breakdown.csv`
+
+## Tests
+
+```powershell
+pytest -q
+```
+
+## Important Notes
+
+- `src/mapr2026_v3` is the active path; some legacy stage-4..6 files under `src/simulation`, `src/ml`, and `src/evaluation` are placeholders.
+- Several old PowerShell runners (`scripts/run_stage4_single_seed_ic.ps1`, `scripts/run_stage5_multi_seed_ic.ps1`, `scripts/run_stage6_ml.ps1`, `scripts/run_all.ps1`) are empty and should not be used as primary entrypoints.
+- Keep `data/raw` immutable and write generated artifacts to `data/processed` or `outputs`.
