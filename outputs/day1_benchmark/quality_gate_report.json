@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-04-18T15:15:29",
+  "quality_mode": "provisional",
+  "thresholds": {
+    "min_cv_score": 0.3,
+    "min_jaccard_mean": 0.85,
+    "min_jaccard_min": 0.8
+  },
+  "observed": {
+    "cv_score": 0.21087886200621908,
+    "jaccard_mean": 0.3069298298144156,
+    "jaccard_min": 0.3020833333333333,
+    "uncertainty_boundary_ratio": 0.199,
+    "uncertainty_ambiguous_ratio": 0.155
+  },
+  "checks": {
+    "pilot_cv_score_pass": false,
+    "stability_jaccard_mean_pass": false,
+    "stability_jaccard_min_pass": false
+  },
+  "pass_all": false,
+  "required_artifacts": {
+    "ic_pilot_diagnostics": "outputs/day1_benchmark/ic_pilot_diagnostics.json",
+    "ic_label_stability": "outputs/day1_benchmark/ic_label_stability.json",
+    "ic_label_uncertainty": "outputs/day1_benchmark/ic_label_uncertainty.json"
+  }
+}

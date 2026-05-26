@@ -194,7 +194,8 @@ def _run_one_hop_correlation(
     pilot_nodes: int,
     pilot_runs: int,
     n_jobs: int,
-) -> tuple[float, float | None, int]:
+    top_pct: float = 0.10,
+) -> tuple[float, float | None, int, float, float]:
     sampled = _sample_indices_degree_stratified(degrees=degrees, n_sample=pilot_nodes, seed=seed)
 
     one_hop_scores = np.array(
@@ -226,7 +227,28 @@ def _run_one_hop_correlation(
     else:
         p_out = float(p_value)
 
-    return float(rho), p_out, int(len(sampled))
+    n_valid = int(len(sampled))
+    k = max(1, int(np.ceil(float(top_pct) * n_valid)))
+
+    # Stable top-k: primary key = score (desc), tie-break = node_id (asc).
+    rank_one_hop = np.lexsort((sampled, -one_hop_scores))
+    rank_ic = np.lexsort((sampled, -ic_means))
+    top_one_hop = set(rank_one_hop[:k].tolist())
+    top_ic = set(rank_ic[:k].tolist())
+
+    union = top_one_hop | top_ic
+    jaccard_top_k = float(len(top_one_hop & top_ic) / len(union)) if union else 1.0
+
+    # NDCG@k uses IC means as relevance and one-hop ranking as predicted order.
+    rel = ic_means.astype(float)
+    pred_idx = rank_one_hop[:k]
+    ideal_idx = rank_ic[:k]
+    discounts = 1.0 / np.log2(np.arange(2, k + 2))
+    dcg = float(np.sum(rel[pred_idx] * discounts))
+    idcg = float(np.sum(rel[ideal_idx] * discounts))
+    ndcg_top_k = float(dcg / idcg) if idcg > 0.0 else 0.0
+
+    return float(rho), p_out, n_valid, jaccard_top_k, ndcg_top_k
 
 
 def main() -> None:
@@ -252,6 +274,8 @@ def main() -> None:
                 "dry_run": True,
                 "spearman_rho": None,
                 "p_value": None,
+                "jaccard_at_10pct": None,
+                "ndcg_at_10pct": None,
                 "decision_branch": None,
                 "note": "Scaffold placeholder. Implement IC pilot + one-hop baseline correlation.",
             },
@@ -321,7 +345,7 @@ def main() -> None:
         },
     )
 
-    rho, p_value, n_valid = _run_one_hop_correlation(
+    rho, p_value, n_valid, jaccard_at_10pct, ndcg_at_10pct = _run_one_hop_correlation(
         indptr=indptr,
         indices=indices,
         degrees=degrees,
@@ -329,6 +353,7 @@ def main() -> None:
         pilot_nodes=args.pilot_nodes,
         pilot_runs=args.pilot_runs,
         n_jobs=args.n_jobs,
+        top_pct=0.10,
     )
     decision_branch = _rho_decision_branch(rho)
 
@@ -339,6 +364,8 @@ def main() -> None:
             "dry_run": False,
             "spearman_rho": rho,
             "p_value": p_value,
+            "jaccard_at_10pct": jaccard_at_10pct,
+            "ndcg_at_10pct": ndcg_at_10pct,
             "decision_branch": decision_branch,
             "pilot_config": {
                 "pilot_nodes": int(args.pilot_nodes),

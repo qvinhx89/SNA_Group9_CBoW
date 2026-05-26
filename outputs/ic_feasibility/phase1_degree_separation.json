@@ -1,0 +1,14 @@
+{
+  "test": "1.2_degree_separation",
+  "n_top10": 500,
+  "n_next10": 500,
+  "degree_median_top10": 236.5,
+  "degree_median_next10": 95.5,
+  "ks_stat": 0.422,
+  "ks_p_value": 0.0,
+  "mwu_p_value": 0.0,
+  "verdict": "separable",
+  "threshold": 0.15,
+  "pivot_signal": false,
+  "pivot_reason": null
+}

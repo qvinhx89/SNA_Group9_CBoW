@@ -16,6 +16,16 @@ __pycache__/
 
 # Generated project artifacts
 logs/
+!logs/
+logs/*
+!logs/errors/
+!logs/errors/.gitkeep
+!logs/run_history/
+!logs/run_history/.gitkeep
+!logs/run_history/*.json
+!logs/timing/
+!logs/timing/.gitkeep
+!logs/timing/*.log
 
 # Keep generated outputs ignored by default, but allow baseline Stage 0-3 artifacts
 outputs/*
@@ -28,6 +38,10 @@ outputs/*
 !outputs/stage2/**
 !outputs/stage3/
 !outputs/stage3/**
+!outputs/ic_feasibility/
+!outputs/ic_feasibility/**
+!outputs/mapr2026_v3_results/
+!outputs/mapr2026_v3_results/**
 !outputs/day1_benchmark/
 !outputs/day1_benchmark/ic_runtime_benchmark.json
 !outputs/day1_benchmark/one_hop_correlation.json
@@ -38,6 +52,7 @@ outputs/*
 outputs/handoffs/**
 !outputs/handoffs/**/
 !outputs/handoffs/**/manifest.json
+!outputs/handoffs/person1_day1_20260407_p1_day1_v3e_optionB_lockstep/**
 
 # Keep data artifacts ignored by default, but allow reproducibility bundle for Stage 0-3
 data/interim/*
@@ -51,13 +66,21 @@ data/processed/*
 !data/processed/node_attributes.parquet
 !data/processed/centrality_table.parquet
 !data/processed/community_labels.parquet
+!data/processed/community_features.parquet
 !data/processed/kshell_table.parquet
 !data/processed/sis_table.parquet
 !data/processed/typology_labels.parquet
+!data/processed/typology_labels_ic_views.parquet
 !data/processed/graph_csr.npz
 !data/processed/ic_scores_primary.parquet
 !data/processed/ic_scores_primary_with_ci.parquet
+!data/processed/diffusion_proxies.parquet
 !data/processed/regression_targets.parquet
+!data/processed/regression_targets_a0.parquet
+!data/processed/regression_targets_ia.parquet
+!data/processed/regression_targets_hscc_refined.parquet
+!data/processed/regression_targets_hscc_refined_smoke.parquet
+!data/processed/regression_targets_hscc_refined_smoke_cuda.parquet
 !data/processed/classification_labels.parquet
 !data/processed/split_masks.parquet
 
@@ -65,3 +88,41 @@ data/processed/*
 .DS_Store
 Thumbs.db
 .vscode/
+.gitnexus
+
+# Local env / editor configs
+.env
+.env.*
+!.env.example
+.idea/
+.vs/
+*.code-workspace
+.cursorrules
+
+# Type check / linter / coverage caches
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+*.log
+*.tmp
+
+# code-review-graph (local SQLite graph)
+.code-review-graph/
+
+# Personal / local AI & IDE (MCP, Cursor hooks, Claude — do not push)
+.claude/
+.cursor/
+.mcp.json
+.opencode.json
+undefined/
+
+# Local eval / CR harness (large clones + reports — keep off remote unless you choose)
+evaluate/
+
+# Docs (ignore all Markdown except root README)
+*.md
+!/README.md

@@ -46,7 +46,12 @@ def main() -> None:
     df_cls = pd.read_parquet(args.cls)
 
     require_columns(df_ic, ["node_id", "ic_score_mean", "ic_score_std", "n_runs"], "ic_scores")
-    require_columns(df_cls, ["node_id", "y_top10"], "classification_labels")
+    require_columns(df_cls, ["node_id"], "classification_labels")
+    if "y_top10" not in df_cls.columns:
+        if "y_top10_consensus" in df_cls.columns:
+            df_cls = df_cls.rename(columns={"y_top10_consensus": "y_top10"})
+        else:
+            require_columns(df_cls, ["y_top10"], "classification_labels")
 
     df = df_ic.merge(df_cls, on="node_id", how="inner")
     if len(df) != len(df_ic):

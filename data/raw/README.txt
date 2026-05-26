@@ -29,7 +29,7 @@ Citing:
 
 Twitch Gamers paper:
 
-https://arxiv.org/abs/2005.07959
+https://arxiv.org/abs/2101.03091
 
 Twitch Gamers project:
 
