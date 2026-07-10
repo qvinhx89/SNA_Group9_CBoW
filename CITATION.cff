@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the associated MAPR 2026 paper."
+type: software
+title: "Operationalization Matters: IC-Based Influence Approximation on Twitch Gamers"
+authors:
+  - family-names: Tran
+    given-names: Dinh-Duy
+  - family-names: Pham
+    given-names: Quoc-Vinh
+  - family-names: Tran
+    given-names: Quoc-Hai
+  - family-names: Tran
+    given-names: Hung-Vi
+  - family-names: Tran
+    given-names: Hung-Nghiep
+year: 2026
+abstract: "Lightweight reproducibility code and small verification artifacts for the accepted MAPR 2026 paper on IC-based influence approximation."
+preferred-citation:
+  type: conference-paper
+  title: "Operationalization Matters: When Graph-Aware Learning Adds Value for IC-Based Influence Approximation"
+  authors:
+    - family-names: Tran
+      given-names: Dinh-Duy
+    - family-names: Pham
+      given-names: Quoc-Vinh
+    - family-names: Tran
+      given-names: Quoc-Hai
+    - family-names: Tran
+      given-names: Hung-Vi
+    - family-names: Tran
+      given-names: Hung-Nghiep
+  conference:
+    name: "International Conference on Multimedia Analysis and Pattern Recognition"
+    abbreviation: MAPR
+  year: 2026
+  notes: "Accepted. DOI and official paper URL will be added when available."

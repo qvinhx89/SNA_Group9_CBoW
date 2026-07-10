@@ -1,0 +1,35 @@
+{
+  "title": "Operationalization Matters: IC-Based Influence Approximation on Twitch Gamers",
+  "upload_type": "software",
+  "description": "Lightweight reproducibility code and small verification artifacts for the accepted MAPR 2026 paper on IC-based influence approximation. Large data protocol artifacts are distributed separately as GitHub Release or Zenodo assets.",
+  "creators": [
+    {
+      "name": "Tran, Dinh-Duy",
+      "affiliation": "University of Information Technology, Ho Chi Minh City, Vietnam"
+    },
+    {
+      "name": "Pham, Quoc-Vinh",
+      "affiliation": "University of Information Technology, Ho Chi Minh City, Vietnam"
+    },
+    {
+      "name": "Tran, Quoc-Hai",
+      "affiliation": "University of Information Technology, Ho Chi Minh City, Vietnam"
+    },
+    {
+      "name": "Tran, Hung-Vi",
+      "affiliation": "University of Information Technology, Ho Chi Minh City, Vietnam"
+    },
+    {
+      "name": "Tran, Hung-Nghiep",
+      "affiliation": "University of Information Technology, Ho Chi Minh City, Vietnam"
+    }
+  ],
+  "keywords": [
+    "influence approximation",
+    "independent cascade",
+    "graph neural networks",
+    "Twitch Gamers",
+    "MAPR 2026"
+  ],
+  "notes": "Paper DOI and official URL will be added after publication."
+}
