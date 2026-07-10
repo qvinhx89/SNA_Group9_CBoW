@@ -1,4 +1,0 @@
-policy,n_total,n_positive,positive_ratio,boundary_ratio,ambiguous_ratio,boundary_ratio_global,ambiguous_ratio_global,n_boundary_positive,n_ambiguous_positive,target_positive_ratio,min_quadrant_size,min_quadrant_ok
-A_hard_top10,5000,500,0.1,0.83,0.684,0.199,0.155,415,342,0.1,150,True
-B_consensus_top10,5000,376,0.0752,0.6196808510638298,0.43617021276595747,0.199,0.155,233,164,0.1,150,True
-C_probabilistic_top10,5000,500,0.1,0.83,0.684,0.199,0.155,415,342,0.1,150,True

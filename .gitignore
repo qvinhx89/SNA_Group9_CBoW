@@ -14,75 +14,28 @@ __pycache__/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
-# Generated project artifacts
+# Generated project artifacts stay local in the lightweight public repo.
 logs/
-!logs/
-logs/*
-!logs/errors/
-!logs/errors/.gitkeep
-!logs/run_history/
-!logs/run_history/.gitkeep
-!logs/run_history/*.json
-!logs/timing/
-!logs/timing/.gitkeep
-!logs/timing/*.log
 
-# Keep generated outputs ignored by default, but allow baseline Stage 0-3 artifacts
+# Outputs are generated locally. Paper-facing frozen summaries live in
+# `Artifacts - frozen results/` and `Artifacts - feasibility stability/`.
 outputs/*
 !outputs/.gitkeep
-!outputs/stage0_data_quality/
-!outputs/stage0_data_quality/**
-!outputs/stage1/
-!outputs/stage1/**
-!outputs/stage2/
-!outputs/stage2/**
-!outputs/stage3/
-!outputs/stage3/**
-!outputs/ic_feasibility/
-!outputs/ic_feasibility/**
-!outputs/mapr2026_v3_results/
-!outputs/mapr2026_v3_results/**
-!outputs/day1_benchmark/
-!outputs/day1_benchmark/ic_runtime_benchmark.json
-!outputs/day1_benchmark/one_hop_correlation.json
-!outputs/day1_benchmark/ic_label_stability.json
-!outputs/day1_benchmark/ic_label_uncertainty.json
-!outputs/day1_benchmark/split_freeze_manifest.json
-!outputs/handoffs/
-outputs/handoffs/**
-!outputs/handoffs/**/
-!outputs/handoffs/**/manifest.json
-!outputs/handoffs/person1_day1_20260407_p1_day1_v3e_optionB_lockstep/**
 
-# Keep data artifacts ignored by default, but allow reproducibility bundle for Stage 0-3
+# Large data artifacts are distributed separately via GitHub Release/Zenodo.
+data/raw/*
+!data/raw/.gitkeep
+
 data/interim/*
 !data/interim/.gitkeep
-!data/interim/edges_raw.parquet
-!data/interim/nodes_raw.parquet
 
 data/processed/*
 !data/processed/.gitkeep
-!data/processed/graph_active.edgelist
-!data/processed/node_attributes.parquet
-!data/processed/centrality_table.parquet
-!data/processed/community_labels.parquet
-!data/processed/community_features.parquet
-!data/processed/kshell_table.parquet
-!data/processed/sis_table.parquet
-!data/processed/typology_labels.parquet
-!data/processed/typology_labels_ic_views.parquet
-!data/processed/graph_csr.npz
-!data/processed/ic_scores_primary.parquet
-!data/processed/ic_scores_primary_with_ci.parquet
-!data/processed/diffusion_proxies.parquet
-!data/processed/regression_targets.parquet
-!data/processed/regression_targets_a0.parquet
-!data/processed/regression_targets_ia.parquet
-!data/processed/regression_targets_hscc_refined.parquet
-!data/processed/regression_targets_hscc_refined_smoke.parquet
-!data/processed/regression_targets_hscc_refined_smoke_cuda.parquet
-!data/processed/classification_labels.parquet
-!data/processed/split_masks.parquet
+Data protocol/
+data_protocol/
+
+# Duplicate camera-ready snapshot kept out of the source repo; canonical code is in src/.
+Code and config/
 
 # OS/editor metadata
 .DS_Store
@@ -122,6 +75,22 @@ undefined/
 
 # Local eval / CR harness (large clones + reports — keep off remote unless you choose)
 evaluate/
+
+# Local exploration and old report material.
+notebooks/
+reports/
+
+# Local/legacy helper scripts not needed for public reproduction.
+scripts/run_all.ps1
+scripts/run_stage*.ps1
+scripts/run_stageC_quality_gate.ps1
+scripts/verify_handoff_package.py
+scripts/vastai_run_gnn.sh
+src/mapr2026_v3/freeze_day1_handoff.py
+
+# Accidental duplicate exports.
+* - Copy.*
+* copy.*
 
 # Docs (ignore all Markdown except root README)
 *.md
