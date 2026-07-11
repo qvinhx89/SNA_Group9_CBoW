@@ -1,7 +1,7 @@
 {
   "title": "Operationalization Matters: IC-Based Influence Approximation on Twitch Gamers",
   "upload_type": "software",
-  "description": "Lightweight reproducibility code and small verification artifacts for the accepted MAPR 2026 paper on IC-based influence approximation. Large data protocol artifacts are distributed separately as GitHub Release or Zenodo assets.",
+  "description": "Lightweight reproducibility code and small verification artifacts for the accepted MAPR 2026 paper on IC-based influence approximation. The repository does not redistribute the Twitch Gamers dataset or precomputed processed experiment artifacts; those artifacts can be regenerated from the public dataset using the included pipeline.",
   "creators": [
     {
       "name": "Tran, Dinh-Duy",
