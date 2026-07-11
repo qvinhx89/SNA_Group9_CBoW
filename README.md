@@ -5,8 +5,8 @@ the current execution path centered on `src/mapr2026_v3`.
 
 ## Paper and Citation
 
-This repository contains the lightweight source code and small verification
-artifacts for the accepted MAPR 2026 paper:
+This repository contains the source code and reproducibility artifacts for the
+accepted MAPR 2026 paper:
 
 **Operationalization Matters: When Graph-Aware Learning Adds Value for IC-Based
 Influence Approximation**<br>
@@ -15,8 +15,8 @@ University of Information Technology, Ho Chi Minh City, Vietnam<br>
 Vietnam National University, Ho Chi Minh City, Vietnam
 
 The official paper link will be added here when the proceedings page or DOI is
-available. Large reproducibility data are distributed separately via a GitHub
-Release or Zenodo archive.
+available. Processed experiment artifacts are generated locally from the public
+dataset by the pipeline below.
 
 ## How to Cite
 
@@ -40,24 +40,65 @@ Corresponding author: Hung-Nghiep Tran (`nghiepth@uit.edu.vn`).
 
 ## Data Availability
 
-This GitHub repository is intentionally kept lightweight. The data protocol
-bundle used to reproduce the paper tables is distributed separately as a release
-asset or Zenodo archive:
+This project uses the public Twitch Gamers dataset. The raw dataset is available
+from SNAP and the original project repository; see the Dataset section below.
+The repository does not redistribute the raw dataset or precomputed generated
+experiment outputs.
 
-- GitHub Release: to be added
-- Zenodo DOI: to be added
+All processed artifacts used by this project, including graph CSR files, split
+masks, IC simulation scores, A0/HSCC regression targets, baseline metrics, and
+surrogate metrics, can be regenerated from the public dataset by running the
+pipeline described below.
 
-After downloading the archive, extract its contents into `data/processed/` so
-the default script paths resolve, for example:
+Generated files are written to `data/processed/` and `outputs/`. Because IC
+labels are Monte Carlo simulation outputs, exact bitwise reproduction may depend
+on random seeds, software versions, and hardware. Frozen summary artifacts are
+included for checking the expected numerical range of the reported results.
 
-```powershell
-New-Item -ItemType Directory -Force data/processed
-Copy-Item "data_protocol/*" data/processed/ -Recurse -Force
+## Dataset
+
+This project uses the Twitch Gamers social network dataset.
+
+- Dataset page: https://snap.stanford.edu/data/twitch_gamers.html
+- Original project repository: https://github.com/benedekrozemberczki/datasets#twitch-gamers
+- Dataset paper: https://arxiv.org/abs/2101.03091
+
+Please cite the original Twitch Gamers dataset paper when using the underlying
+graph data:
+
+Benedek Rozemberczki and Rik Sarkar. "Twitch Gamers: a Dataset for Evaluating
+Proximity Preserving and Structural Role-based Node Embeddings." arXiv:2101.03091,
+2021.
+
+```bibtex
+@misc{rozemberczki2021twitch,
+  title         = {Twitch Gamers: A Dataset for Evaluating Proximity Preserving and Structural Role-based Node Embeddings},
+  author        = {Rozemberczki, Benedek and Sarkar, Rik},
+  year          = {2021},
+  eprint        = {2101.03091},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SI}
+}
 ```
 
-The release archive should contain the frozen graph, split, target, prediction,
-and diagnostic files described in the paper's data protocol. When publishing a
-release, include a checksum or manifest file for the archive.
+## Raw Data Setup
+
+Download `twitch_gamers.zip` from the SNAP dataset page and extract the raw CSV
+files directly under `data/raw/`. The pipeline expects the following files:
+
+- `data/raw/large_twitch_edges.csv`
+- `data/raw/large_twitch_features.csv`
+
+On Windows PowerShell, one possible setup is:
+
+```powershell
+New-Item -ItemType Directory -Force data/raw
+Invoke-WebRequest -Uri https://snap.stanford.edu/data/twitch_gamers.zip -OutFile data/raw/twitch_gamers.zip
+Expand-Archive data/raw/twitch_gamers.zip -DestinationPath data/raw -Force
+```
+
+If the archive extracts into a nested folder, move `large_twitch_edges.csv` and
+`large_twitch_features.csv` so they are directly inside `data/raw/`.
 
 ## Current Scope
 
@@ -91,10 +132,10 @@ pip install -r requirements.txt
 
 - `src/mapr2026_v3/`: active MAPR2026 v3 scripts and shared contracts.
 - `src/data`, `src/graph`, `src/sis`: legacy stage-0..3 pipeline pieces still used for base artifacts.
-- `data/processed/`: local extraction target for the external data protocol bundle.
+- `data/processed/`: generated processed artifacts.
 - `Artifacts - frozen results/`: small paper-facing metric and bootstrap artifacts.
 - `Artifacts - feasibility stability/`: small stability and feasibility diagnostics.
-- `outputs/`: generated local outputs; not tracked in the lightweight public repo.
+- `outputs/`: generated experiment outputs.
 - `tests/`: unit tests for MAPR v3 contracts and determinism.
 
 ## Quickstart (Current MAPR v3 Path)
@@ -115,7 +156,8 @@ python run_all.py --stage 3
 ```powershell
 python src/mapr2026_v3/export_csr.py --run
 python src/mapr2026_v3/day1_benchmark.py --n-jobs -1
-python src/mapr2026_v3/ic_labels_primary.py --n-runs 200 --n-sample 5000 --n-jobs -1
+python src/mapr2026_v3/ic_labels_primary.py --n-runs 200 --n-sample 5000 --n-jobs -1 --out-reg data/processed/regression_targets_a0.parquet
+python src/mapr2026_v3/ic_labels_hscc_refined.py --n-jobs -1
 python src/mapr2026_v3/ic_label_uncertainty.py
 python src/mapr2026_v3/diffusion_proxies.py
 python src/mapr2026_v3/typology_ic_views.py
@@ -141,12 +183,12 @@ python src/mapr2026_v3/preflight_person2.py
 
 ## Key Artifacts
 
-The public repo keeps small frozen result artifacts under:
+Frozen result artifacts are included under:
 
 - `Artifacts - frozen results/`
 - `Artifacts - feasibility stability/`
 
-The external data protocol bundle supplies the larger core contracts:
+The pipeline regenerates the larger core contracts locally:
 
 - `data/processed/graph_csr.npz`
 - `data/processed/ic_scores_primary.parquet`
@@ -169,4 +211,4 @@ pytest -q
 ## Important Notes
 
 - `src/mapr2026_v3` is the active path; legacy stage-0..3 modules are retained only where they build base graph artifacts.
-- Keep large raw, intermediate, processed, and generated result files outside git. Use `data/processed/` as the local extraction target for the external data protocol bundle.
+- Keep large raw, intermediate, processed, and generated result files outside git. Use `data/processed/` for regenerated processed artifacts.

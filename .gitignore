@@ -22,7 +22,7 @@ logs/
 outputs/*
 !outputs/.gitkeep
 
-# Large data artifacts are distributed separately via GitHub Release/Zenodo.
+# Large raw/intermediate/processed artifacts are regenerated locally and not tracked.
 data/raw/*
 !data/raw/.gitkeep
 
